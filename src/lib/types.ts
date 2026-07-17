@@ -62,6 +62,7 @@ export interface Space {
   color: string;
   department_id: string | null;
   sort: number;
+  slug: string;
 }
 
 export interface List {
@@ -69,10 +70,20 @@ export interface List {
   space_id: string;
   name: string;
   sort: number;
+  slug: string;
+}
+
+export interface Pin {
+  id: string;
+  profile_id: string;
+  kind: "list" | "space";
+  target_id: string;
+  sort: number;
 }
 
 export interface Task {
   id: string;
+  task_number: number;
   list_id: string | null;
   owner_id: string | null;
   name: string;

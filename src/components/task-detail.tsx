@@ -5,8 +5,9 @@ import { useUI } from "@/lib/ui";
 import { initials, STATUS_COLORS, PRIORITY_COLORS, Status, Priority, Task } from "@/lib/types";
 import { updateTask, managerOf } from "@/lib/actions";
 import { relTime } from "@/lib/dates";
+import { taskLink } from "@/lib/ui";
 import { RaciRows, raciNote } from "./raci";
-import { IconX } from "./icons";
+import { IconLink, IconX } from "./icons";
 import { Avatar } from "./shared";
 
 // Task detail slide-over (list variant with Details / Activity / Files tabs)
@@ -44,8 +45,18 @@ export function TaskDetailSlideOver() {
       <div onClick={(e) => e.stopPropagation()} style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: 520, maxWidth: "94vw", background: "var(--sw-card)", boxShadow: "-24px 0 60px rgba(23,18,15,.25)", zIndex: 41, display: "flex", flexDirection: "column" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "16px 20px", borderBottom: "1px solid var(--sw-hair)", flex: "none" }}>
           <span style={{ width: 8, height: 8, borderRadius: 99, background: STATUS_COLORS[t.status], flex: "none" }} />
+          <span style={{ fontSize: 11, fontWeight: 400, color: "var(--sw-muted)" }}>SW-{t.task_number}</span>
           <span style={{ fontSize: 11.5, fontWeight: 400, color: "var(--sw-text-soft)" }}>{listPath}</span>
           <div style={{ flex: 1 }} />
+          <button
+            onClick={() => {
+              try { navigator.clipboard.writeText(taskLink(t.task_number)); pushToast("Task link copied"); } catch {}
+            }}
+            title="Copy link to this task"
+            style={{ display: "flex", alignItems: "center", gap: 5, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", height: 28, padding: "0 11px", borderRadius: 99, cursor: "pointer", fontSize: 11, color: "var(--sw-text-soft)" }}
+          >
+            <IconLink size={11} /> Copy link
+          </button>
           <button onClick={() => setActiveTaskId(null)} style={{ border: "none", background: "var(--sw-hover)", width: 28, height: 28, borderRadius: 99, cursor: "pointer", fontSize: 13, color: "var(--sw-text-soft)" }}><IconX /></button>
         </div>
 

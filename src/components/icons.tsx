@@ -56,6 +56,20 @@ export const IconCheckSquare = ({ size = 14 }: { size?: number }) => (
 export const IconGrid = ({ size = 14 }: { size?: number }) => (
   <S size={size}><rect x="4" y="4" width="7" height="7" rx="1.5" /><rect x="13" y="4" width="7" height="7" rx="1.5" /><rect x="4" y="13" width="7" height="7" rx="1.5" /><rect x="13" y="13" width="7" height="7" rx="1.5" /></S>
 );
+export const IconSearch = ({ size = 13 }: { size?: number }) => (
+  <S size={size} sw={2.4}><circle cx="11" cy="11" r="6.5" /><path d="M20 20l-4.2-4.2" /></S>
+);
+export const IconStar = ({ size = 12, filled = false }: { size?: number; filled?: boolean }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ verticalAlign: "middle" }}>
+    <path d="M12 2.8l2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 17.6l-5.8 3.1 1.1-6.5L2.6 9.6l6.5-.9z" />
+  </svg>
+);
+export const IconChevDown = ({ size = 12 }: { size?: number }) => (
+  <S size={size} sw={2.4}><path d="M6 9l6 6 6-6" /></S>
+);
+export const IconLink = ({ size = 12 }: { size?: number }) => (
+  <S size={size}><path d="M10 14a5 5 0 0 0 7.1 0l3-3a5 5 0 0 0-7.1-7.1l-1.6 1.6" /><path d="M14 10a5 5 0 0 0-7.1 0l-3 3a5 5 0 0 0 7.1 7.1l1.6-1.6" /></S>
+);
 export const IconWhatsApp = ({ size = 14 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" style={{ flex: "none" }}>
     <path d="M12.04 2c-5.52 0-10 4.48-10 10 0 1.76.46 3.48 1.34 4.99L2 22l5.16-1.35a9.96 9.96 0 0 0 4.88 1.24h.01c5.52 0 10-4.48 10-10s-4.49-9.89-10.01-9.89zm0 18.24c-1.53 0-3.03-.41-4.34-1.19l-.31-.18-3.06.8.82-2.98-.2-.31a8.2 8.2 0 0 1-1.26-4.38c0-4.54 3.7-8.24 8.25-8.24 2.2 0 4.27.86 5.83 2.42a8.18 8.18 0 0 1 2.41 5.82c0 4.55-3.7 8.24-8.24 8.24zm4.52-6.17c-.25-.12-1.47-.72-1.7-.81-.23-.08-.39-.12-.56.13-.17.25-.64.81-.78.97-.14.17-.29.19-.53.06-.25-.12-1.05-.39-2-1.23-.74-.66-1.24-1.47-1.39-1.72-.14-.25-.02-.38.11-.51.11-.11.25-.29.37-.43.12-.14.16-.25.25-.41.08-.17.04-.31-.02-.43-.06-.12-.56-1.34-.76-1.84-.2-.48-.4-.42-.56-.42-.14-.01-.31-.01-.47-.01-.17 0-.43.06-.66.31-.23.25-.86.84-.86 2.05 0 1.21.88 2.38 1 2.54.12.17 1.74 2.65 4.21 3.72.59.25 1.05.4 1.41.52.59.19 1.13.16 1.55.1.47-.07 1.47-.6 1.68-1.18.21-.58.21-1.08.14-1.18-.06-.11-.23-.17-.48-.29z" />

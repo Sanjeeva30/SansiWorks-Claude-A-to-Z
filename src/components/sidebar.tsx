@@ -1,25 +1,49 @@
 "use client";
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { useStore } from "@/lib/store";
 import { useUI } from "@/lib/ui";
 import { initials } from "@/lib/types";
+import { IconChevDown, IconStar } from "./icons";
+
+const COLLAPSE_KEY = "sw-collapsed-spaces";
 
 export function Sidebar() {
-  const { me, spaces, lists, notifications, departments } = useStore();
+  const { me, spaces, lists, tasks, notifications, departments, pins, patch, supabase } = useStore();
   const {
-    section, setSection, homePage, setHomePage, listPage, setListPage,
+    section, homePage, setHomePage, listPage, setListPage,
     companyPage, setCompanyPage, workspacePage, setWorkspacePage,
-    activeList, setActiveList, openProfile, setShowPalette,
+    activeList, setActiveList, openProfile, setShowPalette, pushToast,
   } = useUI();
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [hoverList, setHoverList] = useState<string | null>(null);
+
+  useEffect(() => {
+    try { setCollapsed(JSON.parse(localStorage.getItem(COLLAPSE_KEY) || "{}")); } catch {}
+  }, []);
+  const toggleSpace = (id: string) => {
+    const next = { ...collapsed, [id]: !collapsed[id] };
+    setCollapsed(next);
+    try { localStorage.setItem(COLLAPSE_KEY, JSON.stringify(next)); } catch {}
+  };
 
   const unread = notifications.filter((n) => !n.read).length;
+  const openCount = (listId: string) => tasks.filter((t) => t.list_id === listId && t.status !== "Done").length;
+  const pinnedListIds = pins.filter((p) => p.kind === "list").map((p) => p.target_id);
 
-  const navBtn = (
-    label: string,
-    active: boolean,
-    onClick: () => void,
-    badge?: number
-  ) => (
+  const togglePin = async (listId: string) => {
+    const existing = pins.find((p) => p.kind === "list" && p.target_id === listId);
+    if (existing) {
+      patch("pins", pins.filter((p) => p.id !== existing.id));
+      await supabase.from("pins").delete().eq("id", existing.id);
+    } else {
+      if (!me) return;
+      const { data } = await supabase.from("pins").insert({ profile_id: me.id, kind: "list", target_id: listId }).select().single();
+      if (data) patch("pins", [...pins, data]);
+      pushToast("Pinned to sidebar");
+    }
+  };
+
+  const navBtn = (label: string, active: boolean, onClick: () => void, badge?: number) => (
     <button
       key={label}
       onClick={onClick}
@@ -36,7 +60,41 @@ export function Sidebar() {
     <div style={{ margin: "13px 0 4px", padding: "0 9px", fontSize: 9.5, fontWeight: 800, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--sw-muted)" }}>{label}</div>
   );
 
+  const listRow = (l: (typeof lists)[number], indent: boolean) => {
+    const active = section === "list" && listPage === "list" && activeList?.listId === l.id;
+    const pinned = pinnedListIds.includes(l.id);
+    const n = openCount(l.id);
+    return (
+      <div
+        key={l.id}
+        onMouseEnter={() => setHoverList(l.id)}
+        onMouseLeave={() => setHoverList(null)}
+        style={{ position: "relative", display: "flex", alignItems: "center" }}
+      >
+        <button
+          onClick={() => setActiveList({ spaceId: l.space_id, listId: l.id })}
+          style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, minWidth: 0, padding: `5px 9px 5px ${indent ? 22 : 9}px`, borderRadius: 7, border: "none", cursor: "pointer", fontSize: 12, background: active ? "var(--sw-hover)" : "transparent", color: active ? "var(--crimson)" : "var(--sw-text-soft)", fontWeight: 400, textAlign: "left" }}
+        >
+          <span style={{ flex: 1, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{l.name}</span>
+          {hoverList !== l.id && n > 0 && (
+            <span style={{ fontSize: 9.5, color: "var(--sw-muted)", flex: "none" }}>{n}</span>
+          )}
+        </button>
+        {(hoverList === l.id || pinned) && (
+          <button
+            onClick={(e) => { e.stopPropagation(); togglePin(l.id); }}
+            title={pinned ? "Unpin" : "Pin to sidebar"}
+            style={{ position: "absolute", right: 6, border: "none", background: "none", cursor: "pointer", color: pinned ? "var(--crimson)" : "var(--sw-muted)", padding: 2, display: "flex" }}
+          >
+            <IconStar size={11} filled={pinned} />
+          </button>
+        )}
+      </div>
+    );
+  };
+
   const deptOf = (spaceDeptId: string | null) => departments.find((d) => d.id === spaceDeptId);
+  const pinnedLists = pinnedListIds.map((id) => lists.find((l) => l.id === id)).filter(Boolean) as typeof lists;
 
   return (
     <aside style={{ width: 228, flex: "none", background: "var(--sw-sidebar)", borderRight: "1px solid var(--sw-hair)", display: "flex", flexDirection: "column", height: "100%" }}>
@@ -55,47 +113,52 @@ export function Sidebar() {
           <span style={{ fontSize: 9.5, border: "1px solid var(--sw-hair)", borderRadius: 5, padding: "1px 5px", color: "var(--sw-muted)" }}>Ctrl K</span>
         </button>
 
-        {navBtn("Home", section === "home" && homePage === "today", () => { setSection("home"); setHomePage("today"); })}
-        {navBtn("My Week", section === "home" && homePage === "myweek", () => { setSection("home"); setHomePage("myweek"); })}
-        {navBtn("Inbox", section === "workspace" && workspacePage === "inbox", () => { setSection("workspace"); setWorkspacePage("inbox"); }, unread)}
-        {navBtn("My List", section === "list" && listPage === "mylist", () => { setSection("list"); setListPage("mylist"); })}
+        {navBtn("My Work", section === "home", () => setHomePage(homePage === "myweek" || homePage === "all" || homePage === "personal" ? homePage : "today"))}
+        {navBtn("Inbox", section === "workspace" && workspacePage === "inbox", () => setWorkspacePage("inbox"), unread)}
 
         {sectionLabel("Company")}
-        {navBtn("Everything", section === "list" && listPage === "everything", () => { setSection("list"); setListPage("everything"); })}
-        {navBtn("Overview", section === "company" && companyPage === "executive", () => { setSection("company"); setCompanyPage("executive"); })}
-        {navBtn("People", section === "company" && companyPage === "people", () => { setSection("company"); setCompanyPage("people"); })}
+        {navBtn("Everything", section === "list" && listPage === "everything", () => setListPage("everything"))}
+        {navBtn("Overview", section === "company" && companyPage === "executive", () => setCompanyPage("executive"))}
+        {navBtn("People", section === "company" && companyPage === "people", () => setCompanyPage("people"))}
 
         {sectionLabel("Workspace")}
-        {navBtn("Docs", section === "workspace" && workspacePage === "docs", () => { setSection("workspace"); setWorkspacePage("docs"); })}
-        {navBtn("Forms", section === "workspace" && workspacePage === "forms", () => { setSection("workspace"); setWorkspacePage("forms"); })}
+        {navBtn("Docs", section === "workspace" && workspacePage === "docs", () => setWorkspacePage("docs"))}
+        {navBtn("Forms", section === "workspace" && workspacePage === "forms", () => setWorkspacePage("forms"))}
+
+        {pinnedLists.length > 0 && (
+          <>
+            {sectionLabel("Pinned")}
+            {pinnedLists.map((l) => listRow(l, false))}
+          </>
+        )}
 
         <div style={{ margin: "13px 0 4px", padding: "0 9px", display: "flex", alignItems: "center" }}>
           <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--sw-muted)", flex: 1 }}>Spaces</span>
         </div>
-        {spaces.map((space) => (
-          <div key={space.id} style={{ marginBottom: 7 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "4px 9px 3px" }}>
-              <span style={{ width: 6, height: 6, borderRadius: 99, background: space.color, flex: "none" }} />
-              <span style={{ fontSize: 11.5, fontWeight: 400, color: "var(--sw-text-soft)", flex: 1 }}>{space.name}</span>
+        {spaces.map((space) => {
+          const isCollapsed = !!collapsed[space.id];
+          const spaceLists = lists.filter((l) => l.space_id === space.id);
+          return (
+            <div key={space.id} style={{ marginBottom: 7 }}>
+              <button
+                onClick={() => toggleSpace(space.id)}
+                title={deptOf(space.department_id)?.name || ""}
+                style={{ display: "flex", alignItems: "center", gap: 7, width: "100%", padding: "4px 9px 3px", border: "none", background: "none", cursor: "pointer", textAlign: "left" }}
+              >
+                <span style={{ width: 6, height: 6, borderRadius: 99, background: space.color, flex: "none" }} />
+                <span style={{ fontSize: 11.5, fontWeight: 400, color: "var(--sw-text-soft)", flex: 1, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{space.name}</span>
+                <span style={{ color: "var(--sw-muted)", display: "flex", transform: isCollapsed ? "rotate(-90deg)" : "none", transition: "transform .12s" }}>
+                  <IconChevDown size={10} />
+                </span>
+              </button>
+              {!isCollapsed && spaceLists.map((l) => listRow(l, true))}
             </div>
-            {lists.filter((l) => l.space_id === space.id).map((l) => {
-              const active = section === "list" && listPage === "list" && activeList?.listId === l.id;
-              return (
-                <button
-                  key={l.id}
-                  onClick={() => { setSection("list"); setListPage("list"); setActiveList({ spaceId: space.id, listId: l.id }); }}
-                  style={{ display: "block", width: "100%", padding: "5px 9px 5px 22px", borderRadius: 7, border: "none", cursor: "pointer", fontSize: 12, background: active ? "var(--sw-hover)" : "transparent", color: active ? "var(--crimson)" : "var(--sw-text-soft)", fontWeight: 400, textAlign: "left" }}
-                >
-                  {l.name}
-                </button>
-              );
-            })}
-          </div>
-        ))}
+          );
+        })}
 
         <div style={{ marginTop: "auto", paddingTop: 13 }}>
-          {navBtn("Admin console", section === "workspace" && workspacePage === "admin", () => { setSection("workspace"); setWorkspacePage("admin"); })}
-          {navBtn("Settings", section === "workspace" && workspacePage === "settings", () => { setSection("workspace"); setWorkspacePage("settings"); })}
+          {navBtn("Admin console", section === "workspace" && workspacePage === "admin", () => setWorkspacePage("admin"))}
+          {navBtn("Settings", section === "workspace" && workspacePage === "settings", () => setWorkspacePage("settings"))}
         </div>
       </nav>
 

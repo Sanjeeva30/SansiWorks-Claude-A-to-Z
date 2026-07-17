@@ -2,22 +2,28 @@
 import React, { useMemo, useState } from "react";
 import { useStore } from "@/lib/store";
 import { useUI } from "@/lib/ui";
-import { STATUS_COLORS, PRIORITY_COLORS, STATUSES, initials } from "@/lib/types";
+import { STATUS_COLORS, PRIORITY_COLORS, STATUSES, Task, initials } from "@/lib/types";
 import { iso, fmtShort, fmtFull, todayIso } from "@/lib/dates";
-import { atRiskTasks, isOpen, isOverdue, tasksOfPerson, workloadPct, efficiencyScore, departmentRisk } from "@/lib/logic";
+import { atRiskTasks, isOpen, tasksOfPerson, workloadPct, efficiencyScore, departmentRisk } from "@/lib/logic";
+import { FilterState, EMPTY_FILTERS, applyFilters } from "@/lib/search";
 import { TopIcons, Avatar } from "./shared";
+import { GlobalSearch } from "./global-search";
+import { FilterBar } from "./filter-bar";
 import { IconCheckSquare, IconClock, IconFlag, IconGrid, IconSquare, IconX } from "./icons";
 
+/* My Work hub — one home for everything assigned to you.
+   Tabs: Today (overview) · This Week (day columns) · All tasks (filterable) · Personal. */
 export function HomeSection() {
   const store = useStore();
   const { me, tasks, lists, spaces, profiles, notifications, departments, deptMembers } = store;
   const {
-    homePage, setHomePage, setSection, setListPage, setShowQuickAdd, setActiveTaskId,
+    homePage, setHomePage, setShowQuickAdd, setActiveTaskId,
     setCompanyPage, setWorkspacePage, openProfile,
   } = useUI();
   const [statusTab, setStatusTab] = useState("Not Started");
   const [density, setDensity] = useState<"comfortable" | "compact">("comfortable");
   const [missedDismissed, setMissedDismissed] = useState(false);
+  const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
 
   const today = todayIso();
   const myTasks = useMemo(() => (me ? tasksOfPerson(tasks, me.id) : []), [tasks, me]);
@@ -43,18 +49,18 @@ export function HomeSection() {
   const completedThisWeek = myTasks.filter((t) => t.status === "Done" && t.completed_at && t.completed_at.slice(0, 10) >= weekStartIso);
   const activeProjects = lists.filter((l) => tasks.some((t) => t.list_id === l.id && isOpen(t))).length;
 
-  const goMyList = () => { setSection("list"); setListPage("mylist"); };
+  const goAll = () => setHomePage("all");
 
   const metrics = [
-    { icon: <IconSquare />, label: "My open tasks", value: myOpen.length, tint: "var(--sw-hover)", nav: goMyList },
-    { icon: <IconClock />, label: "Due this week", value: dueThisWeek.length, tint: "rgba(34,64,158,0.12)", nav: goMyList },
-    { icon: <IconFlag />, label: "At risk", value: myAtRisk.length, tint: "rgba(243,38,62,0.12)", nav: goMyList },
-    { icon: <IconCheckSquare />, label: "Completed this week", value: completedThisWeek.length, tint: "rgba(13,79,49,0.12)", nav: goMyList },
-    { icon: <IconGrid />, label: "Projects active", value: activeProjects, tint: "var(--sw-hover)", nav: () => { setSection("company"); setCompanyPage("executive"); } },
+    { icon: <IconSquare />, label: "My open tasks", value: myOpen.length, tint: "var(--sw-hover)", nav: goAll },
+    { icon: <IconClock />, label: "Due this week", value: dueThisWeek.length, tint: "rgba(34,64,158,0.12)", nav: goAll },
+    { icon: <IconFlag />, label: "At risk", value: myAtRisk.length, tint: "rgba(243,38,62,0.12)", nav: goAll },
+    { icon: <IconCheckSquare />, label: "Completed this week", value: completedThisWeek.length, tint: "rgba(13,79,49,0.12)", nav: goAll },
+    { icon: <IconGrid />, label: "Projects active", value: activeProjects, tint: "var(--sw-hover)", nav: () => setCompanyPage("executive") },
   ];
 
-  const listPathOf = (t: (typeof tasks)[number]) => {
-    if (!t.list_id) return "My List (personal)";
+  const listPathOf = (t: Task) => {
+    if (!t.list_id) return "Personal";
     const l = lists.find((x) => x.id === t.list_id);
     const s = spaces.find((x) => x.id === l?.space_id);
     return `${s?.name || ""} / ${l?.name || ""}`;
@@ -96,7 +102,7 @@ export function HomeSection() {
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
   const firstName = me.name.split(" ")[0];
 
-  // My Week view
+  // This Week view
   const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
   const weekDays = DAY_NAMES.map((dn, i) => {
     const d = new Date(weekStart);
@@ -112,13 +118,80 @@ export function HomeSection() {
   }).filter((d, i) => d.rows.length > 0 || i < 5);
   const weekOverdue = myTasks.filter((t) => t.due && t.due < today && t.status !== "Done");
 
+  // All / Personal tab rows
+  const personalTasks = tasks.filter((t) => !t.list_id && (t.owner_id === me.id || t.assignees.includes(me.id)));
+  const allSource = homePage === "personal" ? personalTasks : myTasks;
+  const allFiltered = applyFilters(allSource, filters, today);
+  const allGroups = STATUSES.map((s) => ({ name: s, color: STATUS_COLORS[s], rows: allFiltered.filter((t) => t.status === s) }))
+    .filter((g) => g.rows.length > 0);
+
+  const TABS: { key: typeof homePage; label: string }[] = [
+    { key: "today", label: "Today" },
+    { key: "myweek", label: "This Week" },
+    { key: "all", label: "All tasks" },
+    { key: "personal", label: "Personal" },
+  ];
+
+  const taskTable = (
+    <>
+      <div style={{ marginBottom: 14 }}>
+        <FilterBar
+          value={filters}
+          onChange={setFilters}
+          people={profiles}
+          resultCount={allFiltered.length}
+          extra={
+            <button onClick={() => setDensity(density === "compact" ? "comfortable" : "compact")} style={{ padding: "6px 12px", borderRadius: 999, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", color: "var(--sw-text-soft)", fontSize: 11.5, fontWeight: 400, cursor: "pointer" }}>
+              {density === "comfortable" ? "Comfortable" : "Compact"}
+            </button>
+          }
+        />
+      </div>
+      {allGroups.map((grp) => (
+        <section key={grp.name} style={{ marginBottom: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+            <span style={{ width: 8, height: 8, borderRadius: 99, background: grp.color, flex: "none" }} />
+            <h3 style={{ margin: 0, fontSize: 13, fontWeight: 400 }}>{grp.name}</h3>
+            <span style={{ fontSize: 11.5, color: "var(--sw-muted)", fontWeight: 400 }}>{grp.rows.length}</span>
+          </div>
+          <div style={{ background: "var(--sw-card)", border: "1px solid var(--sw-hair)", borderRadius: 12, boxShadow: "var(--shadow-card)", overflow: "hidden" }}>
+            {grp.rows.map((t) => (
+              <button key={t.id} className="sw-row" onClick={() => setActiveTaskId(t.id)} style={{ display: "flex", alignItems: "center", gap: 11, width: "100%", textAlign: "left", padding: density === "compact" ? "7px 16px" : "11px 16px", border: "none", borderBottom: "1px solid var(--sw-hair)", background: "none", cursor: "pointer" }}>
+                <span style={{ fontSize: 10, color: "var(--sw-muted)", fontWeight: 400, width: 48, flex: "none" }}>SW-{t.task_number}</span>
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 400, color: "var(--sw-text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.name}</div>
+                  <div style={{ fontSize: 10.5, color: "var(--sw-muted)", marginTop: 1 }}>{listPathOf(t)}</div>
+                </span>
+                <span style={{ display: "flex", marginRight: 2 }}>
+                  {t.assignees.map((id) => profiles.find((p) => p.id === id)).filter(Boolean).map((p) => (
+                    <span key={p!.id} style={{ width: 20, height: 20, borderRadius: 99, background: p!.color, color: "#fff", fontSize: 8, display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid var(--sw-card)", marginLeft: -6 }}>{initials(p!.name)}</span>
+                  ))}
+                </span>
+                <span style={{ fontSize: 10, fontWeight: 400, letterSpacing: "0.04em", color: PRIORITY_COLORS[t.priority], width: 52, textAlign: "right", flex: "none" }}>{t.priority}</span>
+                <span style={{ fontSize: 11, color: t.due && t.due < today && t.status !== "Done" ? "var(--red)" : "var(--sw-text-soft)", width: 54, textAlign: "right", flex: "none" }}>{t.due ? fmtShort(t.due) : ""}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+      ))}
+      {!allFiltered.length && (
+        <div style={{ textAlign: "center", padding: "48px 0", color: "var(--sw-muted)" }}>
+          <p style={{ margin: "0 0 10px", fontSize: 13 }}>{homePage === "personal" ? "No personal tasks yet." : "Nothing matches these filters."}</p>
+          {homePage === "personal" && (
+            <button onClick={() => setShowQuickAdd(true)} style={{ padding: "8px 18px", borderRadius: 999, border: "1px dashed var(--sw-hair)", background: "none", color: "var(--sw-text-soft)", fontSize: 12.5, cursor: "pointer" }}>+ Add a personal task</button>
+          )}
+        </div>
+      )}
+    </>
+  );
+
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, height: "100%" }}>
       {/* TOPBAR */}
       <header style={{ height: 52, flex: "none", display: "flex", alignItems: "center", gap: 10, padding: "0 18px", borderBottom: "1px solid var(--sw-hair)", background: "var(--sw-page)" }}>
-        <h1 style={{ fontSize: 14, fontWeight: 400, margin: 0, letterSpacing: "-0.01em" }}>Home</h1>
-        <div style={{ flex: 1, maxWidth: 340, marginLeft: 6, position: "relative" }}>
-          <input placeholder="Search tasks & docs…" style={{ width: "100%", height: 30, borderRadius: 8, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "0 12px", fontSize: 12, color: "var(--sw-text)", outline: "none" }} />
+        <h1 style={{ fontSize: 14, fontWeight: 400, margin: 0, letterSpacing: "-0.01em" }}>My Work</h1>
+        <div style={{ marginLeft: 6 }}>
+          <GlobalSearch />
         </div>
         <div style={{ flex: 1 }} />
         <button onClick={() => setShowQuickAdd(true)} style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--crimson)", color: "#fff", border: "none", borderRadius: 999, padding: "7px 15px", fontSize: 12.5, fontWeight: 400, cursor: "pointer", boxShadow: "0 8px 20px rgba(122,13,32,.25)" }}>
@@ -130,11 +203,11 @@ export function HomeSection() {
       {/* CONTENT */}
       <main style={{ flex: 1, overflowY: "auto", padding: "20px 26px 40px" }}>
         <div style={{ maxWidth: 1180, margin: "0 auto" }}>
-          {!missedDismissed && unread.length > 0 && (
+          {!missedDismissed && unread.length > 0 && homePage === "today" && (
             <div style={{ display: "flex", alignItems: "center", gap: 11, background: "var(--sw-card)", border: "1px solid var(--sw-hair)", borderRadius: 12, padding: "11px 16px", boxShadow: "var(--shadow-card)", marginBottom: 14 }}>
               <span style={{ width: 8, height: 8, borderRadius: 99, background: "var(--crimson)", flex: "none" }} />
               <span style={{ flex: 1, fontSize: 12.5, color: "var(--sw-text)" }}>{missedLine}</span>
-              <button onClick={() => { setSection("workspace"); setWorkspacePage("inbox"); }} style={{ padding: "6px 14px", borderRadius: 999, border: "none", background: "var(--crimson)", color: "#fff", fontSize: 11.5, fontWeight: 400, cursor: "pointer" }}>Review inbox</button>
+              <button onClick={() => setWorkspacePage("inbox")} style={{ padding: "6px 14px", borderRadius: 999, border: "none", background: "var(--crimson)", color: "#fff", fontSize: 11.5, fontWeight: 400, cursor: "pointer" }}>Review inbox</button>
               <button onClick={() => setMissedDismissed(true)} style={{ border: "none", background: "var(--sw-hover)", width: 24, height: 24, borderRadius: 99, cursor: "pointer", fontSize: 11, color: "var(--sw-text-soft)", flex: "none" }}><IconX /></button>
             </div>
           )}
@@ -148,15 +221,22 @@ export function HomeSection() {
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <div style={{ display: "flex", gap: 3, background: "var(--sw-hover)", border: "1px solid var(--sw-hair)", borderRadius: 999, padding: 3 }}>
-                <button onClick={() => setHomePage("today")} style={{ padding: "4px 13px", borderRadius: 999, border: "none", cursor: "pointer", fontSize: 11, fontWeight: 400, background: homePage !== "myweek" ? "var(--crimson)" : "transparent", color: homePage !== "myweek" ? "#fff" : "var(--sw-text-soft)" }}>Today</button>
-                <button onClick={() => setHomePage("myweek")} style={{ padding: "4px 13px", borderRadius: 999, border: "none", cursor: "pointer", fontSize: 11, fontWeight: 400, background: homePage === "myweek" ? "var(--crimson)" : "transparent", color: homePage === "myweek" ? "#fff" : "var(--sw-text-soft)" }}>My Week</button>
+                {TABS.map((tb) => (
+                  <button key={tb.key} onClick={() => setHomePage(tb.key)} style={{ padding: "4px 13px", borderRadius: 999, border: "none", cursor: "pointer", fontSize: 11, fontWeight: 400, background: homePage === tb.key ? "var(--crimson)" : "transparent", color: homePage === tb.key ? "#fff" : "var(--sw-text-soft)" }}>
+                    {tb.label}
+                  </button>
+                ))}
               </div>
-              <button onClick={() => setDensity(density === "compact" ? "comfortable" : "compact")} style={{ padding: "5px 13px", borderRadius: 999, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", color: "var(--sw-text-soft)", fontSize: 11, fontWeight: 400, cursor: "pointer" }}>
-                {density === "compact" ? "Comfortable" : "Compact"}
-              </button>
+              {homePage === "today" && (
+                <button onClick={() => setDensity(density === "compact" ? "comfortable" : "compact")} style={{ padding: "5px 13px", borderRadius: 999, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", color: "var(--sw-text-soft)", fontSize: 11, fontWeight: 400, cursor: "pointer" }}>
+                  {density === "compact" ? "Comfortable" : "Compact"}
+                </button>
+              )}
               <span style={{ fontSize: 11.5, color: "var(--sw-muted)", fontWeight: 400 }}>{fmtFull(today)}</span>
             </div>
           </div>
+
+          {(homePage === "all" || homePage === "personal") && taskTable}
 
           {homePage === "myweek" && (
             <>
@@ -240,7 +320,7 @@ export function HomeSection() {
                   </button>
                 ))}
                 {!tabRows.length && <p style={{ margin: "12px 0 0", fontSize: 11.5, color: "var(--sw-muted)" }}>Nothing in this status.</p>}
-                <button onClick={goMyList} style={{ marginTop: 10, border: "none", background: "none", color: "var(--crimson)", fontSize: 11.5, fontWeight: 400, cursor: "pointer", padding: 0 }}>View all tasks →</button>
+                <button onClick={goAll} style={{ marginTop: 10, border: "none", background: "none", color: "var(--crimson)", fontSize: 11.5, fontWeight: 400, cursor: "pointer", padding: 0 }}>View all tasks →</button>
               </section>
 
               {/* deadlines + at risk */}
@@ -308,8 +388,8 @@ export function HomeSection() {
                   ))}
                 </div>
                 <a
-                  href="#"
-                  onClick={(e) => { e.preventDefault(); setSection("company"); setCompanyPage("executive"); }}
+                  href="/overview"
+                  onClick={(e) => { e.preventDefault(); setCompanyPage("executive"); }}
                   style={{ flex: "none", textDecoration: "none", color: "var(--crimson)", fontSize: 11.5, fontWeight: 400, cursor: "pointer" }}
                 >
                   View executive report →

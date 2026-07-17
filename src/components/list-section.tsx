@@ -5,7 +5,9 @@ import { useUI } from "@/lib/ui";
 import { STATUS_COLORS, PRIORITY_COLORS, STATUSES, initials, Task } from "@/lib/types";
 import { iso, fmtShort, todayIso } from "@/lib/dates";
 import { updateTask } from "@/lib/actions";
+import { FilterState, EMPTY_FILTERS, applyFilters } from "@/lib/search";
 import { TopIcons } from "./shared";
+import { FilterBar } from "./filter-bar";
 import { IconChevLeft, IconChevRight, IconX } from "./icons";
 
 const TYPE_LABELS: Record<string, string> = { text: "Text", number: "Number", select: "Dropdown", date: "Date" };
@@ -23,9 +25,8 @@ export function ListSection() {
   } = useUI();
 
   const [view, setView] = useState<"table" | "board" | "calendar" | "gantt">("table");
-  const [query, setQuery] = useState("");
   const [density, setDensity] = useState<"comfortable" | "compact">("comfortable");
-  const [filters, setFilters] = useState({ mine: false, overdue: false, unassigned: false });
+  const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
   const [calMonth, setCalMonth] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
   const [ganttSpan, setGanttSpan] = useState(14);
   const [dragId, setDragId] = useState<string | null>(null);
@@ -52,15 +53,10 @@ export function ListSection() {
     return `${s?.name || ""} / ${l?.name || ""}`;
   };
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    let rows = tasks.filter((t) => t.list_id === list?.id);
-    if (q) rows = rows.filter((t) => t.name.toLowerCase().includes(q));
-    if (filters.mine && me) rows = rows.filter((t) => t.assignees.includes(me.id));
-    if (filters.overdue) rows = rows.filter((t) => t.due && t.due < today && t.status !== "Done");
-    if (filters.unassigned) rows = rows.filter((t) => !t.assignees.length);
-    return rows;
-  }, [tasks, list, query, filters, me, today]);
+  const filtered = useMemo(
+    () => applyFilters(tasks.filter((t) => t.list_id === list?.id), filters, today),
+    [tasks, list, filters, today]
+  );
 
   const setTask = (id: string, fields: Partial<Task>, toast?: string) => {
     const prev = tasks;
@@ -155,7 +151,7 @@ export function ListSection() {
   const saveCurrentView = async () => {
     const name = saveViewName.trim();
     if (!name || !me) return;
-    const config = { query, quickFilters: filters, view, density };
+    const config = { filters, view, density };
     const { data } = await supabase.from("saved_views").insert({ profile_id: me.id, name, config }).select().single();
     if (data) patch("savedViews", [...savedViews.filter((v) => v.name !== name), data]);
     setShowSaveView(false);
@@ -163,8 +159,18 @@ export function ListSection() {
     pushToast(`View "${name}" saved`);
   };
   const applySavedView = (config: Record<string, unknown>) => {
-    setQuery((config.query as string) || "");
-    setFilters((config.quickFilters as typeof filters) || { mine: false, overdue: false, unassigned: false });
+    if (config.filters) {
+      setFilters({ ...EMPTY_FILTERS, ...(config.filters as Partial<FilterState>) });
+    } else {
+      // legacy saved views from the quick-filter era
+      const legacy = (config.quickFilters as { mine?: boolean; overdue?: boolean } | undefined) || {};
+      setFilters({
+        ...EMPTY_FILTERS,
+        text: (config.query as string) || "",
+        assignees: legacy.mine && me ? [me.id] : [],
+        due: legacy.overdue ? "overdue" : "",
+      });
+    }
     setView((config.view as typeof view) || "table");
     setDensity((config.density as typeof density) || "comfortable");
   };
@@ -185,38 +191,11 @@ export function ListSection() {
     </div>
   );
 
-  /* ---- My List page ---- */
-  if (listPage === "mylist") {
-    const rows = tasks.filter((t) => me && t.assignees.includes(me.id));
-    return (
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, height: "100%" }}>
-        <header style={{ flex: "none", borderBottom: "1px solid var(--sw-hair)", background: "var(--sw-page)" }}>
-          {header("My List", "var(--crimson)", "Everything assigned to you, across every space")}
-        </header>
-        <main style={{ flex: 1, overflowY: "auto", padding: "16px 22px 40px" }}>
-          <div style={{ background: "var(--sw-card)", border: "1px solid var(--sw-hair)", borderRadius: 12, boxShadow: "var(--shadow-card)", overflow: "hidden" }}>
-            {rows.map((t) => (
-              <button key={t.id} className="sw-row" onClick={() => setActiveTaskId(t.id)} style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left", padding: "12px 16px", border: "none", borderBottom: "1px solid var(--sw-hair)", background: "none", cursor: "pointer" }}>
-                <span style={{ width: 8, height: 8, borderRadius: 99, background: STATUS_COLORS[t.status], flex: "none" }} />
-                <span style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13.5, fontWeight: 400, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.name}</div>
-                  <div style={{ fontSize: 11.5, color: "var(--sw-muted)", marginTop: 2 }}>{listPathOf(t)}</div>
-                </span>
-                <span style={{ fontSize: 11, fontWeight: 400, color: PRIORITY_COLORS[t.priority], flex: "none" }}>{t.priority}</span>
-                <span style={{ fontSize: 12, color: dueColor(t), width: 60, textAlign: "right", flex: "none", fontWeight: 400 }}>{t.due ? fmtShort(t.due) : ""}</span>
-              </button>
-            ))}
-          </div>
-        </main>
-      </div>
-    );
-  }
-
   /* ---- Everything page ---- */
   if (listPage === "everything") {
+    const everythingRows = applyFilters(tasks.filter((t) => t.list_id), filters, today);
     const groups = new Map<string, Task[]>();
-    for (const t of tasks) {
-      if (!t.list_id) continue;
+    for (const t of everythingRows) {
       const key = listPathOf(t);
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key)!.push(t);
@@ -225,6 +204,9 @@ export function ListSection() {
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, height: "100%" }}>
         <header style={{ flex: "none", borderBottom: "1px solid var(--sw-hair)", background: "var(--sw-page)" }}>
           {header("Everything", "var(--navy)", "Every task across every space and list")}
+          <div style={{ padding: "0 22px 10px" }}>
+            <FilterBar value={filters} onChange={setFilters} people={profiles} resultCount={everythingRows.length} />
+          </div>
         </header>
         <main style={{ flex: 1, overflowY: "auto", padding: "16px 22px 40px" }}>
           {Array.from(groups.entries()).map(([name, rows]) => (
@@ -234,6 +216,7 @@ export function ListSection() {
                 {rows.slice(0, 30).map((t) => (
                   <button key={t.id} className="sw-row" onClick={() => setActiveTaskId(t.id)} style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left", padding: "11px 16px", border: "none", borderBottom: "1px solid var(--sw-hair)", background: "none", cursor: "pointer" }}>
                     <span style={{ width: 8, height: 8, borderRadius: 99, background: STATUS_COLORS[t.status], flex: "none" }} />
+                    <span style={{ fontSize: 10, color: "var(--sw-muted)", width: 46, flex: "none" }}>SW-{t.task_number}</span>
                     <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 400, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.name}</span>
                     <span style={{ fontSize: 11, fontWeight: 400, color: PRIORITY_COLORS[t.priority], flex: "none" }}>{t.priority}</span>
                     <span style={{ fontSize: 12, color: dueColor(t), width: 60, textAlign: "right", flex: "none", fontWeight: 400 }}>{t.due ? fmtShort(t.due) : ""}</span>
@@ -252,9 +235,9 @@ export function ListSection() {
     <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, height: "100%" }}>
       <header style={{ flex: "none", borderBottom: "1px solid var(--sw-hair)", background: "var(--sw-page)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 22px 10px" }}>
-          <span style={{ width: 7, height: 7, borderRadius: 99, background: "var(--navy)", flex: "none" }} />
+          <span style={{ width: 7, height: 7, borderRadius: 99, background: space?.color || "var(--navy)", flex: "none" }} />
+          <span style={{ fontSize: 12.5, color: "var(--sw-muted)", fontWeight: 400 }}>{space?.name} /</span>
           <h1 style={{ fontSize: 16, fontWeight: 400, margin: 0 }}>{list?.name}</h1>
-          <span style={{ fontSize: 11.5, color: "var(--sw-muted)", fontWeight: 400 }}>{space?.name}</span>
           <div style={{ flex: 1 }} />
           <TopIcons />
           <button onClick={() => openQuickAdd()} style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--crimson)", color: "#fff", border: "none", borderRadius: 999, padding: "7px 15px", fontSize: 12.5, fontWeight: 400, cursor: "pointer", boxShadow: "0 8px 20px rgba(122,13,32,.25)" }}>
@@ -276,22 +259,21 @@ export function ListSection() {
         </div>
 
         {/* FILTER BAR */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 22px", borderTop: "1px solid var(--sw-hair)" }}>
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search this list…" style={{ width: 220, height: 32, borderRadius: 8, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "0 12px", fontSize: 12, color: "var(--sw-text)", outline: "none" }} />
-          {(["mine", "overdue", "unassigned"] as const).map((k) => {
-            const on = filters[k];
-            return (
-              <button key={k} onClick={() => setFilters({ ...filters, [k]: !on })} style={{ padding: "6px 12px", borderRadius: 999, border: `1px solid ${on ? "var(--crimson)" : "var(--sw-hair)"}`, background: on ? "var(--crimson)" : "var(--sw-hover)", color: on ? "#fff" : "var(--sw-text-soft)", fontSize: 11.5, fontWeight: 400, cursor: "pointer" }}>
-                {k[0].toUpperCase() + k.slice(1)}
-              </button>
-            );
-          })}
-          <div style={{ flex: 1 }} />
-          <span style={{ fontSize: 11.5, color: "var(--sw-muted)", fontWeight: 400 }}>{filtered.length} tasks</span>
-          <button onClick={() => setDensity(density === "comfortable" ? "compact" : "comfortable")} style={{ padding: "6px 12px", borderRadius: 999, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", color: "var(--sw-text-soft)", fontSize: 11.5, fontWeight: 400, cursor: "pointer" }}>
-            {density === "comfortable" ? "Comfortable" : "Compact"}
-          </button>
-          <button onClick={() => { setShowSaveView(!showSaveView); setSaveViewName(""); }} style={{ padding: "6px 12px", borderRadius: 999, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", color: "var(--crimson)", fontSize: 11.5, fontWeight: 400, cursor: "pointer" }}>+ Save view</button>
+        <div style={{ padding: "9px 22px", borderTop: "1px solid var(--sw-hair)" }}>
+          <FilterBar
+            value={filters}
+            onChange={setFilters}
+            people={profiles}
+            resultCount={filtered.length}
+            extra={
+              <>
+                <button onClick={() => setDensity(density === "comfortable" ? "compact" : "comfortable")} style={{ padding: "6px 12px", borderRadius: 999, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", color: "var(--sw-text-soft)", fontSize: 11.5, fontWeight: 400, cursor: "pointer" }}>
+                  {density === "comfortable" ? "Comfortable" : "Compact"}
+                </button>
+                <button onClick={() => { setShowSaveView(!showSaveView); setSaveViewName(""); }} style={{ padding: "6px 12px", borderRadius: 999, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", color: "var(--crimson)", fontSize: 11.5, fontWeight: 400, cursor: "pointer" }}>+ Save view</button>
+              </>
+            }
+          />
         </div>
         {showSaveView && (
           <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 22px 9px" }}>
@@ -333,6 +315,7 @@ export function ListSection() {
                 {grp.rows.map((t) => (
                   <div key={t.id} onClick={() => setActiveTaskId(t.id)} role="button" tabIndex={0} className="sw-row" style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left", padding: rowPad, borderBottom: "1px solid var(--sw-hair)", background: "none", cursor: "pointer" }}>
                     <span style={{ width: 7, height: 7, borderRadius: 99, background: STATUS_COLORS[t.status], flex: "none" }} />
+                    <span style={{ fontSize: 10, color: "var(--sw-muted)", width: 46, flex: "none" }}>SW-{t.task_number}</span>
                     <span style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 8 }}>
                       <span style={{ fontSize: 12.5, fontWeight: 400, color: "var(--sw-text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.name}</span>
                       {t.blocked && <span style={{ fontSize: 9.5, fontWeight: 400, color: "var(--red)", background: "rgba(243,38,62,0.1)", padding: "1px 6px", borderRadius: 999, flex: "none" }}>BLOCKED</span>}

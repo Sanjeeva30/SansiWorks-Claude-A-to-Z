@@ -3,7 +3,7 @@ import React, { createContext, useContext, useCallback, useEffect, useState } fr
 import { createClient } from "./supabase/client";
 import {
   Approval, AuditEntry, Automation, BoardRequest, CustomField, Department, DeptProposal,
-  Dependency, Doc, FormDef, Invite, Level, List, Nomination, Notification, Profile, Space,
+  Dependency, Doc, FormDef, Invite, Level, List, Nomination, Notification, Pin, Profile, Space,
   Task, TaskActivity, Template,
 } from "./types";
 
@@ -34,6 +34,7 @@ export interface StoreData {
   automations: Automation[];
   features: Record<string, boolean>;
   savedViews: { id: string; name: string; config: Record<string, unknown> }[];
+  pins: Pin[];
 }
 
 interface StoreCtx extends StoreData {
@@ -56,7 +57,7 @@ const EMPTY: StoreData = {
   spaces: [], lists: [], tasks: [], deps: [], activity: [], docs: [], forms: [],
   notifications: [], prefs: {}, approvals: [], invites: [], boardRequests: [],
   nominations: [], proposals: [], audit: [], templates: [], customFields: [],
-  automations: [], features: {}, savedViews: [],
+  automations: [], features: {}, savedViews: [], pins: [],
 };
 
 export function StoreProvider({ children }: { children: React.ReactNode }) {
@@ -73,7 +74,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       profiles, levels, departments, deptHeads, deptMembers, spaces, lists,
       tasks, assignees, raci, deps, activity, docs, forms, notifications, prefs,
       approvals, invites, boardRequests, nominations, proposals, audit,
-      templates, customFields, automations, features, savedViews,
+      templates, customFields, automations, features, savedViews, pins,
     ] = await Promise.all([
       supabase.from("profiles").select("*").order("name"),
       supabase.from("levels").select("*").order("sort"),
@@ -102,6 +103,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       supabase.from("automations").select("*").order("created_at"),
       supabase.from("features").select("*"),
       supabase.from("saved_views").select("*").eq("profile_id", uid).order("created_at"),
+      supabase.from("pins").select("*").eq("profile_id", uid).order("sort"),
     ]);
 
     const byTask = new Map<string, string[]>();
@@ -157,6 +159,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       automations: (automations.data || []) as Automation[],
       features: featMap,
       savedViews: savedViews.data || [],
+      pins: (pins.data || []) as Pin[],
     });
     setLoading(false);
   }, [supabase]);

@@ -2,69 +2,87 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "@/lib/store";
 import { useUI } from "@/lib/ui";
+import { searchWorkspace, scoreMatch, getRecentSearches, pushRecentSearch } from "@/lib/search";
 
-/* ---------- Command palette ---------- */
+/* ---------- Command palette: pages, actions, and workspace-wide search ---------- */
 export function CommandPalette() {
-  const { showPalette, setShowPalette, setSection, setListPage, setCompanyPage, setWorkspacePage, setActiveTaskId, setActiveList, setShowQuickAdd } = useUI();
-  const { tasks, profiles, docs, lists, spaces } = useStore();
+  const { showPalette, setShowPalette, setHomePage, setListPage, setCompanyPage, setWorkspacePage, setActiveTaskId, setActiveList, setShowQuickAdd, toggleTheme, setShowPortal } = useUI();
+  const store = useStore();
   const { openProfile } = useUI();
   const [query, setQuery] = useState("");
   const [index, setIndex] = useState(0);
+  const [recents, setRecents] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (showPalette) {
       setQuery("");
       setIndex(0);
+      setRecents(getRecentSearches());
       setTimeout(() => inputRef.current?.focus(), 30);
     }
   }, [showPalette]);
 
   const items = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = query.trim();
     const out: { group: string; label: string; sub: string; run: () => void }[] = [];
     const pages: [string, () => void][] = [
-      ["Home", () => setSection("home")],
-      ["My List", () => { setSection("list"); setListPage("mylist"); }],
-      ["Everything", () => { setSection("list"); setListPage("everything"); }],
-      ["Overview", () => { setSection("company"); setCompanyPage("executive"); }],
-      ["People", () => { setSection("company"); setCompanyPage("people"); }],
-      ["Inbox", () => { setSection("workspace"); setWorkspacePage("inbox"); }],
-      ["Docs", () => { setSection("workspace"); setWorkspacePage("docs"); }],
-      ["Forms", () => { setSection("workspace"); setWorkspacePage("forms"); }],
-      ["Settings", () => { setSection("workspace"); setWorkspacePage("settings"); }],
-      ["Admin console", () => { setSection("workspace"); setWorkspacePage("admin"); }],
-      ["New task", () => setShowQuickAdd(true)],
+      ["My Work", () => setHomePage("today")],
+      ["My tasks", () => setHomePage("all")],
+      ["This Week", () => setHomePage("myweek")],
+      ["Personal tasks", () => setHomePage("personal")],
+      ["Everything", () => setListPage("everything")],
+      ["Overview", () => setCompanyPage("executive")],
+      ["People", () => setCompanyPage("people")],
+      ["Inbox", () => setWorkspacePage("inbox")],
+      ["Docs", () => setWorkspacePage("docs")],
+      ["Forms", () => setWorkspacePage("forms")],
+      ["Settings", () => setWorkspacePage("settings")],
+      ["Admin console", () => setWorkspacePage("admin")],
     ];
+    const actions: [string, string, () => void][] = [
+      ["New task", "Ctrl+T or N", () => setShowQuickAdd(true)],
+      ["Toggle dark mode", "", () => toggleTheme()],
+      ["Open request portal", "public form", () => setShowPortal(true)],
+    ];
+    for (const [label, sub, run] of actions) {
+      if (!q || scoreMatch(q, label) > 12) out.push({ group: "Action", label, sub, run });
+    }
     for (const [label, run] of pages) {
-      if (!q || label.toLowerCase().includes(q)) out.push({ group: "Page", label, sub: "", run });
+      if (!q || scoreMatch(q, label) > 12) out.push({ group: "Page", label, sub: "", run });
     }
     if (q) {
-      for (const t of tasks.filter((t) => t.name.toLowerCase().includes(q)).slice(0, 6)) {
-        const l = lists.find((x) => x.id === t.list_id);
-        const s = spaces.find((x) => x.id === l?.space_id);
-        out.push({ group: "Task", label: t.name, sub: l ? `${s?.name} / ${l.name}` : "My List", run: () => setActiveTaskId(t.id) });
+      for (const h of searchWorkspace(q, store, 5)) {
+        const nav = h.nav;
+        out.push({
+          group: h.group, label: h.label, sub: h.sub,
+          run: () => {
+            pushRecentSearch(q);
+            switch (nav.kind) {
+              case "task": setActiveTaskId(nav.id); break;
+              case "person": openProfile(nav.id); break;
+              case "doc": setWorkspacePage("docs"); break;
+              case "form": setWorkspacePage("forms"); break;
+              case "list": setActiveList({ spaceId: nav.spaceId, listId: nav.listId }); break;
+              case "run": nav.run(); break;
+            }
+          },
+        });
       }
-      for (const p of profiles.filter((p) => p.name.toLowerCase().includes(q)).slice(0, 4)) {
-        out.push({ group: "Person", label: p.name, sub: p.role_title || "", run: () => openProfile(p.id) });
-      }
-      for (const d of docs.filter((d) => d.title.toLowerCase().includes(q)).slice(0, 4)) {
-        out.push({ group: "Doc", label: d.title, sub: d.category || "", run: () => { setSection("workspace"); setWorkspacePage("docs"); } });
-      }
-      for (const l of lists.filter((l) => l.name.toLowerCase().includes(q)).slice(0, 4)) {
-        const s = spaces.find((x) => x.id === l.space_id);
-        out.push({ group: "List", label: l.name, sub: s?.name || "", run: () => { setSection("list"); setListPage("list"); setActiveList({ spaceId: l.space_id, listId: l.id }); } });
+    } else {
+      for (const r of recents) {
+        out.push({ group: "Recent", label: r, sub: "", run: () => { setQuery(r); setIndex(0); }, keepOpen: true } as typeof out[number] & { keepOpen: boolean });
       }
     }
-    return out.slice(0, 10);
-  }, [query, tasks, profiles, docs, lists, spaces]);
+    return out.slice(0, 12) as { group: string; label: string; sub: string; run: () => void; keepOpen?: boolean }[];
+  }, [query, store, recents]);
 
   useEffect(() => {
     if (!showPalette) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "ArrowDown") { e.preventDefault(); setIndex((i) => Math.min(i + 1, items.length - 1)); }
       else if (e.key === "ArrowUp") { e.preventDefault(); setIndex((i) => Math.max(0, i - 1)); }
-      else if (e.key === "Enter") { e.preventDefault(); const it = items[index]; if (it) { it.run(); setShowPalette(false); } }
+      else if (e.key === "Enter") { e.preventDefault(); const it = items[index]; if (it) { it.run(); if (!it.keepOpen) setShowPalette(false); } }
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
@@ -85,7 +103,7 @@ export function CommandPalette() {
           {items.map((i, idx) => (
             <button
               key={`${i.group}-${i.label}`}
-              onClick={() => { i.run(); setShowPalette(false); }}
+              onClick={() => { i.run(); if (!i.keepOpen) setShowPalette(false); }}
               onMouseEnter={() => setIndex(idx)}
               style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left", padding: "9px 12px", border: "none", borderRadius: 8, background: idx === index ? "var(--sw-hover)" : "transparent", cursor: "pointer" }}
             >
