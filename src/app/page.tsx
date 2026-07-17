@@ -1,66 +1,59 @@
-import Image from "next/image";
-import styles from "./page.module.css";
+"use client";
+import React from "react";
+import { StoreProvider, useStore } from "@/lib/store";
+import { UIProvider, useUI } from "@/lib/ui";
+import { Sidebar } from "@/components/sidebar";
+import { HomeSection } from "@/components/home-section";
+import { ListSection } from "@/components/list-section";
+import { CompanySection } from "@/components/company-section";
+import { WorkspaceSection } from "@/components/workspace-section";
+import { TaskDetailSlideOver } from "@/components/task-detail";
+import { QuickAddModal } from "@/components/quick-add";
+import { ProfileModal, MetricModal, Toasts } from "@/components/shared";
+import { CommandPalette, PublicPortal } from "@/components/palette-portal";
+import { OnboardingChecklist } from "@/components/onboarding";
 
-export default function Home() {
+function AppShell() {
+  const { section } = useUI();
+  const { loading, me } = useStore();
+
+  if (loading || !me) {
+    return (
+      <div style={{ display: "flex", height: "100vh", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 14, background: "var(--sw-page)" }}>
+        <div style={{ display: "flex", width: 38, height: 5, borderRadius: 99, overflow: "hidden" }}>
+          <span style={{ flex: 1, background: "#7A0D20" }} /><span style={{ flex: 1, background: "#22409E" }} /><span style={{ flex: 1, background: "#0D4F31" }} /><span style={{ flex: 1, background: "#F3263E" }} /><span style={{ flex: 1, background: "#BDDA5F" }} />
+        </div>
+        <span style={{ fontSize: 12.5, color: "var(--sw-muted)", fontFamily: "var(--font-sans)" }}>Loading your workspace…</span>
+      </div>
+    );
+  }
+
   return (
-    <div className={styles.page}>
-      <main className={styles.main}>
-        <Image
-          className={styles.logo}
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className={styles.intro}>
-          <h1>To get started, edit the page.tsx file.</h1>
-          <p>
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className={styles.ctas}>
-          <a
-            className={styles.primary}
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className={styles.logo}
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className={styles.secondary}
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+    <div style={{ display: "flex", height: "100vh", width: "100%", background: "var(--sw-page)", fontFamily: "var(--font-sans)", color: "var(--sw-text)", overflow: "hidden" }}>
+      <Sidebar />
+      {section === "home" && <HomeSection />}
+      {section === "list" && <ListSection />}
+      {section === "company" && <CompanySection />}
+      {section === "workspace" && <WorkspaceSection />}
+
+      <TaskDetailSlideOver />
+      <QuickAddModal />
+      <ProfileModal />
+      <MetricModal />
+      <CommandPalette />
+      <PublicPortal />
+      <OnboardingChecklist />
+      <Toasts />
     </div>
+  );
+}
+
+export default function Page() {
+  return (
+    <StoreProvider>
+      <UIProvider>
+        <AppShell />
+      </UIProvider>
+    </StoreProvider>
   );
 }

@@ -1,49 +1,167 @@
+/* ============================================================
+   SansiWorks — global styles
+   1:1 port of the Sansico Group design system tokens plus the
+   app-level style block from SansiWorks.dc.html
+   ============================================================ */
+
+/* ---- fonts (self-hosted) ---- */
+@font-face {
+  font-family: "Archivo";
+  src: url("/fonts/Archivo-Variable.ttf") format("truetype-variations");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Instrument Serif";
+  src: url("/fonts/InstrumentSerif-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Instrument Serif";
+  src: url("/fonts/InstrumentSerif-Italic.ttf") format("truetype");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --font-sans: "Archivo", ui-sans-serif, system-ui, Helvetica, Arial, sans-serif;
+  --font-serif: "Instrument Serif", Georgia, serif;
+
+  /* ---- base brand hues ---- */
+  --crimson: #7A0D20;
+  --crimson-deep: #5A0915;
+  --navy: #22409E;
+  --green: #0D4F31;
+  --red: #F3263E;
+  --citrus: #BDDA5F;
+
+  /* ---- neutrals ---- */
+  --paper: #FFFFFF;
+  --paper-warm: #FAF8F4;
+  --ink: #17120F;
+  --ink-soft: #4A423D;
+  --hair: #E5DFD8;
+  --muted: #9A918A;
+
+  /* ---- semantic aliases ---- */
+  --surface-page: var(--paper);
+  --surface-warm: var(--paper-warm);
+  --surface-card: #FFFFFF;
+  --surface-dark: var(--ink);
+  --surface-footer: #100C0A;
+  --text-body: var(--ink);
+  --text-soft: var(--ink-soft);
+  --text-muted: var(--muted);
+  --text-on-dark: rgba(255, 255, 255, 0.92);
+  --text-on-dark-soft: rgba(255, 255, 255, 0.75);
+  --border-hair: var(--hair);
+  --border-focus: var(--navy);
+  --accent-primary: var(--crimson);
+  --accent-secondary: var(--navy);
+
+  /* ---- spacing / radius / shadows ---- */
+  --space-xs: 8px;
+  --space-sm: 14px;
+  --space-md: 18px;
+  --space-lg: 24px;
+  --space-xl: clamp(20px, 4vw, 48px);
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 16px;
+  --radius-xl: 18px;
+  --radius-pill: 999px;
+  --max-wrap: 1240px;
+  --shadow-card:
+    0 1px 4px rgba(23, 18, 15, 0.06),
+    0 8px 28px rgba(23, 18, 15, 0.13),
+    0 24px 64px rgba(23, 18, 15, 0.12);
+  --shadow-card-hover:
+    0 2px 8px rgba(23, 18, 15, 0.08),
+    0 16px 48px rgba(23, 18, 15, 0.20),
+    0 36px 88px rgba(23, 18, 15, 0.18);
+  --shadow-button-hover: 0 14px 34px rgba(122, 13, 32, 0.35);
+  --ease-brand: cubic-bezier(0.16, 1, 0.3, 1);
+  --duration-fast: 0.2s;
+  --duration-base: 0.35s;
+  --duration-slow: 0.7s;
+
+  /* ---- SansiWorks app theme vars (light default) ---- */
+  --sw-page: #FFFFFF;
+  --sw-card: #FFFFFF;
+  --sw-sidebar: #FAF8F4;
+  --sw-hover: #F5F2EC;
+  --sw-hair: #E5DFD8;
+  --sw-text: #17120F;
+  --sw-text-soft: #4A423D;
+  --sw-muted: #9A918A;
+  --sw-field-h: 40px;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+[data-sw-theme="dark"] {
+  --sw-page: #15120F;
+  --sw-card: #1D1815;
+  --sw-sidebar: #191512;
+  --sw-hover: #241E1A;
+  --sw-hair: #332B25;
+  --sw-text: rgba(255, 255, 255, 0.92);
+  --sw-text-soft: rgba(255, 255, 255, 0.68);
+  --sw-muted: rgba(255, 255, 255, 0.45);
 }
 
-html {
-  height: 100%;
-}
-
-html,
+/* ---- base reset (design system base.css) ---- */
+*, *::before, *::after { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
 body {
-  max-width: 100vw;
-  overflow-x: hidden;
-}
-
-body {
-  min-height: 100%;
-  display: flex;
-  flex-direction: column;
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-* {
-  box-sizing: border-box;
-  padding: 0;
   margin: 0;
+  font-family: var(--font-sans);
+  color: var(--sw-text);
+  background: var(--sw-page);
+  line-height: 1.55;
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  font-variant-numeric: tabular-nums;
+}
+img { max-width: 100%; display: block; }
+a { color: inherit; text-decoration: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
 }
 
-a {
-  color: inherit;
-  text-decoration: none;
+/* ---- app-level style block from SansiWorks.dc.html ---- */
+button, select, input, textarea { color: inherit; font: inherit; }
+@keyframes swModalIn { from { opacity: 0; transform: translateY(10px) scale(.98); } to { opacity: 1; transform: none; } }
+@keyframes swSectionIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+main { animation: swSectionIn .16s ease; }
+.sw-row { transition: background .12s ease; }
+.sw-row:hover { background: var(--sw-hover) !important; }
+.sw-select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 28px !important;
+  border-radius: 999px !important;
+  background-image: url('data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20width=%2212%22%20height=%2212%22%20viewBox=%220%200%2024%2024%22%20fill=%22none%22%20stroke=%22%239A918A%22%20stroke-width=%222.4%22%20stroke-linecap=%22round%22%3E%3Cpath%20d=%22M6%209l6%206%206-6%22/%3E%3C/svg%3E') !important;
+  background-repeat: no-repeat !important;
+  background-position: right 10px center !important;
 }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid #7A0D20; outline-offset: 3px; }
+button:active { transform: scale(0.97); }
+@keyframes swStripIn { from { width: 0; opacity: 0; } to { width: 38px; opacity: 1; } }
+.sw-tipwrap { position: relative; }
+.sw-tipwrap .sw-tip { display: none; }
+.sw-tipwrap:hover .sw-tip { display: block; }
+.sw-card-h { transition: transform .15s ease, box-shadow .15s ease; }
+.sw-card-h:hover { transform: translateY(-3px); box-shadow: 0 1px 2px rgba(23,18,15,.08), 0 12px 28px rgba(23,18,15,.13), 0 32px 64px rgba(23,18,15,.10) !important; }
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-thumb { background: var(--sw-hair); border-radius: 99px; }
+::-webkit-scrollbar-track { background: transparent; }
 
-@media (prefers-color-scheme: dark) {
-  html {
-    color-scheme: dark;
-  }
-}
+/* ---- onboarding-flow keyframes from SansiWorks Onboarding.dc.html ---- */
+@keyframes swFadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+@keyframes swCheckPop { 0% { transform: scale(0.6); } 60% { transform: scale(1.25); } 100% { transform: scale(1); } }
+@keyframes swToastIn { from { opacity: 0; transform: translateY(10px) scale(.97); } to { opacity: 1; transform: none; } }
