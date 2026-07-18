@@ -14,13 +14,15 @@ export interface RaciValue {
 }
 
 export function RaciRows({
-  profiles, value, onChange, autoA, personal,
+  profiles, value, onChange, autoA, personal, aCandidates, deptLabel,
 }: {
-  profiles: Profile[];
+  profiles: Profile[];           // pool for C & I — may span every department
   value: RaciValue;
   onChange: (v: RaciValue) => void;
-  autoA: string | null; // auto accountable (manager of first assignee)
+  autoA: string | null;          // auto accountable (manager of first assignee)
   personal?: boolean;
+  aCandidates?: Profile[];       // pool for A — the Rs plus anyone who outranks them
+  deptLabel?: (p: Profile) => string | null;
 }) {
   const [active, setActive] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -52,9 +54,12 @@ export function RaciRows({
         const k = r.letter;
         const isOpen = active === k;
         const q = isOpen ? query.toLowerCase() : "";
-        const results = profiles
-          .filter((p) => !r.selected.includes(p.id) && (!q || p.name.toLowerCase().includes(q)))
-          .slice(0, 5);
+        const pool = r.single ? (aCandidates || profiles) : profiles;
+        // C & I search the whole company — require 2+ letters before showing names
+        const needsQuery = !r.single && pool.length > 8;
+        const results = needsQuery && q.length < 2
+          ? []
+          : pool.filter((p) => !r.selected.includes(p.id) && (!q || p.name.toLowerCase().includes(q))).slice(0, 6);
         return (
           <div key={k} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
             <span style={{ width: 92, flex: "none", paddingTop: 5, fontSize: 10, color: "var(--sw-muted)" }}>
@@ -104,12 +109,19 @@ export function RaciRows({
                     >
                       <span style={{ width: 18, height: 18, borderRadius: 99, background: p.color, color: "#fff", fontSize: 7.5, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>{initials(p.name)}</span>
                       <span style={{ flex: 1, fontSize: 11.5, color: "var(--sw-text)" }}>{p.name}</span>
+                      {deptLabel && deptLabel(p) && (
+                        <span style={{ fontSize: 9, color: "var(--sw-muted)", background: "var(--sw-hover)", borderRadius: 999, padding: "1px 7px", flex: "none" }}>{deptLabel(p)}</span>
+                      )}
                       {r.single && p.id === autoA && (
                         <span style={{ fontSize: 9, color: "var(--green)", background: "rgba(13,79,49,0.08)", borderRadius: 999, padding: "1px 7px" }}>manager</span>
                       )}
                     </button>
                   ))}
-                  {!results.length && <div style={{ padding: "7px 10px", fontSize: 11, color: "var(--sw-muted)" }}>No matches.</div>}
+                  {!results.length && (
+                    <div style={{ padding: "7px 10px", fontSize: 11, color: "var(--sw-muted)" }}>
+                      {needsQuery && q.length < 2 ? "Type 2+ letters — any department" : "No matches."}
+                    </div>
+                  )}
                 </div>
               )}
             </div>

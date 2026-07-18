@@ -12,6 +12,7 @@ import { QuickAddModal } from "@/components/quick-add";
 import { ProfileModal, MetricModal, Toasts } from "@/components/shared";
 import { CommandPalette, PublicPortal } from "@/components/palette-portal";
 import { OnboardingChecklist } from "@/components/onboarding";
+import { ReminderEngine } from "@/components/reminders";
 
 function AppShell() {
   const { section } = useUI();
@@ -43,6 +44,7 @@ function AppShell() {
       <CommandPalette />
       <PublicPortal />
       <OnboardingChecklist />
+      <ReminderEngine />
       <Toasts />
     </div>
   );

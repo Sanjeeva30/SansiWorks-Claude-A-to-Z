@@ -4,7 +4,7 @@ import { createClient } from "./supabase/client";
 import {
   Approval, AuditEntry, Automation, BoardRequest, CustomField, Department, DeptProposal,
   Dependency, Doc, FormDef, Invite, Level, List, Nomination, Notification, Pin, Profile, Space,
-  Subtask, Task, TaskActivity, Template,
+  Reminder, Subtask, Task, TaskActivity, Template,
 } from "./types";
 
 export interface StoreData {
@@ -18,6 +18,7 @@ export interface StoreData {
   lists: List[];
   tasks: Task[];
   subtasks: Subtask[];
+  reminders: Reminder[];
   deps: Dependency[];
   activity: TaskActivity[];
   docs: Doc[];
@@ -55,7 +56,7 @@ export function useStore() {
 
 const EMPTY: StoreData = {
   me: null, profiles: [], levels: [], departments: [], deptHeads: [], deptMembers: [],
-  spaces: [], lists: [], tasks: [], subtasks: [], deps: [], activity: [], docs: [], forms: [],
+  spaces: [], lists: [], tasks: [], subtasks: [], reminders: [], deps: [], activity: [], docs: [], forms: [],
   notifications: [], prefs: {}, approvals: [], invites: [], boardRequests: [],
   nominations: [], proposals: [], audit: [], templates: [], customFields: [],
   automations: [], features: {}, savedViews: [], pins: [],
@@ -73,7 +74,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
     const [
       profiles, levels, departments, deptHeads, deptMembers, spaces, lists,
-      tasks, assignees, raci, subtasks, deps, activity, docs, forms, notifications, prefs,
+      tasks, assignees, raci, subtasks, reminders, deps, activity, docs, forms, notifications, prefs,
       approvals, invites, boardRequests, nominations, proposals, audit,
       templates, customFields, automations, features, savedViews, pins,
     ] = await Promise.all([
@@ -88,6 +89,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       supabase.from("task_assignees").select("*"),
       supabase.from("task_raci").select("*"),
       supabase.from("subtasks").select("*").order("sort"),
+      supabase.from("reminders").select("*").eq("profile_id", uid).neq("status", "dismissed").order("remind_at"),
       supabase.from("task_dependencies").select("*"),
       supabase.from("task_activity").select("*").order("created_at", { ascending: false }).limit(200),
       supabase.from("docs").select("*").order("created_at"),
@@ -145,6 +147,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       lists: (lists.data || []) as List[],
       tasks: allTasks,
       subtasks: (subtasks.data || []) as Subtask[],
+      reminders: (reminders.data || []) as Reminder[],
       deps: (deps.data || []) as Dependency[],
       activity: (activity.data || []) as TaskActivity[],
       docs: (docs.data || []) as Doc[],

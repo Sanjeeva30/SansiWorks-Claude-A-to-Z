@@ -113,6 +113,20 @@ export interface Subtask {
   done: boolean;
   sort: number;
   created_at: string;
+  accountable_id: string | null;
+  raci_c: string[];
+  raci_i: string[];
+}
+
+export interface Reminder {
+  id: string;
+  profile_id: string;
+  task_id: string | null;
+  subtask_id: string | null;
+  title: string;
+  remind_at: string;
+  status: "pending" | "fired" | "dismissed";
+  created_at: string;
 }
 
 export interface Doc {

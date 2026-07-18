@@ -4,8 +4,9 @@ import { useStore } from "@/lib/store";
 import { useUI } from "@/lib/ui";
 import { initials } from "@/lib/types";
 import { parseNLDate } from "@/lib/dates";
-import { createTask, managerOf, eligibleAssignees } from "@/lib/actions";
+import { createTask, managerOf, eligibleAssignees, accountableCandidates, suggestAssignees, addSubtask, createReminder } from "@/lib/actions";
 import { RaciRows, RaciValue, raciNote } from "./raci";
+import { Subtask } from "@/lib/types";
 import { IconSparkle, IconTaskPlus, IconX } from "./icons";
 
 export function QuickAddModal() {
@@ -35,19 +36,23 @@ export function QuickAddModal() {
   const [raci, setRaci] = useState<RaciValue>({ a: null, c: [], i: [] });
   const [description, setDescription] = useState("");
   const [attachments, setAttachments] = useState<{ id: string; name: string; size: number }[]>([]);
+  const [drafts, setDrafts] = useState<{ id: string; name: string; assignee_id: string | null; due: string; reminder: string; raci: RaciValue; open: boolean }[]>([]);
+  const [draftName, setDraftName] = useState("");
   const [addAnother, setAddAnother] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
 
   if (!showQuickAdd || !me) return null;
 
   const personal = listVal === "my";
-  const scoped = eligibleAssignees(store, personal ? null : listVal);
+  const deptScoped = eligibleAssignees(store, personal ? null : listVal);
+  const aCands = accountableCandidates(profiles, store.levels, assignees.length ? assignees : [me.id]);
+  const deptLabel = (p: (typeof profiles)[number]) => store.departments.find((d) => d.id === p.department_id)?.name?.split(" ")[0] || null;
   const autoA = managerOf(profiles, assignees[0]);
   const close = () => setShowQuickAdd(false);
 
   const reset = () => {
     setName(""); setDueText(""); setDue(""); setDueLabel(""); setDescription("");
-    setAttachments([]); setRaci({ a: null, c: [], i: [] }); setReminder("");
+    setAttachments([]); setRaci({ a: null, c: [], i: [] }); setReminder(""); setDrafts([]); setDraftName("");
   };
 
   const submit = async () => {
@@ -67,14 +72,30 @@ export function QuickAddModal() {
       reminder_at: reminder || null,
       recur,
     });
-    if (created) pushToast(`Task "${created.name}" created`);
+    if (created) {
+      // draft subtasks (with their RACI) and any reminders ride along
+      for (const d of drafts) {
+        const sub = await addSubtask(supabase, store, patch, created.id, d.name, d.assignee_id, d.due || null,
+          { accountable_id: d.raci.a, raci_c: d.raci.c, raci_i: d.raci.i });
+        if (sub && d.reminder) {
+          await createReminder(supabase, store, patch, { profile_id: me.id, task_id: created.id, subtask_id: (sub as Subtask).id, title: d.name, remind_at: new Date(d.reminder).toISOString() });
+        }
+      }
+      if (reminder) {
+        await createReminder(supabase, store, patch, { profile_id: me.id, task_id: created.id, title: created.name, remind_at: new Date(reminder).toISOString() });
+      }
+      pushToast(`Task "${created.name}" created${drafts.length ? ` with ${drafts.length} subtask${drafts.length > 1 ? "s" : ""}` : ""}`);
+    }
     if (addAnother) reset();
     else close();
   };
 
-  const filteredPeople = scoped.filter(
-    (p) => !assigneeQuery || p.name.toLowerCase().includes(assigneeQuery.toLowerCase()) || p.email.toLowerCase().includes(assigneeQuery.toLowerCase())
-  );
+  const q = assigneeQuery.trim().toLowerCase();
+  const filteredPeople = personal
+    ? [] // personal task: just you — no other names offered
+    : q.length >= 2
+      ? profiles.filter((p) => p.name.toLowerCase().includes(q) || p.email.toLowerCase().includes(q)) // cross-department by search
+      : deptScoped.filter((p) => !q || p.name.toLowerCase().includes(q));
   const selected = profiles.filter((p) => assignees.includes(p.id));
 
   const dueChips = ["Today", "Tomorrow", "Next week", "End of month"];
@@ -152,22 +173,24 @@ export function QuickAddModal() {
             {label("Where")}
             <div style={{ marginBottom: 6 }}>{dd("list", currentListLabel, listOptions, (v) => {
               setListVal(v);
-              // re-scope people to the destination department
-              const nextScope = eligibleAssignees(store, v === "my" ? null : v).map((p) => p.id);
-              setAssignees((a) => a.filter((id) => nextScope.includes(id)));
-              setRaci((r) => ({ a: r.a && nextScope.includes(r.a) ? r.a : null, c: r.c.filter((id) => nextScope.includes(id)), i: r.i.filter((id) => nextScope.includes(id)) }));
+              // switching to a personal task drops other people
+              if (v === "my") { setAssignees(me ? [me.id] : []); setRaci({ a: null, c: [], i: [] }); }
             })}</div>
-            {!personal && scoped.length < profiles.length && (
-              <div style={{ fontSize: 11, color: "var(--sw-muted)", marginBottom: 12 }}>People pickers are limited to this list&apos;s department.</div>
-            )}
-            {(personal || scoped.length >= profiles.length) && <div style={{ marginBottom: 12 }} />}
+            <div style={{ marginBottom: 12 }} />
 
             <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
               <label style={{ fontSize: 12.5, fontWeight: 400, color: "var(--sw-text-soft)", flex: 1 }}>Assign to <span style={{ color: "var(--crimson)" }}>*</span></label>
               <button onClick={() => { if (!assignees.includes(me.id)) setAssignees([...assignees, me.id]); }} style={{ border: "none", background: "none", color: "var(--crimson)", fontSize: 12.5, fontWeight: 400, cursor: "pointer" }}>+ Add me</button>
             </div>
-            <input value={assigneeQuery} onChange={(e) => setAssigneeQuery(e.target.value)} placeholder="Type a name or email…"
+            {personal ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, padding: "8px 12px", border: "1px solid var(--sw-hair)", borderRadius: 10, background: "var(--sw-hover)" }}>
+                <span style={{ width: 22, height: 22, borderRadius: 99, background: me.color, color: "#fff", fontSize: 9, display: "flex", alignItems: "center", justifyContent: "center" }}>{initials(me.name)}</span>
+                <span style={{ fontSize: 12.5 }}>{me.name} <span style={{ color: "var(--sw-muted)" }}>— personal tasks are yours alone</span></span>
+              </div>
+            ) : (
+            <input value={assigneeQuery} onChange={(e) => setAssigneeQuery(e.target.value)} placeholder="Department shown below — type 2+ letters to search any department…"
               style={{ width: "100%", height: "var(--sw-field-h)", borderRadius: 10, border: "1.5px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "0 12px", fontSize: 13, marginBottom: 10, outline: "none", color: "var(--sw-text)" }} />
+            )}
 
             {selected.length > 0 && (
               <>
@@ -184,19 +207,23 @@ export function QuickAddModal() {
               </>
             )}
 
+            {!personal && (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 7, marginBottom: 18 }}>
               {filteredPeople.map((p) => {
                 const on = assignees.includes(p.id);
+                const crossDept = !deptScoped.some((x) => x.id === p.id);
                 return (
                   <button key={p.id} onClick={() => setAssignees(on ? assignees.filter((x) => x !== p.id) : [...assignees, p.id])}
                     style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 12px 5px 5px", borderRadius: 999, border: `1.5px solid ${on ? "var(--crimson)" : "var(--sw-hair)"}`, background: on ? "rgba(122,13,32,0.06)" : "none", cursor: "pointer" }}>
                     <span style={{ width: 20, height: 20, borderRadius: 99, background: p.color, color: "#fff", fontSize: 8.5, fontWeight: 400, display: "flex", alignItems: "center", justifyContent: "center" }}>{initials(p.name)}</span>
                     <span style={{ fontSize: 12.5, fontWeight: 400, color: on ? "var(--crimson)" : "var(--sw-text-soft)" }}>{p.name}</span>
+                    {crossDept && <span style={{ fontSize: 9, color: "var(--sw-muted)", background: "var(--sw-hover)", borderRadius: 999, padding: "1px 7px" }}>{deptLabel(p) || "other dept"}</span>}
                   </button>
                 );
               })}
-              {!filteredPeople.length && <span style={{ fontSize: 12.5, color: "var(--sw-muted)", padding: "6px 0" }}>No match.</span>}
+              {!filteredPeople.length && <span style={{ fontSize: 12.5, color: "var(--sw-muted)", padding: "6px 0" }}>{q.length === 1 ? "Type one more letter to search all departments…" : "No match."}</span>}
             </div>
+            )}
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 18 }}>
               <div>
@@ -246,8 +273,72 @@ export function QuickAddModal() {
               <span style={{ fontSize: 11, color: "var(--sw-muted)" }}>{raciNote(personal)}</span>
             </div>
             <div style={{ marginBottom: 18 }}>
-              <RaciRows profiles={scoped} personal={personal} autoA={autoA} value={raci} onChange={setRaci} />
+              <RaciRows profiles={profiles} aCandidates={aCands} deptLabel={deptLabel} personal={personal} autoA={autoA} value={raci} onChange={setRaci} />
             </div>
+
+            {label("Subtasks")}
+            <div style={{ marginBottom: 6 }}>
+              {drafts.map((d, i) => {
+                const dp = profiles.find((x) => x.id === d.assignee_id);
+                return (
+                  <div key={d.id} style={{ border: "1px solid var(--sw-hair)", borderRadius: 10, marginBottom: 7, background: "var(--sw-card)", overflow: "visible" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 10px" }}>
+                      <span style={{ fontSize: 10.5, color: "var(--sw-muted)", width: 16, flex: "none" }}>{i + 1}.</span>
+                      <input
+                        value={d.name}
+                        onChange={(e) => setDrafts(drafts.map((x) => x.id === d.id ? { ...x, name: e.target.value } : x))}
+                        style={{ flex: 1, border: "none", background: "none", outline: "none", fontSize: 12.5, color: "var(--sw-text)", minWidth: 0 }}
+                      />
+                      <select
+                        className="sw-select"
+                        value={d.assignee_id || ""}
+                        onChange={(e) => setDrafts(drafts.map((x) => x.id === d.id ? { ...x, assignee_id: e.target.value || null } : x))}
+                        style={{ height: 26, borderRadius: 7, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", fontSize: 11, color: "var(--sw-text-soft)", padding: "0 5px", maxWidth: 110 }}
+                      >
+                        <option value="">{personal ? "Me" : "Assignee…"}</option>
+                        {(personal ? [me] : deptScoped).map((p) => <option key={p.id} value={p.id}>{p.name.split(" ")[0]}</option>)}
+                      </select>
+                      <input type="date" value={d.due} onChange={(e) => setDrafts(drafts.map((x) => x.id === d.id ? { ...x, due: e.target.value } : x))}
+                        style={{ height: 26, borderRadius: 7, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", fontSize: 10.5, color: "var(--sw-text-soft)", padding: "0 5px", width: 118 }} />
+                      <button onClick={() => setDrafts(drafts.map((x) => x.id === d.id ? { ...x, open: !x.open } : x))} title="RACI & reminder"
+                        style={{ border: "none", background: d.open ? "var(--sw-hover)" : "none", borderRadius: 6, color: "var(--sw-muted)", cursor: "pointer", padding: "3px 6px", fontSize: 11 }}>⋯</button>
+                      <button onClick={() => setDrafts(drafts.filter((x) => x.id !== d.id))} style={{ border: "none", background: "none", color: "var(--sw-muted)", cursor: "pointer", padding: 2, display: "flex" }}><IconX /></button>
+                    </div>
+                    {d.open && (
+                      <div style={{ borderTop: "1px solid var(--sw-hair)", padding: "9px 12px", background: "var(--sw-hover)", display: "flex", flexDirection: "column", gap: 8 }}>
+                        <RaciRows
+                          profiles={profiles}
+                          aCandidates={accountableCandidates(profiles, store.levels, d.assignee_id ? [d.assignee_id] : assignees.length ? assignees : [me.id])}
+                          deptLabel={deptLabel}
+                          autoA={d.assignee_id ? managerOf(profiles, d.assignee_id) : autoA}
+                          value={d.raci}
+                          onChange={(v) => setDrafts(drafts.map((x) => x.id === d.id ? { ...x, raci: v } : x))}
+                        />
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <span style={{ fontSize: 10, color: "var(--sw-muted)", width: 92, flex: "none" }}>Reminder</span>
+                          <input type="datetime-local" value={d.reminder} onChange={(e) => setDrafts(drafts.map((x) => x.id === d.id ? { ...x, reminder: e.target.value } : x))}
+                            style={{ height: 27, borderRadius: 7, border: "1px solid var(--sw-hair)", background: "var(--sw-card)", fontSize: 11, color: "var(--sw-text)", padding: "0 7px" }} />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              <input
+                value={draftName}
+                onChange={(e) => setDraftName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && draftName.trim()) {
+                    setDrafts([...drafts, { id: Math.random().toString(36).slice(2), name: draftName.trim(), assignee_id: personal ? me.id : (assignees[0] || null), due: "", reminder: "", raci: { a: null, c: [], i: [] }, open: false }]);
+                    setDraftName("");
+                  }
+                }}
+                placeholder="+ Break this task down — type a subtask and press Enter"
+                style={{ width: "100%", height: 34, borderRadius: 9, border: "1.5px dashed var(--sw-hair)", background: "none", padding: "0 12px", fontSize: 12.5, outline: "none", color: "var(--sw-text)", boxSizing: "border-box" }}
+              />
+              {drafts.length > 0 && <div style={{ fontSize: 10.5, color: "var(--sw-muted)", marginTop: 5 }}>Subtasks inherit this task&apos;s department scope · use ⋯ for RACI and a reminder.</div>}
+            </div>
+            <div style={{ marginBottom: 12 }} />
 
             {label("Description")}
             <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Add more details about this task…"
@@ -310,16 +401,14 @@ export function QuickAddModal() {
 
             <div style={{ background: "var(--sw-card)", border: "1px solid var(--sw-hair)", borderRadius: 12, padding: 14, marginBottom: 14 }}>
               <div style={{ fontSize: 13, fontWeight: 400, marginBottom: 10 }}>Suggested assignees</div>
-              {scoped.slice(0, 3).map((sa, idx) => (
+              {personal && <div style={{ fontSize: 11.5, color: "var(--sw-muted)" }}>Personal task — no suggestions needed.</div>}
+              {!personal && suggestAssignees(store, name, listVal === "my" ? null : listVal, assignees).map(({ p: sa, reason }) => (
                 <button key={sa.id} onClick={() => { if (!assignees.includes(sa.id)) setAssignees([...assignees, sa.id]); }}
                   style={{ display: "flex", alignItems: "flex-start", gap: 9, width: "100%", textAlign: "left", border: "none", background: "none", cursor: "pointer", padding: "7px 0" }}>
                   <span style={{ width: 26, height: 26, borderRadius: 99, background: sa.color, color: "#fff", fontSize: 9.5, fontWeight: 400, display: "flex", alignItems: "center", justifyContent: "center", flex: "none", marginTop: 1 }}>{initials(sa.name)}</span>
                   <span style={{ flex: 1, minWidth: 0 }}>
-                    <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <span style={{ fontSize: 12.5, fontWeight: 400 }}>{sa.name}</span>
-                      {idx === 0 && <span style={{ background: "rgba(34,64,158,0.1)", color: "var(--navy)", fontSize: 9.5, fontWeight: 400, padding: "1px 7px", borderRadius: 999 }}>Suggested</span>}
-                    </span>
-                    <span style={{ display: "block", fontSize: 11, color: "var(--sw-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{sa.email}</span>
+                    <span style={{ fontSize: 12.5, fontWeight: 400 }}>{sa.name}</span>
+                    <span style={{ display: "block", fontSize: 11, color: "var(--navy)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{reason}</span>
                   </span>
                 </button>
               ))}

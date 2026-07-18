@@ -134,6 +134,52 @@ export function canDecideDueDate(me: Profile | null, profiles: Profile[], levels
   return levelSort(profiles, levels, me.id) < levelSort(profiles, levels, approval.requester_id);
 }
 
+/** Who may add subtasks to an existing task: the assignor (owner), the Accountable,
+ *  anyone who outranks the assignor, or a super admin. Assignees themselves may not
+ *  restructure the work they were given unless they also fit one of those roles. */
+export function canAddSubtask(me: Profile | null, profiles: Profile[], levels: Level[], task: TaskT): boolean {
+  if (!me) return false;
+  if (me.is_super) return true;
+  if (!task.list_id) return task.owner_id === me.id || task.assignees.includes(me.id); // personal
+  if (task.owner_id === me.id || task.accountable_id === me.id) return true;
+  return levelSort(profiles, levels, me.id) < levelSort(profiles, levels, task.owner_id);
+}
+
+/** Accountable candidates: the Responsible people themselves, plus anyone who outranks
+ *  the highest-ranked Responsible. (A = same as R, or higher in rank than R.) */
+export function accountableCandidates(profiles: Profile[], levels: Level[], assigneeIds: string[]): Profile[] {
+  if (!assigneeIds.length) return profiles;
+  const bestR = Math.min(...assigneeIds.map((id) => levelSort(profiles, levels, id)));
+  return profiles.filter((p) => assigneeIds.includes(p.id) || levelSort(profiles, levels, p.id) < bestR || p.is_super);
+}
+
+/* ----- reminders ----- */
+export async function createReminder(
+  supabase: Supabase, store: Pick<StoreData, "reminders">, patch: Patch,
+  input: { profile_id: string; task_id?: string | null; subtask_id?: string | null; title: string; remind_at: string }
+) {
+  const { data } = await supabase.from("reminders").insert({
+    profile_id: input.profile_id, task_id: input.task_id || null, subtask_id: input.subtask_id || null,
+    title: input.title, remind_at: input.remind_at,
+  }).select().single();
+  // only reminders for the current viewer live in the store (RLS scopes reads anyway)
+  if (data && store.reminders) patch("reminders", [...store.reminders, data].sort((a, b) => a.remind_at.localeCompare(b.remind_at)));
+  return data;
+}
+
+export async function updateReminder(
+  supabase: Supabase, store: Pick<StoreData, "reminders">, patch: Patch,
+  id: string, fields: Partial<Pick<StoreData["reminders"][number], "remind_at" | "status" | "title">>
+) {
+  patch("reminders", store.reminders.map((r) => (r.id === id ? { ...r, ...fields } : r)));
+  await supabase.from("reminders").update(fields).eq("id", id);
+}
+
+export async function deleteReminder(supabase: Supabase, store: Pick<StoreData, "reminders">, patch: Patch, id: string) {
+  patch("reminders", store.reminders.filter((r) => r.id !== id));
+  await supabase.from("reminders").delete().eq("id", id);
+}
+
 /* ----- department-scoped people pickers ----- */
 export function eligibleAssignees(
   store: Pick<StoreData, "profiles" | "deptMembers" | "lists" | "spaces">,
@@ -197,12 +243,53 @@ export async function decideDueDate(
 /* ----- subtasks ----- */
 export async function addSubtask(
   supabase: Supabase, store: Pick<StoreData, "subtasks">, patch: Patch,
-  taskId: string, name: string, assigneeId: string | null, due: string | null
+  taskId: string, name: string, assigneeId: string | null, due: string | null,
+  raci?: { accountable_id?: string | null; raci_c?: string[]; raci_i?: string[] }
 ) {
   const sort = store.subtasks.filter((s) => s.task_id === taskId).length;
-  const { data } = await supabase.from("subtasks").insert({ task_id: taskId, name, assignee_id: assigneeId, due, sort }).select().single();
+  const { data } = await supabase.from("subtasks").insert({
+    task_id: taskId, name, assignee_id: assigneeId, due, sort,
+    accountable_id: raci?.accountable_id || null, raci_c: raci?.raci_c || [], raci_i: raci?.raci_i || [],
+  }).select().single();
   if (data) patch("subtasks", [...store.subtasks, data as Subtask]);
   return data as Subtask | null;
+}
+
+/* ----- suggested assignees (create-task side panel) ----- */
+export function suggestAssignees(
+  store: Pick<StoreData, "profiles" | "tasks" | "deptMembers" | "lists" | "spaces">,
+  title: string,
+  listId: string | null,
+  excludeIds: string[] = []
+): { p: Profile; reason: string }[] {
+  const words = title.toLowerCase().split(/\s+/).filter((w) => w.length > 3);
+  const list = store.lists.find((l) => l.id === listId);
+  const space = store.spaces.find((s) => s.id === list?.space_id);
+  const deptIds = space?.department_id
+    ? new Set(store.deptMembers.filter((m) => m.department_id === space.department_id).map((m) => m.profile_id))
+    : null;
+
+  const scored = store.profiles
+    .filter((p) => !excludeIds.includes(p.id))
+    .map((p) => {
+      const theirTasks = store.tasks.filter((t) => t.assignees.includes(p.id));
+      const similar = words.length
+        ? theirTasks.filter((t) => words.some((w) => t.name.toLowerCase().includes(w))).length
+        : 0;
+      const open = theirTasks.filter((t) => t.status !== "Done").length;
+      const inDept = deptIds ? deptIds.has(p.id) : false;
+      const score = similar * 3 + (inDept ? 2 : 0) + Math.max(0, 3 - open * 0.4);
+      const reason = similar > 0
+        ? `worked on ${similar} similar task${similar > 1 ? "s" : ""}`
+        : inDept
+          ? open <= 2 ? "in this department · light workload" : "in this department"
+          : open <= 2 ? "light workload" : "";
+      return { p, score, reason };
+    })
+    .filter((r) => r.score > 0.5 && r.reason)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3);
+  return scored.map(({ p, reason }) => ({ p, reason }));
 }
 
 export async function updateSubtask(

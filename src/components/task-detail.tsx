@@ -6,12 +6,13 @@ import { initials, STATUS_COLORS, PRIORITY_COLORS, Status, Priority, Task } from
 import {
   updateTask, managerOf, eligibleAssignees, canEditDueDirectly, canDecideDueDate,
   requestDueDate, decideDueDate, addSubtask, updateSubtask, deleteSubtask,
-  addDependency, removeDependency,
+  addDependency, removeDependency, canAddSubtask, accountableCandidates,
 } from "@/lib/actions";
+import { ReminderInline } from "./reminders";
 import { relTime, fmtShort, todayIso } from "@/lib/dates";
 import { taskLink } from "@/lib/ui";
 import { scoreMatch } from "@/lib/search";
-import { RaciRows, raciNote } from "./raci";
+import { RaciRows, RaciValue, raciNote } from "./raci";
 import { IconLink, IconX } from "./icons";
 import { Avatar } from "./shared";
 
@@ -25,6 +26,7 @@ export function TaskDetailSlideOver() {
   const [tab, setTab] = useState<"details" | "activity" | "files">("details");
   const [subName, setSubName] = useState("");
   const [subAssignee, setSubAssignee] = useState("");
+  const [expandedSub, setExpandedSub] = useState<string | null>(null);
   const [reqOpen, setReqOpen] = useState(false);
   const [reqDate, setReqDate] = useState("");
   const [reqReason, setReqReason] = useState("");
@@ -49,6 +51,9 @@ export function TaskDetailSlideOver() {
   const pendingReq = approvals.find((a) => a.task_id === t.id && a.kind === "due_date" && a.status === "pending");
   const decidedReqs = approvals.filter((a) => a.task_id === t.id && a.kind === "due_date" && a.status !== "pending").slice(0, 3);
   const mayEditDue = canEditDueDirectly(me, levels, t);
+  const maySubtask = canAddSubtask(me, profiles, levels, t);
+  const aCands = accountableCandidates(profiles, levels, t.assignees);
+  const deptLabel = (p: (typeof profiles)[number]) => store.departments.find((d) => d.id === p.department_id)?.name?.split(" ")[0] || null;
   const mayDecide = pendingReq ? canDecideDueDate(me, profiles, levels, pendingReq) : false;
 
   const set = (fields: Partial<Task>, toast?: string) => {
@@ -186,7 +191,9 @@ export function TaskDetailSlideOver() {
                 <div style={{ gridColumn: "1 / -1", display: "flex", flexDirection: "column", gap: 6, margin: "2px 0 4px" }}>
                   <span style={{ fontSize: 11, fontWeight: 400, color: "var(--sw-muted)" }}>{`RACI — ${raciNote(personal)}`}</span>
                   <RaciRows
-                    profiles={scoped}
+                    profiles={profiles}
+                    aCandidates={aCands}
+                    deptLabel={deptLabel}
                     personal={personal}
                     autoA={autoA}
                     value={{ a: t.accountable_id, c: t.raci_c, i: t.raci_i }}
@@ -261,6 +268,9 @@ export function TaskDetailSlideOver() {
                 <span style={label}>Effort</span>
                 <span style={{ fontSize: 12.5, fontWeight: 400 }}>{t.effort} pts</span>
 
+                <span style={label}>Reminder</span>
+                <span style={{ justifySelf: "start" }}><ReminderInline taskId={t.id} title={t.name} /></span>
+
                 <span style={label}>Milestone</span>
                 <button
                   onClick={() => set({ milestone: !t.milestone }, t.milestone ? "Milestone removed" : "Marked as milestone")}
@@ -286,7 +296,8 @@ export function TaskDetailSlideOver() {
               {mySubtasks.map((s) => {
                 const who = profiles.find((p) => p.id === s.assignee_id);
                 return (
-                  <div key={s.id} className="sw-row" style={{ display: "flex", alignItems: "center", gap: 9, padding: "6px 4px", borderRadius: 7 }}>
+                  <React.Fragment key={s.id}>
+                  <div className="sw-row" style={{ display: "flex", alignItems: "center", gap: 9, padding: "6px 4px", borderRadius: 7 }}>
                     <button
                       onClick={() => updateSubtask(supabase, store, patch, s.id, { done: !s.done })}
                       title={s.done ? "Reopen" : "Mark complete"}
@@ -313,23 +324,47 @@ export function TaskDetailSlideOver() {
                       style={{ height: 24, borderRadius: 6, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", fontSize: 10.5, color: s.due && s.due < today && !s.done ? "var(--red)" : "var(--sw-text-soft)", padding: "0 4px", width: 112 }}
                     />
                     {who && <span title={who.name} style={{ width: 18, height: 18, borderRadius: 99, background: who.color, color: "#fff", fontSize: 7.5, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>{initials(who.name)}</span>}
+                    <button onClick={() => setExpandedSub(expandedSub === s.id ? null : s.id)} title="RACI & reminder" style={{ border: "none", background: expandedSub === s.id ? "var(--sw-hover)" : "none", borderRadius: 6, color: "var(--sw-muted)", cursor: "pointer", padding: "2px 5px", fontSize: 11, lineHeight: 1 }}>⋯</button>
                     <button onClick={() => deleteSubtask(supabase, store, patch, s.id)} title="Delete subtask" style={{ border: "none", background: "none", color: "var(--sw-muted)", cursor: "pointer", padding: 2, display: "flex" }}><IconX size={10} /></button>
                   </div>
+                  {expandedSub === s.id && (
+                    <div style={{ margin: "2px 0 8px 24px", padding: "10px 12px", border: "1px solid var(--sw-hair)", borderRadius: 10, background: "var(--sw-hover)", display: "flex", flexDirection: "column", gap: 8 }}>
+                      <RaciRows
+                        profiles={profiles}
+                        aCandidates={accountableCandidates(profiles, levels, s.assignee_id ? [s.assignee_id] : t.assignees)}
+                        deptLabel={deptLabel}
+                        autoA={s.assignee_id ? managerOf(profiles, s.assignee_id) : autoA}
+                        value={{ a: s.accountable_id, c: s.raci_c, i: s.raci_i } as RaciValue}
+                        onChange={(v) => updateSubtask(supabase, store, patch, s.id, { accountable_id: v.a, raci_c: v.c, raci_i: v.i })}
+                      />
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ fontSize: 10, color: "var(--sw-muted)", width: 92, flex: "none" }}>Reminder</span>
+                        <ReminderInline taskId={t.id} subtaskId={s.id} title={s.name} />
+                      </div>
+                    </div>
+                  )}
+                  </React.Fragment>
                 );
               })}
-              <div style={{ display: "flex", gap: 7, marginTop: 6 }}>
-                <input
-                  value={subName}
-                  onChange={(e) => setSubName(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter") submitSubtask(); }}
-                  placeholder="+ Add a subtask and press Enter"
-                  style={{ flex: 1, height: 30, borderRadius: 8, border: "1px dashed var(--sw-hair)", background: "none", padding: "0 11px", fontSize: 12, outline: "none", color: "var(--sw-text)" }}
-                />
-                <select className="sw-select" value={subAssignee} onChange={(e) => setSubAssignee(e.target.value)} style={{ height: 30, borderRadius: 8, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", fontSize: 11, color: "var(--sw-text-soft)", padding: "0 6px" }}>
-                  <option value="">Assign…</option>
-                  {scoped.map((p) => <option key={p.id} value={p.id}>{p.name.split(" ")[0]}</option>)}
-                </select>
-              </div>
+              {maySubtask ? (
+                <div style={{ display: "flex", gap: 7, marginTop: 6 }}>
+                  <input
+                    value={subName}
+                    onChange={(e) => setSubName(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") submitSubtask(); }}
+                    placeholder="+ Add a subtask and press Enter"
+                    style={{ flex: 1, height: 30, borderRadius: 8, border: "1px dashed var(--sw-hair)", background: "none", padding: "0 11px", fontSize: 12, outline: "none", color: "var(--sw-text)" }}
+                  />
+                  <select className="sw-select" value={subAssignee} onChange={(e) => setSubAssignee(e.target.value)} style={{ height: 30, borderRadius: 8, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", fontSize: 11, color: "var(--sw-text-soft)", padding: "0 6px" }}>
+                    <option value="">Assign…</option>
+                    {scoped.map((p) => <option key={p.id} value={p.id}>{p.name.split(" ")[0]}</option>)}
+                  </select>
+                </div>
+              ) : (
+                <div style={{ marginTop: 6, fontSize: 10.5, color: "var(--sw-muted)" }}>
+                  Only the assignor ({profiles.find((p) => p.id === t.owner_id)?.name.split(" ")[0] || "owner"}), the Accountable, or someone senior to them can add subtasks here.
+                </div>
+              )}
 
               {/* DEPENDENCIES */}
               <div style={{ height: 1, background: "var(--sw-hair)", margin: "16px 0" }} />
