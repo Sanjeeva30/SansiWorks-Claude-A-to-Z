@@ -17,7 +17,7 @@ export function ListSection() {
   const store = useStore();
   const {
     me, tasks, lists, spaces, profiles, templates, customFields, automations,
-    savedViews, patch, supabase,
+    savedViews, subtasks, deps, patch, supabase,
   } = store;
   const {
     listPage, activeList, setActiveTaskId, setShowQuickAdd, setQuickAddStatus,
@@ -317,8 +317,16 @@ export function ListSection() {
                     <span style={{ width: 7, height: 7, borderRadius: 99, background: STATUS_COLORS[t.status], flex: "none" }} />
                     <span style={{ fontSize: 10, color: "var(--sw-muted)", width: 46, flex: "none" }}>SW-{t.task_number}</span>
                     <span style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 8 }}>
+                      {t.milestone && <span title="Milestone" style={{ color: "var(--crimson)", fontSize: 10, flex: "none" }}>◆</span>}
                       <span style={{ fontSize: 12.5, fontWeight: 400, color: "var(--sw-text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.name}</span>
-                      {t.blocked && <span style={{ fontSize: 9.5, fontWeight: 400, color: "var(--red)", background: "rgba(243,38,62,0.1)", padding: "1px 6px", borderRadius: 999, flex: "none" }}>BLOCKED</span>}
+                      {(() => {
+                        const st = subtasks.filter((x) => x.task_id === t.id);
+                        return st.length ? <span title="Subtasks done" style={{ fontSize: 9.5, fontWeight: 400, color: "var(--sw-muted)", border: "1px solid var(--sw-hair)", padding: "1px 6px", borderRadius: 999, flex: "none" }}>{st.filter((x) => x.done).length}/{st.length}</span> : null;
+                      })()}
+                      {(() => {
+                        const openBlockers = deps.filter((d) => d.task_id === t.id).map((d) => tasks.find((x) => x.id === d.depends_on)).filter((x) => x && x.status !== "Done");
+                        return openBlockers.length ? <span title="Blocked by open tasks" style={{ fontSize: 9.5, fontWeight: 400, color: "var(--red)", background: "rgba(243,38,62,0.1)", padding: "1px 6px", borderRadius: 999, flex: "none" }}>BLOCKED ·{openBlockers.length}</span> : null;
+                      })()}
                     </span>
                     <span style={{ display: "flex", marginRight: 2 }}>
                       {avatarsOf(t).map((p) => (

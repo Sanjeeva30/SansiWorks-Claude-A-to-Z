@@ -98,9 +98,21 @@ export interface Task {
   accountable_id: string | null;
   completed_at: string | null;
   created_at: string;
+  milestone: boolean;
   assignees: string[]; // profile ids
   raci_c: string[];
   raci_i: string[];
+}
+
+export interface Subtask {
+  id: string;
+  task_id: string;
+  name: string;
+  assignee_id: string | null;
+  due: string | null;
+  done: boolean;
+  sort: number;
+  created_at: string;
 }
 
 export interface Doc {
@@ -142,6 +154,11 @@ export interface Approval {
   detail: string | null;
   requested_due: string | null;
   status: string;
+  created_at: string;
+  prev_due: string | null;
+  decided_by: string | null;
+  decided_at: string | null;
+  decision_note: string | null;
 }
 
 export interface Invite {

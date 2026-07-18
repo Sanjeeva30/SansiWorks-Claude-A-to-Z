@@ -142,7 +142,7 @@ export function WorkspaceSection() {
   const sansicoUsers = profiles;
   const adminTabDefs: [string, string][] = [
     ["users", "Users"], ["hierarchy", "Hierarchy"], ["departments", "Departments"],
-    ["approvals", `Approvals${approvals.length ? ` (${approvals.length})` : ""}`],
+    ["approvals", `Approvals${approvals.filter((a) => a.status === "pending").length ? ` (${approvals.filter((a) => a.status === "pending").length})` : ""}`],
     ["invites", "Invites"], ["features", "Features"], ["audit", "Audit log"],
   ];
   const [expandedLevel, setExpandedLevel] = useState<string | null>(null);
@@ -748,24 +748,23 @@ export function WorkspaceSection() {
 
                   <section style={{ ...card, marginBottom: 14 }}>
                     <h3 style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 400 }}>Due-date approval queue</h3>
-                    {approvals.map((a) => {
+                    {approvals.filter((a) => a.status === "pending" && a.kind === "due_date").map((a) => {
                       const t = tasks.find((x) => x.id === a.task_id);
                       const requester = profiles.find((p) => p.id === a.requester_id);
                       return (
                         <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 11, padding: "10px 0", borderBottom: "1px solid var(--sw-hair)" }}>
                           <span style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 12.5, fontWeight: 400 }}>Due-date change — &quot;{t?.name}&quot;</div>
-                            <div style={{ fontSize: 11, color: "var(--sw-muted)" }}>{requester?.name} · {t ? listPath(t.list_id).split(" / ")[1] : ""} · {a.detail}</div>
+                            <div style={{ fontSize: 12.5, fontWeight: 400 }}>
+                              &quot;{t?.name}&quot; — {a.prev_due ? `${a.prev_due} → ` : ""}{a.requested_due}
+                            </div>
+                            <div style={{ fontSize: 11, color: "var(--sw-muted)" }}>{requester?.name} · {t ? listPath(t.list_id).split(" / ")[1] : ""} · &quot;{a.detail}&quot;</div>
                           </span>
                           <button
                             onClick={async () => {
-                              patch("approvals", approvals.filter((x) => x.id !== a.id));
-                              await supabase.from("approvals").update({ status: "approved" }).eq("id", a.id);
-                              if (t && a.requested_due) {
-                                const { updateTask } = await import("@/lib/actions");
-                                updateTask(supabase, tasks, patch, t.id, { due: a.requested_due });
-                              }
-                              pushToast("Request approved");
+                              if (!me) return;
+                              const { decideDueDate } = await import("@/lib/actions");
+                              await decideDueDate(supabase, store, patch, a, me, "approved");
+                              pushToast("Request approved — due date updated");
                             }}
                             style={pillBtn("var(--green)")}
                           >
@@ -773,8 +772,10 @@ export function WorkspaceSection() {
                           </button>
                           <button
                             onClick={async () => {
-                              patch("approvals", approvals.filter((x) => x.id !== a.id));
-                              await supabase.from("approvals").update({ status: "declined" }).eq("id", a.id);
+                              if (!me) return;
+                              const { decideDueDate } = await import("@/lib/actions");
+                              await decideDueDate(supabase, store, patch, a, me, "declined");
+                              pushToast("Request declined");
                             }}
                             style={pillBtn("var(--red)")}
                           >
@@ -783,7 +784,7 @@ export function WorkspaceSection() {
                         </div>
                       );
                     })}
-                    {!approvals.length && <p style={{ margin: "8px 0 0", fontSize: 12, color: "var(--sw-muted)" }}>Queue is clear.</p>}
+                    {!approvals.some((a) => a.status === "pending" && a.kind === "due_date") && <p style={{ margin: "8px 0 0", fontSize: 12, color: "var(--sw-muted)" }}>Queue is clear.</p>}
                   </section>
 
                   <section style={card}>

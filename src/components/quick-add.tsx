@@ -4,7 +4,7 @@ import { useStore } from "@/lib/store";
 import { useUI } from "@/lib/ui";
 import { initials } from "@/lib/types";
 import { parseNLDate } from "@/lib/dates";
-import { createTask, managerOf } from "@/lib/actions";
+import { createTask, managerOf, eligibleAssignees } from "@/lib/actions";
 import { RaciRows, RaciValue, raciNote } from "./raci";
 import { IconSparkle, IconTaskPlus, IconX } from "./icons";
 
@@ -41,6 +41,7 @@ export function QuickAddModal() {
   if (!showQuickAdd || !me) return null;
 
   const personal = listVal === "my";
+  const scoped = eligibleAssignees(store, personal ? null : listVal);
   const autoA = managerOf(profiles, assignees[0]);
   const close = () => setShowQuickAdd(false);
 
@@ -60,7 +61,7 @@ export function QuickAddModal() {
       due: due || null,
       description,
       assignees: assignees.length ? assignees : [me.id],
-      accountable_id: personal ? null : raci.a || autoA,
+      accountable_id: personal ? null : raci.a || autoA || me.id, // exactly one Accountable, always
       raci_c: raci.c,
       raci_i: raci.i,
       reminder_at: reminder || null,
@@ -71,7 +72,7 @@ export function QuickAddModal() {
     else close();
   };
 
-  const filteredPeople = profiles.filter(
+  const filteredPeople = scoped.filter(
     (p) => !assigneeQuery || p.name.toLowerCase().includes(assigneeQuery.toLowerCase()) || p.email.toLowerCase().includes(assigneeQuery.toLowerCase())
   );
   const selected = profiles.filter((p) => assignees.includes(p.id));
@@ -149,7 +150,17 @@ export function QuickAddModal() {
               style={{ width: "100%", height: "var(--sw-field-h)", borderRadius: 10, border: "1.5px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "0 14px", fontSize: 14.5, marginBottom: 18, outline: "none", color: "var(--sw-text)" }} />
 
             {label("Where")}
-            <div style={{ marginBottom: 18 }}>{dd("list", currentListLabel, listOptions, setListVal)}</div>
+            <div style={{ marginBottom: 6 }}>{dd("list", currentListLabel, listOptions, (v) => {
+              setListVal(v);
+              // re-scope people to the destination department
+              const nextScope = eligibleAssignees(store, v === "my" ? null : v).map((p) => p.id);
+              setAssignees((a) => a.filter((id) => nextScope.includes(id)));
+              setRaci((r) => ({ a: r.a && nextScope.includes(r.a) ? r.a : null, c: r.c.filter((id) => nextScope.includes(id)), i: r.i.filter((id) => nextScope.includes(id)) }));
+            })}</div>
+            {!personal && scoped.length < profiles.length && (
+              <div style={{ fontSize: 11, color: "var(--sw-muted)", marginBottom: 12 }}>People pickers are limited to this list&apos;s department.</div>
+            )}
+            {(personal || scoped.length >= profiles.length) && <div style={{ marginBottom: 12 }} />}
 
             <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
               <label style={{ fontSize: 12.5, fontWeight: 400, color: "var(--sw-text-soft)", flex: 1 }}>Assign to <span style={{ color: "var(--crimson)" }}>*</span></label>
@@ -235,7 +246,7 @@ export function QuickAddModal() {
               <span style={{ fontSize: 11, color: "var(--sw-muted)" }}>{raciNote(personal)}</span>
             </div>
             <div style={{ marginBottom: 18 }}>
-              <RaciRows profiles={profiles} personal={personal} autoA={autoA} value={raci} onChange={setRaci} />
+              <RaciRows profiles={scoped} personal={personal} autoA={autoA} value={raci} onChange={setRaci} />
             </div>
 
             {label("Description")}
@@ -299,7 +310,7 @@ export function QuickAddModal() {
 
             <div style={{ background: "var(--sw-card)", border: "1px solid var(--sw-hair)", borderRadius: 12, padding: 14, marginBottom: 14 }}>
               <div style={{ fontSize: 13, fontWeight: 400, marginBottom: 10 }}>Suggested assignees</div>
-              {profiles.slice(0, 3).map((sa, idx) => (
+              {scoped.slice(0, 3).map((sa, idx) => (
                 <button key={sa.id} onClick={() => { if (!assignees.includes(sa.id)) setAssignees([...assignees, sa.id]); }}
                   style={{ display: "flex", alignItems: "flex-start", gap: 9, width: "100%", textAlign: "left", border: "none", background: "none", cursor: "pointer", padding: "7px 0" }}>
                   <span style={{ width: 26, height: 26, borderRadius: 99, background: sa.color, color: "#fff", fontSize: 9.5, fontWeight: 400, display: "flex", alignItems: "center", justifyContent: "center", flex: "none", marginTop: 1 }}>{initials(sa.name)}</span>
