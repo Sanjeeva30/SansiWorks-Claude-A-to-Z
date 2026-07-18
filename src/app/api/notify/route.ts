@@ -10,32 +10,31 @@ export async function POST(req: NextRequest) {
   if (!auth.user) return NextResponse.json({ ok: false }, { status: 401 });
 
   if (body.kind === "assigned" && body.taskId) {
-    const [{ data: task }, { data: assignees }, { data: actor }] = await Promise.all([
-      supabase.from("tasks").select("id,name,priority,due,list_id").eq("id", body.taskId).single(),
-      supabase.from("task_assignees").select("profile_id").eq("task_id", body.taskId),
+    const [{ data: task }, { data: actor }] = await Promise.all([
+      supabase.from("tasks").select("id,name,priority,due,list_id,assignee_id").eq("id", body.taskId).single(),
       supabase.from("profiles").select("name").eq("id", auth.user.id).single(),
     ]);
     if (!task) return NextResponse.json({ ok: false });
-    for (const a of assignees || []) {
-      if (a.profile_id === auth.user.id) continue;
-      const { data: person } = await supabase.from("profiles").select("id,name,email").eq("id", a.profile_id).single();
-      if (!person) continue;
-      await supabase.from("notifications").insert({
-        profile_id: person.id, task_id: task.id,
-        body: `${actor?.name || "Someone"} assigned you "${task.name}"`, reason: "Assigned",
-      });
-      const { data: pref } = await supabase.from("notification_prefs").select("channel").eq("profile_id", person.id).eq("category", "assigned").single();
-      if ((pref?.channel || "instant") === "instant") {
-        const html = wrapEmailHtml(`
-          <h2 style="font-family:Georgia,serif;font-weight:400;font-size:22px;margin:0 0 14px;">New task <em>for you</em>.</h2>
-          <div style="border:1.5px solid #E5DFD8;border-radius:12px;padding:15px 17px;margin-bottom:14px;">
-            <div style="font-size:14px;margin-bottom:4px;">${task.name}</div>
-            <div style="font-size:11.5px;color:#9A918A;margin-bottom:2px;">${task.priority}${task.due ? ` · due ${task.due}` : ""}</div>
-            <div style="font-size:11.5px;color:#4A423D;">Assigned by ${actor?.name || "a teammate"}, just now</div>
-          </div>
-          <a href="${req.nextUrl.origin}" style="display:inline-block;background:#7A0D20;color:#fff;border-radius:999px;padding:8px 20px;font-size:12px;text-decoration:none;">Open in SansiWorks →</a>
-          <p style="margin:16px 0 0;font-size:10.5px;color:#9A918A;">You're receiving this instantly because 'Task assigned to me' is set to Instant email in your settings.</p>`);
-        await sendEmail({ email: person.email, name: person.name }, `${(actor?.name || "A teammate").split(" ")[0]} assigned you: ${task.name}`, html);
+    if (task.assignee_id && task.assignee_id !== auth.user.id) {
+      const { data: person } = await supabase.from("profiles").select("id,name,email").eq("id", task.assignee_id).single();
+      if (person) {
+        await supabase.from("notifications").insert({
+          profile_id: person.id, task_id: task.id,
+          body: `${actor?.name || "Someone"} assigned you "${task.name}"`, reason: "Assigned",
+        });
+        const { data: pref } = await supabase.from("notification_prefs").select("channel").eq("profile_id", person.id).eq("category", "assigned").single();
+        if ((pref?.channel || "instant") === "instant") {
+          const html = wrapEmailHtml(`
+            <h2 style="font-family:Georgia,serif;font-weight:400;font-size:22px;margin:0 0 14px;">New task <em>for you</em>.</h2>
+            <div style="border:1.5px solid #E5DFD8;border-radius:12px;padding:15px 17px;margin-bottom:14px;">
+              <div style="font-size:14px;margin-bottom:4px;">${task.name}</div>
+              <div style="font-size:11.5px;color:#9A918A;margin-bottom:2px;">${task.priority}${task.due ? ` · due ${task.due}` : ""}</div>
+              <div style="font-size:11.5px;color:#4A423D;">Assigned by ${actor?.name || "a teammate"}, just now</div>
+            </div>
+            <a href="${req.nextUrl.origin}" style="display:inline-block;background:#7A0D20;color:#fff;border-radius:999px;padding:8px 20px;font-size:12px;text-decoration:none;">Open in SansiWorks →</a>
+            <p style="margin:16px 0 0;font-size:10.5px;color:#9A918A;">You're receiving this instantly because 'Task assigned to me' is set to Instant email in your settings.</p>`);
+          await sendEmail({ email: person.email, name: person.name }, `${(actor?.name || "A teammate").split(" ")[0]} assigned you: ${task.name}`, html);
+        }
       }
     }
     return NextResponse.json({ ok: true });

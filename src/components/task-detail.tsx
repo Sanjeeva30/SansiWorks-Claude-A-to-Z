@@ -4,15 +4,18 @@ import { useStore } from "@/lib/store";
 import { useUI } from "@/lib/ui";
 import { initials, STATUS_COLORS, PRIORITY_COLORS, Status, Priority, Task } from "@/lib/types";
 import {
-  updateTask, managerOf, eligibleAssignees, canEditDueDirectly, canDecideDueDate,
+  updateTask, eligibleAssignees, canEditDueDirectly, canDecideDueDate,
   requestDueDate, decideDueDate, addSubtask, updateSubtask, deleteSubtask,
   addDependency, removeDependency, canAddSubtask, accountableCandidates,
+  createReminder,
 } from "@/lib/actions";
 import { ReminderInline } from "./reminders";
 import { relTime, fmtShort, todayIso } from "@/lib/dates";
 import { taskLink } from "@/lib/ui";
 import { scoreMatch } from "@/lib/search";
-import { RaciRows, RaciValue, raciNote } from "./raci";
+import { AssigneePicker } from "./assignee-picker";
+import { RaciRows, raciNote } from "./raci";
+import { SubtaskFields, SubtaskDraft, blankSubtaskDraft } from "./subtask-fields";
 import { IconLink, IconX } from "./icons";
 import { Avatar } from "./shared";
 
@@ -24,8 +27,7 @@ export function TaskDetailSlideOver() {
   const store = useStore();
   const { me, tasks, profiles, levels, lists, spaces, activity, subtasks, deps, approvals, patch, supabase } = store;
   const [tab, setTab] = useState<"details" | "activity" | "files">("details");
-  const [subName, setSubName] = useState("");
-  const [subAssignee, setSubAssignee] = useState("");
+  const [newSub, setNewSub] = useState<SubtaskDraft | null>(null);
   const [expandedSub, setExpandedSub] = useState<string | null>(null);
   const [reqOpen, setReqOpen] = useState(false);
   const [reqDate, setReqDate] = useState("");
@@ -52,7 +54,7 @@ export function TaskDetailSlideOver() {
   const decidedReqs = approvals.filter((a) => a.task_id === t.id && a.kind === "due_date" && a.status !== "pending").slice(0, 3);
   const mayEditDue = canEditDueDirectly(me, levels, t);
   const maySubtask = canAddSubtask(me, profiles, levels, t);
-  const aCands = accountableCandidates(profiles, levels, t.assignees);
+  const aCands = accountableCandidates(store, t.assignee_id);
   const deptLabel = (p: (typeof profiles)[number]) => store.departments.find((d) => d.id === p.department_id)?.name?.split(" ")[0] || null;
   const mayDecide = pendingReq ? canDecideDueDate(me, profiles, levels, pendingReq) : false;
 
@@ -61,8 +63,6 @@ export function TaskDetailSlideOver() {
     updateTask(supabase, tasks, patch, t.id, fields);
     if (toast) pushToast(toast, () => patch("tasks", prev));
   };
-
-  const autoA = managerOf(profiles, t.assignees[0]);
 
   const depCandidates = depQuery.trim()
     ? tasks
@@ -75,10 +75,13 @@ export function TaskDetailSlideOver() {
     : [];
 
   const submitSubtask = async () => {
-    const name = subName.trim();
-    if (!name) return;
-    setSubName("");
-    await addSubtask(supabase, store, patch, t.id, name, subAssignee || null, null);
+    if (!newSub || !newSub.name.trim() || !newSub.assignee_id || !me) return;
+    const sub = await addSubtask(supabase, store, patch, t.id, newSub.name.trim(), newSub.assignee_id, newSub.due || null,
+      { accountable_id: newSub.raci.a, raci_c: newSub.raci.c, raci_i: newSub.raci.i });
+    if (sub && newSub.reminder) {
+      await createReminder(supabase, store, patch, { profile_id: me.id, task_id: t.id, subtask_id: sub.id, title: newSub.name.trim(), remind_at: new Date(newSub.reminder).toISOString() });
+    }
+    setNewSub(null);
   };
 
   const chip = (x: Task, onRemove?: () => void) => (
@@ -159,32 +162,19 @@ export function TaskDetailSlideOver() {
                   <option>Low</option><option>Medium</option><option>High</option><option>Critical</option>
                 </select>
 
-                <span style={label}>Assignees</span>
-                <span style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                  {scoped.filter((p) => t.assignees.includes(p.id)).map((p) => (
-                    <button
-                      key={p.id}
-                      onClick={() => set({ assignees: t.assignees.filter((x) => x !== p.id) })}
-                      title="Remove assignee"
-                      style={{ display: "flex", alignItems: "center", gap: 5, background: "rgba(122,13,32,0.06)", border: "1px solid var(--crimson)", borderRadius: 999, padding: "3px 9px 3px 3px", cursor: "pointer" }}
-                    >
-                      <span style={{ width: 18, height: 18, borderRadius: 99, background: p.color, color: "#fff", fontSize: 8, fontWeight: 400, display: "flex", alignItems: "center", justifyContent: "center" }}>{initials(p.name)}</span>
-                      <span style={{ fontSize: 11.5, fontWeight: 400, color: "var(--crimson)" }}>{p.name.split(" ")[0]}</span>
-                    </button>
-                  ))}
-                  {scoped.filter((p) => !t.assignees.includes(p.id)).slice(0, 4).map((p) => (
-                    <button
-                      key={p.id}
-                      onClick={() => set({ assignees: [...t.assignees, p.id] })}
-                      title="Add assignee"
-                      style={{ display: "flex", alignItems: "center", gap: 5, background: "none", border: "1px solid var(--sw-hair)", borderRadius: 999, padding: "3px 9px 3px 3px", cursor: "pointer" }}
-                    >
-                      <span style={{ width: 18, height: 18, borderRadius: 99, background: p.color, color: "#fff", fontSize: 8, fontWeight: 400, display: "flex", alignItems: "center", justifyContent: "center" }}>{initials(p.name)}</span>
-                      <span style={{ fontSize: 11.5, fontWeight: 400, color: "var(--sw-text-soft)" }}>{p.name.split(" ")[0]}</span>
-                    </button>
-                  ))}
-                  {!personal && scoped.length < profiles.length && (
-                    <span style={{ fontSize: 10, color: "var(--sw-muted)", alignSelf: "center" }} title="Assignees are limited to this list's department">dept-scoped</span>
+                <span style={label}>Responsible (R)</span>
+                <span style={{ justifySelf: "start" }}>
+                  {me && (
+                    <AssigneePicker
+                      personal={personal}
+                      me={me}
+                      value={t.assignee_id}
+                      onChange={(id) => set({ assignee_id: id, accountable_id: t.accountable_id === id ? null : t.accountable_id })}
+                      deptScoped={scoped}
+                      allProfiles={profiles}
+                      deptLabel={deptLabel}
+                      compact
+                    />
                   )}
                 </span>
 
@@ -195,7 +185,6 @@ export function TaskDetailSlideOver() {
                     aCandidates={aCands}
                     deptLabel={deptLabel}
                     personal={personal}
-                    autoA={autoA}
                     value={{ a: t.accountable_id, c: t.raci_c, i: t.raci_i }}
                     onChange={(v) => set({ accountable_id: v.a, raci_c: v.c, raci_i: v.i })}
                   />
@@ -331,10 +320,9 @@ export function TaskDetailSlideOver() {
                     <div style={{ margin: "2px 0 8px 24px", padding: "10px 12px", border: "1px solid var(--sw-hair)", borderRadius: 10, background: "var(--sw-hover)", display: "flex", flexDirection: "column", gap: 8 }}>
                       <RaciRows
                         profiles={profiles}
-                        aCandidates={accountableCandidates(profiles, levels, s.assignee_id ? [s.assignee_id] : t.assignees)}
+                        aCandidates={accountableCandidates(store, s.assignee_id)}
                         deptLabel={deptLabel}
-                        autoA={s.assignee_id ? managerOf(profiles, s.assignee_id) : autoA}
-                        value={{ a: s.accountable_id, c: s.raci_c, i: s.raci_i } as RaciValue}
+                        value={{ a: s.accountable_id, c: s.raci_c, i: s.raci_i }}
                         onChange={(v) => updateSubtask(supabase, store, patch, s.id, { accountable_id: v.a, raci_c: v.c, raci_i: v.i })}
                       />
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -347,19 +335,32 @@ export function TaskDetailSlideOver() {
                 );
               })}
               {maySubtask ? (
-                <div style={{ display: "flex", gap: 7, marginTop: 6 }}>
-                  <input
-                    value={subName}
-                    onChange={(e) => setSubName(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter") submitSubtask(); }}
-                    placeholder="+ Add a subtask and press Enter"
-                    style={{ flex: 1, height: 30, borderRadius: 8, border: "1px dashed var(--sw-hair)", background: "none", padding: "0 11px", fontSize: 12, outline: "none", color: "var(--sw-text)" }}
-                  />
-                  <select className="sw-select" value={subAssignee} onChange={(e) => setSubAssignee(e.target.value)} style={{ height: 30, borderRadius: 8, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", fontSize: 11, color: "var(--sw-text-soft)", padding: "0 6px" }}>
-                    <option value="">Assign…</option>
-                    {scoped.map((p) => <option key={p.id} value={p.id}>{p.name.split(" ")[0]}</option>)}
-                  </select>
-                </div>
+                newSub ? (
+                  <>
+                    <SubtaskFields
+                      draft={newSub}
+                      onChange={setNewSub}
+                      onRemove={() => setNewSub(null)}
+                      personal={personal}
+                      deptScoped={scoped}
+                      deptLabel={deptLabel}
+                    />
+                    <button
+                      onClick={submitSubtask}
+                      disabled={!newSub.name.trim() || !newSub.assignee_id}
+                      style={{ border: "none", background: newSub.name.trim() && newSub.assignee_id ? "var(--crimson)" : "var(--sw-hair)", color: "#fff", borderRadius: 999, padding: "7px 16px", fontSize: 12, cursor: newSub.name.trim() && newSub.assignee_id ? "pointer" : "not-allowed" }}
+                    >
+                      Add subtask
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => setNewSub(blankSubtaskDraft())}
+                    style={{ width: "100%", height: 32, borderRadius: 8, border: "1px dashed var(--sw-hair)", background: "none", fontSize: 12, color: "var(--sw-text-soft)", cursor: "pointer", marginTop: 6 }}
+                  >
+                    + Add a subtask
+                  </button>
+                )
               ) : (
                 <div style={{ marginTop: 6, fontSize: 10.5, color: "var(--sw-muted)" }}>
                   Only the assignor ({profiles.find((p) => p.id === t.owner_id)?.name.split(" ")[0] || "owner"}), the Accountable, or someone senior to them can add subtasks here.

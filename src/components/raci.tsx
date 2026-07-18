@@ -3,25 +3,24 @@ import React, { useState } from "react";
 import { Profile, initials } from "@/lib/types";
 import { IconX } from "./icons";
 
-// "Four search rows" RACI picker (option 1a) — R merged into Assign-to, so here:
-// A (required, single, defaults to assignee's manager), C (Contributor), I (Informed).
-// Personal tasks skip A entirely.
+// "Four search rows" RACI picker — R is the single assignee, chosen elsewhere. Here:
+// A (single, picked by the assignor — never auto-filled), C (Contributor), I (Informed).
+// Personal tasks skip A entirely (self is both R and A).
 
 export interface RaciValue {
-  a: string | null;      // profile id override; null = auto (manager)
+  a: string | null;      // Accountable — exactly one, chosen by the assignor
   c: string[];
   i: string[];
 }
 
 export function RaciRows({
-  profiles, value, onChange, autoA, personal, aCandidates, deptLabel,
+  profiles, value, onChange, personal, aCandidates, deptLabel,
 }: {
-  profiles: Profile[];           // pool for C & I — may span every department
+  profiles: Profile[];           // pool for C & I — spans every department
   value: RaciValue;
   onChange: (v: RaciValue) => void;
-  autoA: string | null;          // auto accountable (manager of first assignee)
   personal?: boolean;
-  aCandidates?: Profile[];       // pool for A — the Rs plus anyone who outranks them
+  aCandidates?: Profile[];       // pool for A — R's department, or anyone outranking R
   deptLabel?: (p: Profile) => string | null;
 }) {
   const [active, setActive] = useState<string | null>(null);
@@ -32,10 +31,9 @@ export function RaciRows({
     selected: string[]; set: (ids: string[]) => void;
   }[] = [];
   if (!personal) {
-    const effA = value.a || autoA;
     rows.push({
       letter: "A", label: "Accountable", single: true, required: true,
-      selected: effA ? [effA] : [],
+      selected: value.a ? [value.a] : [],
       set: (ids) => onChange({ ...value, a: ids[0] || null }),
     });
   }
@@ -70,12 +68,10 @@ export function RaciRows({
                 {r.selected.map((pid) => {
                   const p = profiles.find((x) => x.id === pid);
                   if (!p) return null;
-                  const tag = r.single && !value.a ? "auto" : "";
                   return (
                     <span key={pid} style={{ display: "flex", alignItems: "center", gap: 4, background: "var(--sw-card)", border: "1px solid var(--sw-hair)", borderRadius: 999, padding: "1px 7px 1px 2px" }}>
                       <span style={{ width: 15, height: 15, borderRadius: 99, background: p.color, color: "#fff", fontSize: 7, display: "flex", alignItems: "center", justifyContent: "center" }}>{initials(p.name)}</span>
                       <span style={{ fontSize: 11, color: "var(--sw-text)" }}>{p.name.split(" ")[0]}</span>
-                      {tag && <span style={{ fontSize: 8.5, color: "var(--green)" }}>{tag}</span>}
                       <button
                         onClick={() => r.set(r.selected.filter((x) => x !== pid))}
                         style={{ border: "none", background: "none", padding: 0, cursor: "pointer", fontSize: 8.5, color: "var(--sw-muted)" }}
@@ -112,9 +108,6 @@ export function RaciRows({
                       {deptLabel && deptLabel(p) && (
                         <span style={{ fontSize: 9, color: "var(--sw-muted)", background: "var(--sw-hover)", borderRadius: 999, padding: "1px 7px", flex: "none" }}>{deptLabel(p)}</span>
                       )}
-                      {r.single && p.id === autoA && (
-                        <span style={{ fontSize: 9, color: "var(--green)", background: "rgba(13,79,49,0.08)", borderRadius: 999, padding: "1px 7px" }}>manager</span>
-                      )}
                     </button>
                   ))}
                   {!results.length && (
@@ -135,4 +128,4 @@ export function RaciRows({
 export const raciNote = (personal?: boolean) =>
   personal
     ? "Personal task — you're Responsible & Accountable · C & I optional"
-    : "Responsible = the assignees above · A required · C & I optional";
+    : "R is the assignee above · pick who's Accountable · C & I optional";

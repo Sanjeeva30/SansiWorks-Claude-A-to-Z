@@ -99,7 +99,7 @@ export interface Task {
   completed_at: string | null;
   created_at: string;
   milestone: boolean;
-  assignees: string[]; // profile ids
+  assignee_id: string | null; // R — exactly one person
   raci_c: string[];
   raci_i: string[];
 }
@@ -108,7 +108,7 @@ export interface Subtask {
   id: string;
   task_id: string;
   name: string;
-  assignee_id: string | null;
+  assignee_id: string | null; // R
   due: string | null;
   done: boolean;
   sort: number;
@@ -116,6 +116,7 @@ export interface Subtask {
   accountable_id: string | null;
   raci_c: string[];
   raci_i: string[];
+  reminder_at: string | null;
 }
 
 export interface Reminder {

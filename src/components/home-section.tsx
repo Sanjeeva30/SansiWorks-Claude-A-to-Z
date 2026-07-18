@@ -45,7 +45,7 @@ export function HomeSection() {
   const myOpen = myTasks.filter(isOpen);
   const dueThisWeek = myOpen.filter((t) => t.due && t.due >= weekStartIso && t.due <= weekEnd);
   const atRiskAll = atRiskTasks(tasks);
-  const myAtRisk = atRiskAll.filter((r) => r.task.assignees.includes(me.id));
+  const myAtRisk = atRiskAll.filter((r) => r.task.assignee_id === me.id);
   const completedThisWeek = myTasks.filter((t) => t.status === "Done" && t.completed_at && t.completed_at.slice(0, 10) >= weekStartIso);
   const activeProjects = lists.filter((l) => tasks.some((t) => t.list_id === l.id && isOpen(t))).length;
 
@@ -82,7 +82,7 @@ export function HomeSection() {
   // Company pulse: average dept efficiency
   const deptScores = departments.map((d) => {
     const memberIds = deptMembers.filter((m) => m.department_id === d.id).map((m) => m.profile_id);
-    const dTasks = tasks.filter((t) => t.assignees.some((a) => memberIds.includes(a)));
+    const dTasks = tasks.filter((t) => !!t.assignee_id && memberIds.includes(t.assignee_id));
     return { d, eff: efficiencyScore(dTasks).score, risk: departmentRisk(dTasks) };
   });
   const health = deptScores.length ? Math.round(deptScores.reduce((s, x) => s + x.eff, 0) / deptScores.length) : 100;
@@ -119,7 +119,7 @@ export function HomeSection() {
   const weekOverdue = myTasks.filter((t) => t.due && t.due < today && t.status !== "Done");
 
   // All / Personal tab rows
-  const personalTasks = tasks.filter((t) => !t.list_id && (t.owner_id === me.id || t.assignees.includes(me.id)));
+  const personalTasks = tasks.filter((t) => !t.list_id && (t.owner_id === me.id || t.assignee_id === me.id));
   const allSource = homePage === "personal" ? personalTasks : myTasks;
   const allFiltered = applyFilters(allSource, filters, today);
   const allGroups = STATUSES.map((s) => ({ name: s, color: STATUS_COLORS[s], rows: allFiltered.filter((t) => t.status === s) }))
@@ -163,7 +163,7 @@ export function HomeSection() {
                   <div style={{ fontSize: 10.5, color: "var(--sw-muted)", marginTop: 1 }}>{listPathOf(t)}</div>
                 </span>
                 <span style={{ display: "flex", marginRight: 2 }}>
-                  {t.assignees.map((id) => profiles.find((p) => p.id === id)).filter(Boolean).map((p) => (
+                  {[t.assignee_id].map((id) => profiles.find((p) => p.id === id)).filter(Boolean).map((p) => (
                     <span key={p!.id} style={{ width: 20, height: 20, borderRadius: 99, background: p!.color, color: "#fff", fontSize: 8, display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid var(--sw-card)", marginLeft: -6 }}>{initials(p!.name)}</span>
                   ))}
                 </span>

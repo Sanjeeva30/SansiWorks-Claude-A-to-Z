@@ -74,7 +74,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
     const [
       profiles, levels, departments, deptHeads, deptMembers, spaces, lists,
-      tasks, assignees, raci, subtasks, reminders, deps, activity, docs, forms, notifications, prefs,
+      tasks, raci, subtasks, reminders, deps, activity, docs, forms, notifications, prefs,
       approvals, invites, boardRequests, nominations, proposals, audit,
       templates, customFields, automations, features, savedViews, pins,
     ] = await Promise.all([
@@ -86,7 +86,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       supabase.from("spaces").select("*").order("sort"),
       supabase.from("lists").select("*").order("sort"),
       supabase.from("tasks").select("*").order("due", { ascending: true, nullsFirst: false }),
-      supabase.from("task_assignees").select("*"),
       supabase.from("task_raci").select("*"),
       supabase.from("subtasks").select("*").order("sort"),
       supabase.from("reminders").select("*").eq("profile_id", uid).neq("status", "dismissed").order("remind_at"),
@@ -110,11 +109,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       supabase.from("pins").select("*").eq("profile_id", uid).order("sort"),
     ]);
 
-    const byTask = new Map<string, string[]>();
-    for (const a of assignees.data || []) {
-      if (!byTask.has(a.task_id)) byTask.set(a.task_id, []);
-      byTask.get(a.task_id)!.push(a.profile_id);
-    }
     const raciC = new Map<string, string[]>();
     const raciI = new Map<string, string[]>();
     for (const r of raci.data || []) {
@@ -125,7 +119,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
     const allTasks: Task[] = (tasks.data || []).map((t) => ({
       ...t,
-      assignees: byTask.get(t.id) || [],
       raci_c: raciC.get(t.id) || [],
       raci_i: raciI.get(t.id) || [],
     }));

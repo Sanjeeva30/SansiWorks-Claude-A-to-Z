@@ -129,7 +129,7 @@ export function applyFilters(tasks: Task[], f: FilterState, today: string): Task
   let rows = tasks;
   const q = f.text.trim().toLowerCase();
   if (q) rows = rows.filter((t) => t.name.toLowerCase().includes(q) || `sw-${t.task_number}`.includes(q));
-  if (f.assignees.length) rows = rows.filter((t) => t.assignees.some((a) => f.assignees.includes(a)));
+  if (f.assignees.length) rows = rows.filter((t) => !!t.assignee_id && f.assignees.includes(t.assignee_id));
   if (f.statuses.length) rows = rows.filter((t) => f.statuses.includes(t.status));
   if (f.priorities.length) rows = rows.filter((t) => f.priorities.includes(t.priority));
   if (f.due) {

@@ -15,18 +15,14 @@ export async function GET(req: NextRequest) {
   const supabase = createAdminClient();
   const today = new Date().toISOString().slice(0, 10);
 
-  const [{ data: profiles }, { data: tasks }, { data: assignees }, { data: prefs }] = await Promise.all([
+  const [{ data: profiles }, { data: tasks }, { data: prefs }] = await Promise.all([
     supabase.from("profiles").select("id,name,email,digest_time"),
-    supabase.from("tasks").select("id,name,status,priority,due,list_id").neq("status", "Done"),
-    supabase.from("task_assignees").select("task_id,profile_id"),
+    supabase.from("tasks").select("id,name,status,priority,due,list_id,assignee_id").neq("status", "Done"),
     supabase.from("notification_prefs").select("profile_id,category,channel"),
   ]);
   if (!profiles || !tasks) return NextResponse.json({ error: "no data — is SUPABASE_SERVICE_ROLE_KEY set?" }, { status: 500 });
 
-  const tasksOf = (pid: string) => {
-    const ids = new Set((assignees || []).filter((a) => a.profile_id === pid).map((a) => a.task_id));
-    return tasks.filter((t) => ids.has(t.id));
-  };
+  const tasksOf = (pid: string) => tasks.filter((t) => t.assignee_id === pid);
   const digestOff = (pid: string) =>
     (prefs || []).filter((p) => p.profile_id === pid).every((p) => p.channel === "off" || p.channel === "inapp");
 

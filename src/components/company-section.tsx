@@ -51,7 +51,7 @@ export function CompanySection() {
     () =>
       departments.map((d) => {
         const memberIds = deptMembers.filter((m) => m.department_id === d.id).map((m) => m.profile_id);
-        const dTasks = tasks.filter((t) => t.assignees.some((a) => memberIds.includes(a)));
+        const dTasks = tasks.filter((t) => !!t.assignee_id && memberIds.includes(t.assignee_id));
         const open = dTasks.filter(isOpen);
         const overdue = open.filter(isOverdue);
         const risk = open.length ? Math.round((overdue.length / open.length) * 100) : 0;
@@ -109,7 +109,7 @@ export function CompanySection() {
     if (!unblocker) return [];
     return deps.filter((d) => d.depends_on === unblocker.task.id).map((d) => tasks.find((t) => t.id === d.task_id)).filter((t) => t && isOpen(t)) as Task[];
   }, [unblocker, deps, tasks]);
-  const unblockerOwner = unblocker ? profiles.find((p) => p.id === unblocker.task.assignees[0]) : null;
+  const unblockerOwner = unblocker ? profiles.find((p) => p.id === unblocker.task.assignee_id) : null;
 
   const overdueRows = overdueAll.slice(0, 5).map((t) => ({
     t,

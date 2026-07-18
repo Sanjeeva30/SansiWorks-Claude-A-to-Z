@@ -20,20 +20,14 @@ export async function POST(req: NextRequest) {
   }
 
   // Build compact workspace context
-  const [profileRes, tasksRes, assigneesRes, profilesRes] = await Promise.all([
+  const [profileRes, tasksRes, profilesRes] = await Promise.all([
     supabase.from("profiles").select("id,name").eq("id", auth.user.id).single(),
-    supabase.from("tasks").select("id,name,status,priority,due,description,list_id").neq("status", "Done").order("due").limit(60),
-    supabase.from("task_assignees").select("task_id,profile_id"),
+    supabase.from("tasks").select("id,name,status,priority,due,description,list_id,assignee_id").neq("status", "Done").order("due").limit(60),
     supabase.from("profiles").select("id,name"),
   ]);
   const nameOf = new Map((profilesRes.data || []).map((p) => [p.id, p.name]));
-  const assignees = new Map<string, string[]>();
-  for (const a of assigneesRes.data || []) {
-    if (!assignees.has(a.task_id)) assignees.set(a.task_id, []);
-    assignees.get(a.task_id)!.push(nameOf.get(a.profile_id) || "?");
-  }
   const taskLines = (tasksRes.data || [])
-    .map((t) => `- ${t.name} [${t.status}, ${t.priority}${t.due ? `, due ${t.due}` : ""}] assigned to ${(assignees.get(t.id) || []).join(", ") || "no one"}`)
+    .map((t) => `- ${t.name} [${t.status}, ${t.priority}${t.due ? `, due ${t.due}` : ""}] assigned to ${(t.assignee_id && nameOf.get(t.assignee_id)) || "no one"}`)
     .join("\n");
 
   const prompt = `You are Sansi, the AI assistant inside SansiWorks — Sansico Group's internal work-management app (an Indonesian packaging company). The user asking is ${profileRes.data?.name || "a team member"}. Today is ${new Date().toISOString().slice(0, 10)}.

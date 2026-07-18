@@ -66,7 +66,7 @@ export function ListSection() {
 
   const rowPad = density === "compact" ? "7px 16px" : "12px 16px";
   const dueColor = (t: Task) => (t.due && t.due < today && t.status !== "Done" ? "var(--red)" : "var(--sw-text-soft)");
-  const avatarsOf = (t: Task) => t.assignees.map((id) => profiles.find((p) => p.id === id)).filter(Boolean) as typeof profiles;
+  const avatarsOf = (t: Task) => [t.assignee_id].map((id) => profiles.find((p) => p.id === id)).filter(Boolean) as typeof profiles;
 
   const openQuickAdd = (status?: string) => { setQuickAddStatus(status || "Not Started"); setShowQuickAdd(true); };
 
@@ -121,7 +121,7 @@ export function ListSection() {
   const ganttLanes = profiles
     .map((p) => {
       const windowStartIso = iso(ganttStart);
-      const laneTasks = filtered.filter((t) => t.assignees[0] === p.id && t.due && t.due >= windowStartIso);
+      const laneTasks = filtered.filter((t) => t.assignee_id === p.id && t.due && t.due >= windowStartIso);
       if (!laneTasks.length) return null;
       const bars = laneTasks
         .map((t) => {
@@ -434,7 +434,7 @@ export function ListSection() {
                       <div key={ci} style={{ boxSizing: "border-box", background: isWeekend ? "var(--sw-hover)" : "var(--sw-card)", minHeight: 100, padding: "7px 8px", display: "flex", flexDirection: "column", gap: 4, borderTop: "1px solid var(--sw-hair)", borderLeft: "1px solid var(--sw-hair)", marginLeft: -1, marginTop: -1, outline: isToday ? "2px solid var(--crimson)" : "none", outlineOffset: -2 }}>
                         <span style={{ width: 20, height: 20, borderRadius: 99, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 400, color: isToday ? "#fff" : inMonth ? "var(--sw-text)" : "var(--sw-muted)", background: isToday ? "var(--crimson)" : "transparent", flex: "none" }}>{d.getDate()}</span>
                         {shown.map((t) => {
-                          const a = profiles.find((p) => p.id === t.assignees[0]);
+                          const a = profiles.find((p) => p.id === t.assignee_id);
                           const overdue = t.due! < today && t.status !== "Done";
                           return (
                             <button key={t.id} onClick={() => setActiveTaskId(t.id)} style={{ boxSizing: "border-box", display: "block", width: "100%", textAlign: "left", border: "none", borderLeft: `3px solid ${STATUS_COLORS[t.status]}`, borderRadius: 5, padding: "4px 6px", background: overdue ? "rgba(243,38,62,0.06)" : "var(--sw-hover)", cursor: "pointer", overflow: "hidden" }}>
@@ -664,7 +664,7 @@ export function ListSection() {
                         const { createTask } = await import("@/lib/actions");
                         const created = await createTask(supabase, tasks, patch, {
                           name: tp.name, list_id: list.id, owner_id: me.id, status: tp.status, priority: tp.priority,
-                          due: today, description: desc, assignees: [me.id],
+                          due: today, description: desc, assignee_id: me.id,
                         });
                         if (created) pushToast(`Task "${created.name}" created from template`);
                         setShowTemplates(false);

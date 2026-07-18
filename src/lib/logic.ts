@@ -28,7 +28,7 @@ export function efficiencyScore(tasks: Task[]): { score: number; color: string }
 }
 
 export function tasksOfPerson(tasks: Task[], pid: string) {
-  return tasks.filter((t) => t.assignees.includes(pid));
+  return tasks.filter((t) => t.assignee_id === pid);
 }
 
 export function departmentRisk(deptTasks: Task[]): number {
@@ -49,7 +49,7 @@ export function atRiskTasks(tasks: Task[]): { task: Task; reason: string }[] {
   const soonIso = soon.toISOString().slice(0, 10);
   const openCounts = new Map<string, number>();
   for (const t of tasks)
-    if (isOpen(t)) for (const a of t.assignees) openCounts.set(a, (openCounts.get(a) || 0) + 1);
+    if (isOpen(t) && t.assignee_id) openCounts.set(t.assignee_id, (openCounts.get(t.assignee_id) || 0) + 1);
 
   const out: { task: Task; reason: string }[] = [];
   for (const t of tasks) {
@@ -62,9 +62,9 @@ export function atRiskTasks(tasks: Task[]): { task: Task; reason: string }[] {
       out.push({ task: t, reason: `Overdue since ${t.due}` });
       continue;
     }
-    if (t.due <= soonIso) {
-      const heavy = t.assignees.some((a) => (openCounts.get(a) || 0) >= 5);
-      const slowHistory = t.assignees.some((a) => personOnTimeHistoryPct(tasks, a) < 75);
+    if (t.due <= soonIso && t.assignee_id) {
+      const heavy = (openCounts.get(t.assignee_id) || 0) >= 5;
+      const slowHistory = personOnTimeHistoryPct(tasks, t.assignee_id) < 75;
       if (heavy) out.push({ task: t, reason: "Assignee has a heavy open workload" });
       else if (slowHistory) out.push({ task: t, reason: "Assignee's on-time history below 75%" });
     }

@@ -17,19 +17,12 @@ export async function updateTask(
   const next = tasks.map((t) => (t.id === id ? { ...t, ...fields } : t));
   patch("tasks", next);
   const dbFields: Record<string, unknown> = { ...fields };
-  delete dbFields.assignees;
   delete dbFields.raci_c;
   delete dbFields.raci_i;
   if (fields.status === "Done") dbFields.completed_at = new Date().toISOString();
   if (fields.status && fields.status !== "Done") dbFields.completed_at = null;
   if (Object.keys(dbFields).length) {
     await supabase.from("tasks").update(dbFields).eq("id", id);
-  }
-  if (fields.assignees) {
-    await supabase.from("task_assignees").delete().eq("task_id", id);
-    if (fields.assignees.length) {
-      await supabase.from("task_assignees").insert(fields.assignees.map((p) => ({ task_id: id, profile_id: p })));
-    }
   }
   if (fields.raci_c || fields.raci_i) {
     const t = next.find((x) => x.id === id)!;
@@ -54,7 +47,7 @@ export async function createTask(
     priority?: string;
     due?: string | null;
     description?: string;
-    assignees: string[];
+    assignee_id: string;
     accountable_id?: string | null;
     raci_c?: string[];
     raci_i?: string[];
@@ -68,6 +61,7 @@ export async function createTask(
       name: input.name,
       list_id: input.list_id,
       owner_id: input.owner_id,
+      assignee_id: input.assignee_id,
       status: input.status || "Not Started",
       priority: input.priority || "Medium",
       due: input.due || null,
@@ -79,14 +73,12 @@ export async function createTask(
     .select()
     .single();
   if (error || !data) return null;
-  const assignees = input.assignees.length ? input.assignees : [input.owner_id];
-  await supabase.from("task_assignees").insert(assignees.map((p) => ({ task_id: data.id, profile_id: p })));
   const raciRows = [
     ...(input.raci_c || []).map((p) => ({ task_id: data.id, profile_id: p, role: "C" })),
     ...(input.raci_i || []).map((p) => ({ task_id: data.id, profile_id: p, role: "I" })),
   ];
   if (raciRows.length) await supabase.from("task_raci").insert(raciRows);
-  const task: Task = { ...data, assignees, raci_c: input.raci_c || [], raci_i: input.raci_i || [] };
+  const task: Task = { ...data, raci_c: input.raci_c || [], raci_i: input.raci_i || [] };
   patch("tasks", [...tasks, task]);
   // fire-and-forget instant alerts for assignment
   fetch("/api/notify", {
@@ -140,17 +132,26 @@ export function canDecideDueDate(me: Profile | null, profiles: Profile[], levels
 export function canAddSubtask(me: Profile | null, profiles: Profile[], levels: Level[], task: TaskT): boolean {
   if (!me) return false;
   if (me.is_super) return true;
-  if (!task.list_id) return task.owner_id === me.id || task.assignees.includes(me.id); // personal
+  if (!task.list_id) return task.owner_id === me.id || task.assignee_id === me.id; // personal
   if (task.owner_id === me.id || task.accountable_id === me.id) return true;
   return levelSort(profiles, levels, me.id) < levelSort(profiles, levels, task.owner_id);
 }
 
-/** Accountable candidates: the Responsible people themselves, plus anyone who outranks
- *  the highest-ranked Responsible. (A = same as R, or higher in rank than R.) */
-export function accountableCandidates(profiles: Profile[], levels: Level[], assigneeIds: string[]): Profile[] {
-  if (!assigneeIds.length) return profiles;
-  const bestR = Math.min(...assigneeIds.map((id) => levelSort(profiles, levels, id)));
-  return profiles.filter((p) => assigneeIds.includes(p.id) || levelSort(profiles, levels, p.id) < bestR || p.is_super);
+/** Accountable candidates for a given R (Responsible): same department as R, or anyone
+ *  who outranks R (lower sort = higher rank). A is always picked by the assignor —
+ *  never auto-selected — and is exactly one person. */
+export function accountableCandidates(
+  store: Pick<StoreData, "profiles" | "levels" | "deptMembers">,
+  assigneeId: string | null
+): Profile[] {
+  const { profiles, levels, deptMembers } = store;
+  if (!assigneeId) return profiles;
+  const rRank = levelSort(profiles, levels, assigneeId);
+  const r = profiles.find((p) => p.id === assigneeId);
+  const rDeptIds = new Set(deptMembers.filter((m) => m.department_id === r?.department_id).map((m) => m.profile_id));
+  return profiles.filter(
+    (p) => p.id !== assigneeId && (rDeptIds.has(p.id) || levelSort(profiles, levels, p.id) < rRank || p.is_super)
+  );
 }
 
 /* ----- reminders ----- */
@@ -272,7 +273,7 @@ export function suggestAssignees(
   const scored = store.profiles
     .filter((p) => !excludeIds.includes(p.id))
     .map((p) => {
-      const theirTasks = store.tasks.filter((t) => t.assignees.includes(p.id));
+      const theirTasks = store.tasks.filter((t) => t.assignee_id === p.id);
       const similar = words.length
         ? theirTasks.filter((t) => words.some((w) => t.name.toLowerCase().includes(w))).length
         : 0;
