@@ -471,9 +471,28 @@ export function WorkspaceSection() {
                               </button>
                             )}
                           </div>
-                          {Object.entries(s.answers).map(([q, a]) => (
-                            <p key={q} style={{ margin: "0 0 2px", fontSize: 12, color: "var(--sw-text-soft)" }}><b style={{ fontWeight: 500, color: "var(--sw-text)" }}>{q}:</b> {String(a)}</p>
-                          ))}
+                          {Object.entries(s.answers).map(([q, a]) => {
+                            const val = String(a);
+                            if (val.startsWith("FILE:")) {
+                              const [, path, ...nameParts] = val.split(":");
+                              const fileName = nameParts.join(":");
+                              return (
+                                <p key={q} style={{ margin: "0 0 2px", fontSize: 12, color: "var(--sw-text-soft)" }}>
+                                  <b style={{ fontWeight: 500, color: "var(--sw-text)" }}>{q}:</b>{" "}
+                                  <button
+                                    onClick={async () => {
+                                      const { data } = await supabase.storage.from("task-attachments").createSignedUrl(path, 60);
+                                      if (data?.signedUrl) window.open(data.signedUrl, "_blank");
+                                    }}
+                                    style={{ border: "none", background: "none", color: "var(--crimson)", cursor: "pointer", padding: 0, fontSize: 12 }}
+                                  >
+                                    Download {fileName}
+                                  </button>
+                                </p>
+                              );
+                            }
+                            return <p key={q} style={{ margin: "0 0 2px", fontSize: 12, color: "var(--sw-text-soft)" }}><b style={{ fontWeight: 500, color: "var(--sw-text)" }}>{q}:</b> {val}</p>;
+                          })}
                         </div>
                       ))}
                     </div>
@@ -1306,7 +1325,7 @@ export function WorkspaceSection() {
               <div key={f.id} style={{ display: "flex", gap: 8, marginBottom: 8 }}>
                 <input value={f.label} onChange={(e) => setNewForm({ ...newForm, fields: newForm.fields.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)) })} style={{ flex: 1, height: 36, borderRadius: 9, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "0 12px", fontSize: 12.5, color: "var(--sw-text)", outline: "none" }} />
                 <select className="sw-select" value={f.type} onChange={(e) => setNewForm({ ...newForm, fields: newForm.fields.map((x, j) => (j === i ? { ...x, type: e.target.value } : x)) })} style={{ height: 36, borderRadius: 9, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "0 10px", fontSize: 12, color: "var(--sw-text)", width: 130 }}>
-                  <option>Short answer</option><option>Paragraph</option><option>Dropdown</option>
+                  <option>Short answer</option><option>Paragraph</option><option>Dropdown</option><option>File upload</option>
                 </select>
                 <button onClick={() => setNewForm({ ...newForm, fields: newForm.fields.filter((_, j) => j !== i) })} style={{ border: "none", background: "none", color: "var(--red)", cursor: "pointer" }}><IconX /></button>
               </div>
@@ -1358,7 +1377,7 @@ export function WorkspaceSection() {
               <div key={f.id} style={{ display: "flex", gap: 8, marginBottom: 8 }}>
                 <input value={f.label} onChange={(e) => setEditingForm({ ...editingForm, fields: editingForm.fields.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)) })} style={{ flex: 1, height: 36, borderRadius: 9, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "0 12px", fontSize: 12.5, color: "var(--sw-text)", outline: "none" }} />
                 <select className="sw-select" value={f.type} onChange={(e) => setEditingForm({ ...editingForm, fields: editingForm.fields.map((x, j) => (j === i ? { ...x, type: e.target.value } : x)) })} style={{ height: 36, borderRadius: 9, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "0 10px", fontSize: 12, color: "var(--sw-text)", width: 130 }}>
-                  <option>Short answer</option><option>Paragraph</option><option>Dropdown</option>
+                  <option>Short answer</option><option>Paragraph</option><option>Dropdown</option><option>File upload</option>
                 </select>
                 <button onClick={() => setEditingForm({ ...editingForm, fields: editingForm.fields.filter((_, j) => j !== i) })} style={{ border: "none", background: "none", color: "var(--red)", cursor: "pointer" }}><IconX /></button>
               </div>

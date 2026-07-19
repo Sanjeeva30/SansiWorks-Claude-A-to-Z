@@ -172,6 +172,7 @@ export function DocDetailModal() {
   const { docs, docVersions, profiles, departments, deptHeads, me, supabase, patch } = useStore();
   const [note, setNote] = useState("");
   const [revisionFile, setRevisionFile] = useState<File | null>(null);
+  const [plainFile, setPlainFile] = useState<File | null>(null);
   const [reviewNoteFile, setReviewNoteFile] = useState<File | null>(null);
   const [requestingRevisions, setRequestingRevisions] = useState<"head" | "audit" | null>(null);
   const [busy, setBusy] = useState(false);
@@ -280,6 +281,25 @@ export function DocDetailModal() {
     setBusy(false);
   };
 
+  const attachPlainFile = async () => {
+    if (!me || !plainFile) return;
+    setBusy(true);
+    const path = `${d.id}/${Date.now()}-${plainFile.name}`;
+    await supabase.storage.from("sop-files").upload(path, plainFile);
+    const nextVersion = (latest?.version_number || 0) + 1;
+    const { data: version } = await supabase.from("doc_versions").insert({
+      doc_id: d.id, version_number: nextVersion, file_path: path, file_name: plainFile.name,
+      submitted_by: me.id, head_status: "approved", audit_status: "approved",
+    }).select().single();
+    if (version) {
+      await supabase.from("docs").update({ current_version_id: version.id }).eq("id", d.id);
+      patch("docVersions", [...docVersions, version]);
+      patch("docs", docs.map((x) => (x.id === d.id ? { ...x, current_version_id: version.id } : x)));
+    }
+    setPlainFile(null);
+    setBusy(false);
+  };
+
   return (
     <div style={overlay} onClick={() => setDocDetailId(null)}>
       <div ref={trapRef} role="dialog" aria-modal="true" aria-label={d.title} onClick={(e) => e.stopPropagation()} style={{ ...panel, width: 560 }}>
@@ -305,10 +325,22 @@ export function DocDetailModal() {
           </button>
         )}
         {!openVersion && <p style={{ margin: "0 0 12px", fontSize: 12, color: "var(--sw-muted)" }}>No file attached to this document.</p>}
-        <button onClick={() => { if (owner) { setDocDetailId(null); openProfile(owner.id); } }} style={{ display: "flex", alignItems: "center", gap: 9, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", borderRadius: 999, padding: "6px 14px 6px 6px", cursor: "pointer", marginBottom: d.is_sop ? 18 : 0 }}>
+        <button onClick={() => { if (owner) { setDocDetailId(null); openProfile(owner.id); } }} style={{ display: "flex", alignItems: "center", gap: 9, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", borderRadius: 999, padding: "6px 14px 6px 6px", cursor: "pointer", marginBottom: 12 }}>
           <span style={{ width: 24, height: 24, borderRadius: 99, background: owner?.color || "#9A918A", color: "#fff", fontSize: 9.5, fontWeight: 400, display: "flex", alignItems: "center", justifyContent: "center" }}>{owner ? initials(owner.name) : "?"}</span>
           <span style={{ fontSize: 12.5, fontWeight: 400 }}>{owner?.name || "—"}</span>
         </button>
+
+        {!d.is_sop && (
+          <div style={{ marginBottom: 18 }}>
+            <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.05em", textTransform: "uppercase", color: "var(--sw-muted)", marginBottom: 8 }}>
+              {openVersion ? "Replace file" : "Attach a file"}
+            </div>
+            <input type="file" onChange={(e) => setPlainFile(e.target.files?.[0] || null)} style={{ width: "100%", marginBottom: 10, fontSize: 12 }} />
+            <button disabled={busy || !plainFile} onClick={attachPlainFile} style={{ padding: "7px 16px", borderRadius: 999, border: "none", background: plainFile ? "var(--crimson)" : "var(--sw-hair)", color: "#fff", fontSize: 12, cursor: plainFile ? "pointer" : "default" }}>
+              {openVersion ? "Upload new version" : "Attach file"}
+            </button>
+          </div>
+        )}
 
         {d.is_sop && (
           <>

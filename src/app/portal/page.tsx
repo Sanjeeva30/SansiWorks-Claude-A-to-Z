@@ -20,6 +20,16 @@ function PortalInner() {
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [uploading, setUploading] = useState<string | null>(null);
+
+  const uploadFile = async (label: string, file: File) => {
+    setUploading(label);
+    const path = `form-submissions/${Date.now()}-${file.name}`;
+    const { error } = await supabase.storage.from("task-attachments").upload(path, file);
+    setUploading(null);
+    if (error) { setSubmitError("That file couldn't be uploaded — please try again."); return; }
+    setAnswers((a) => ({ ...a, [label]: `FILE:${path}:${file.name}` }));
+  };
 
   useEffect(() => {
     supabase.from("forms").select("id,title,list_id,fields").eq("active", true).then(({ data }) => setForms((data as PortalForm[]) || []));
@@ -82,6 +92,12 @@ function PortalInner() {
                       {f.label}
                       {f.type === "Paragraph" ? (
                         <textarea rows={4} value={answers[f.label] || ""} onChange={(e) => setAnswers({ ...answers, [f.label]: e.target.value })} style={{ borderRadius: 9, border: "1px solid #E5DFD8", background: "#FAF8F4", padding: "9px 12px", fontSize: 12.5, outline: "none", resize: "vertical" }} />
+                      ) : f.type === "File upload" ? (
+                        <>
+                          <input type="file" onChange={(e) => { const file = e.target.files?.[0]; if (file) uploadFile(f.label, file); }} style={{ fontSize: 12.5 }} />
+                          {uploading === f.label && <span style={{ fontSize: 11.5, color: "#9A918A" }}>Uploading…</span>}
+                          {answers[f.label]?.startsWith("FILE:") && <span style={{ fontSize: 11.5, color: "#0D4F31" }}>Attached: {answers[f.label].split(":").slice(2).join(":")}</span>}
+                        </>
                       ) : (
                         <input value={answers[f.label] || ""} onChange={(e) => setAnswers({ ...answers, [f.label]: e.target.value })} style={{ height: 36, borderRadius: 9, border: "1px solid #E5DFD8", background: "#FAF8F4", padding: "0 12px", fontSize: 12.5, outline: "none" }} />
                       )}
