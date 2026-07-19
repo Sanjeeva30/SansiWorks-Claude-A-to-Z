@@ -1,5 +1,6 @@
 "use client";
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { useStore } from "@/lib/store";
 import { useUI } from "@/lib/ui";
 import { STATUS_COLORS, PRIORITY_COLORS, STATUSES, initials, Task } from "@/lib/types";
@@ -180,54 +181,9 @@ export function ListSection() {
   const listTpl = templates.filter((t) => t.list_id === list?.id);
 
   /* ================================================================ */
-  const header = (title: string, dotColor: string, subtitle: string, extra?: React.ReactNode) => (
-    <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 22px" }}>
-      <span style={{ width: 7, height: 7, borderRadius: 99, background: dotColor, flex: "none" }} />
-      <h1 style={{ fontSize: 16, fontWeight: 400, margin: 0 }}>{title}</h1>
-      <span style={{ fontSize: 11.5, color: "var(--sw-muted)", fontWeight: 400 }}>{subtitle}</span>
-      {extra}
-      <div style={{ flex: 1 }} />
-      <TopIcons />
-    </div>
-  );
-
   /* ---- Everything page ---- */
   if (listPage === "everything") {
-    const everythingRows = applyFilters(tasks.filter((t) => t.list_id), filters, today);
-    const groups = new Map<string, Task[]>();
-    for (const t of everythingRows) {
-      const key = listPathOf(t);
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key)!.push(t);
-    }
-    return (
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, height: "100%" }}>
-        <header style={{ flex: "none", borderBottom: "1px solid var(--sw-hair)", background: "var(--sw-page)" }}>
-          {header("Everything", "var(--navy)", "Every task across every space and list")}
-          <div style={{ padding: "0 22px 10px" }}>
-            <FilterBar value={filters} onChange={setFilters} people={profiles} resultCount={everythingRows.length} />
-          </div>
-        </header>
-        <main style={{ flex: 1, overflowY: "auto", padding: "16px 22px 40px" }}>
-          {Array.from(groups.entries()).map(([name, rows]) => (
-            <div key={name} style={{ marginBottom: 18 }}>
-              <h3 style={{ margin: "0 0 8px", fontSize: 12.5, fontWeight: 400, color: "var(--sw-text-soft)" }}>{name}</h3>
-              <div style={{ background: "var(--sw-card)", border: "1px solid var(--sw-hair)", borderRadius: 12, boxShadow: "var(--shadow-card)", overflow: "hidden" }}>
-                {rows.slice(0, 30).map((t) => (
-                  <button key={t.id} className="sw-row" onClick={() => setActiveTaskId(t.id)} style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left", padding: "11px 16px", border: "none", borderBottom: "1px solid var(--sw-hair)", background: "none", cursor: "pointer" }}>
-                    <span style={{ width: 8, height: 8, borderRadius: 99, background: STATUS_COLORS[t.status], flex: "none" }} />
-                    <span style={{ fontSize: 10, color: "var(--sw-muted)", width: 46, flex: "none" }}>SW-{t.task_number}</span>
-                    <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 400, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.name}</span>
-                    <span style={{ fontSize: 11, fontWeight: 400, color: PRIORITY_COLORS[t.priority], flex: "none" }}>{t.priority}</span>
-                    <span style={{ fontSize: 12, color: dueColor(t), width: 60, textAlign: "right", flex: "none", fontWeight: 400 }}>{t.due ? fmtShort(t.due) : ""}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
-        </main>
-      </div>
-    );
+    return <EverythingView />;
   }
 
   /* ---- List page (table / board / calendar / gantt) ---- */
@@ -370,11 +326,13 @@ export function ListSection() {
                         key={t.id}
                         className="sw-card-h"
                         onClick={() => setActiveTaskId(t.id)}
+                        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setActiveTaskId(t.id); } }}
                         draggable
                         onDragStart={(e) => { setDragId(t.id); e.dataTransfer.effectAllowed = "move"; }}
                         onDragEnd={() => { setDragId(null); setDragOver(null); }}
                         role="button"
                         tabIndex={0}
+                        aria-label={`${t.name}, ${t.status}, priority ${t.priority}${t.due ? `, due ${t.due}` : ""}`}
                         style={{ display: "block", width: "100%", textAlign: "left", padding: "12px 13px", border: "1px solid var(--sw-hair)", borderRadius: 11, background: "var(--sw-card)", boxShadow: "var(--shadow-card)", cursor: "grab" }}
                       >
                         <div style={{ fontSize: 12.5, fontWeight: 400, marginBottom: 8, lineHeight: 1.35 }}>{t.name}</div>
@@ -389,6 +347,17 @@ export function ListSection() {
                           </span>
                           <span style={{ fontSize: 10.5, color: dueColor(t), fontWeight: 400 }}>{t.due ? fmtShort(t.due) : ""}</span>
                         </div>
+                        <select
+                          className="sw-select"
+                          aria-label={`Move "${t.name}" to a different status`}
+                          value={t.status}
+                          onClick={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => e.stopPropagation()}
+                          onChange={(e) => setTask(t.id, { status: e.target.value as Task["status"] }, `Task moved to ${e.target.value}`)}
+                          style={{ marginTop: 8, width: "100%", height: 26, borderRadius: 7, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", color: "var(--sw-text-soft)", fontSize: 10.5, padding: "0 6px" }}
+                        >
+                          {STATUSES.map((st) => <option key={st} value={st}>{st}</option>)}
+                        </select>
                       </div>
                     ))}
                     <button onClick={() => openQuickAdd(s)} style={{ textAlign: "left", padding: "8px 10px", border: "1px dashed var(--sw-hair)", borderRadius: 10, background: "none", color: "var(--sw-muted)", fontSize: 11.5, fontWeight: 400, cursor: "pointer" }}>+ Add task</button>
@@ -746,6 +715,92 @@ export function ListSection() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/* "Everything" — every task across every space, flattened by list and
+   virtualized so no group silently truncates (it used to cap at 30/group). */
+type EverythingRow = { kind: "header"; name: string } | { kind: "row"; task: Task };
+
+function EverythingView() {
+  const { tasks, lists, spaces, profiles } = useStore();
+  const { setActiveTaskId } = useUI();
+  const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
+  const today = todayIso();
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const listPathOf = (t: Task) => {
+    if (!t.list_id) return "My List (personal)";
+    const l = lists.find((x) => x.id === t.list_id);
+    const s = spaces.find((x) => x.id === l?.space_id);
+    return `${s?.name || ""} / ${l?.name || ""}`;
+  };
+
+  const everythingRows = applyFilters(tasks.filter((t) => t.list_id), filters, today);
+  const groups = new Map<string, Task[]>();
+  for (const t of everythingRows) {
+    const key = listPathOf(t);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(t);
+  }
+  const items: EverythingRow[] = [];
+  for (const [name, rows] of groups) {
+    items.push({ kind: "header", name });
+    for (const t of rows) items.push({ kind: "row", task: t });
+  }
+
+  const virtualizer = useVirtualizer({
+    count: items.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: (i) => (items[i].kind === "header" ? 40 : 47),
+    overscan: 12,
+  });
+  const dueColorFor = (t: Task) => {
+    if (!t.due) return "var(--sw-muted)";
+    return t.due < today && t.status !== "Done" ? "var(--red)" : "var(--sw-text-soft)";
+  };
+
+  return (
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, height: "100%" }}>
+      <header style={{ flex: "none", borderBottom: "1px solid var(--sw-hair)", background: "var(--sw-page)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 22px" }}>
+          <span style={{ width: 7, height: 7, borderRadius: 99, background: "var(--navy)", flex: "none" }} />
+          <h1 style={{ fontSize: 16, fontWeight: 400, margin: 0 }}>Everything</h1>
+          <span style={{ fontSize: 11.5, color: "var(--sw-muted)", fontWeight: 400 }}>Every task across every space and list</span>
+          <div style={{ flex: 1 }} />
+          <TopIcons />
+        </div>
+        <div style={{ padding: "0 22px 10px" }}>
+          <FilterBar value={filters} onChange={setFilters} people={profiles} resultCount={everythingRows.length} />
+        </div>
+      </header>
+      <main ref={scrollRef} style={{ flex: 1, overflowY: "auto", padding: "16px 22px 40px", position: "relative" }}>
+        <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
+          {virtualizer.getVirtualItems().map((vi) => {
+            const item = items[vi.index];
+            return (
+              <div key={vi.key} style={{ position: "absolute", top: 0, left: 0, right: 0, transform: `translateY(${vi.start}px)` }}>
+                {item.kind === "header" ? (
+                  <h3 style={{ margin: "0 0 8px", fontSize: 12.5, fontWeight: 400, color: "var(--sw-text-soft)" }}>{item.name}</h3>
+                ) : (
+                  <button
+                    onClick={() => setActiveTaskId(item.task.id)}
+                    className="sw-row"
+                    style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left", padding: "11px 16px", border: "1px solid var(--sw-hair)", borderRadius: 10, background: "var(--sw-card)", cursor: "pointer", boxShadow: "var(--shadow-card)", marginBottom: 6 }}
+                  >
+                    <span style={{ width: 8, height: 8, borderRadius: 99, background: STATUS_COLORS[item.task.status], flex: "none" }} />
+                    <span style={{ fontSize: 10, color: "var(--sw-muted)", width: 46, flex: "none" }}>SW-{item.task.task_number}</span>
+                    <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 400, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.task.name}</span>
+                    <span style={{ fontSize: 11, fontWeight: 400, color: PRIORITY_COLORS[item.task.priority], flex: "none" }}>{item.task.priority}</span>
+                    <span style={{ fontSize: 12, color: dueColorFor(item.task), width: 60, textAlign: "right", flex: "none", fontWeight: 400 }}>{item.task.due ? fmtShort(item.task.due) : ""}</span>
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </main>
     </div>
   );
 }

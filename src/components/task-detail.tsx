@@ -1,14 +1,17 @@
 "use client";
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useStore } from "@/lib/store";
 import { useUI } from "@/lib/ui";
-import { initials, STATUS_COLORS, PRIORITY_COLORS, Status, Priority, Task } from "@/lib/types";
+import { initials, STATUS_COLORS, PRIORITY_COLORS, Status, Priority, Task, Attachment, Profile } from "@/lib/types";
 import {
   updateTask, eligibleAssignees, canEditDueDirectly, canDecideDueDate,
   requestDueDate, decideDueDate, addSubtask, updateSubtask, deleteSubtask,
   addDependency, removeDependency, canAddSubtask, accountableCandidates,
-  createReminder,
+  createReminder, canEditDifficulty, updateTaskDifficulty, updateSubtaskDifficulty,
+  listAttachments, uploadAttachment, deleteAttachment, downloadAttachmentUrl,
+  createComment,
 } from "@/lib/actions";
+import { isHeadRank } from "@/lib/colors";
 import { ReminderInline } from "./reminders";
 import { relTime, fmtShort, todayIso } from "@/lib/dates";
 import { taskLink } from "@/lib/ui";
@@ -16,8 +19,11 @@ import { scoreMatch } from "@/lib/search";
 import { AssigneePicker } from "./assignee-picker";
 import { RaciRows, raciNote } from "./raci";
 import { SubtaskFields, SubtaskDraft, blankSubtaskDraft } from "./subtask-fields";
+import { DifficultyPicker, DifficultyBadge } from "./difficulty";
+import { FileDropZone } from "./dropzone";
 import { IconLink, IconX } from "./icons";
 import { Avatar } from "./shared";
+import { useFocusTrap } from "@/lib/a11y";
 
 const label: React.CSSProperties = { fontSize: 12, fontWeight: 400, color: "var(--sw-muted)" };
 
@@ -25,8 +31,12 @@ const label: React.CSSProperties = { fontSize: 12, fontWeight: 400, color: "var(
 export function TaskDetailSlideOver() {
   const { activeTaskId, setActiveTaskId, pushToast, openProfile } = useUI();
   const store = useStore();
-  const { me, tasks, profiles, levels, lists, spaces, activity, subtasks, deps, approvals, patch, supabase } = store;
-  const [tab, setTab] = useState<"details" | "activity" | "files">("details");
+  const { me, tasks, profiles, levels, lists, spaces, activity, subtasks, deps, approvals, comments, patch, supabase } = store;
+  const [tab, setTab] = useState<"details" | "activity" | "files" | "comments">("details");
+  const [commentDraft, setCommentDraft] = useState("");
+  const [pendingMentions, setPendingMentions] = useState<string[]>([]);
+  const [mentionFilter, setMentionFilter] = useState<string | null>(null);
+  const [postingComment, setPostingComment] = useState(false);
   const [newSub, setNewSub] = useState<SubtaskDraft | null>(null);
   const [expandedSub, setExpandedSub] = useState<string | null>(null);
   const [reqOpen, setReqOpen] = useState(false);
@@ -34,12 +44,41 @@ export function TaskDetailSlideOver() {
   const [reqReason, setReqReason] = useState("");
   const [depQuery, setDepQuery] = useState("");
   const [decideNote, setDecideNote] = useState("");
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [uploading, setUploading] = useState(false);
   const t = tasks.find((x) => x.id === activeTaskId);
 
   const today = todayIso();
   const scoped = useMemo(() => (t ? eligibleAssignees(store, t.list_id) : []), [store, t]);
 
+  useEffect(() => {
+    if (!t) { setAttachments([]); return; }
+    listAttachments(supabase, t.id).then(setAttachments);
+  }, [t?.id, supabase]);
+  const trapRef = useFocusTrap(!!t);
+
   if (!t) return null;
+
+  const handleFiles = async (files: File[]) => {
+    setUploading(true);
+    let failures = 0;
+    for (const f of files) {
+      const { attachment, error } = await uploadAttachment(supabase, t.id, f);
+      if (attachment) setAttachments((a) => [attachment, ...a]);
+      if (error) failures++;
+    }
+    setUploading(false);
+    if (failures) pushToast(`${failures} file${failures > 1 ? "s" : ""} failed to upload`);
+  };
+  const handleDelete = async (a: Attachment) => {
+    setAttachments((cur) => cur.filter((x) => x.id !== a.id));
+    await deleteAttachment(supabase, a);
+  };
+  const handleDownload = async (a: Attachment) => {
+    const url = await downloadAttachmentUrl(supabase, a.storage_path);
+    if (url) window.open(url, "_blank");
+    else pushToast("Couldn't get a download link — try again.");
+  };
 
   const list = lists.find((l) => l.id === t.list_id);
   const space = spaces.find((s) => s.id === list?.space_id);
@@ -77,7 +116,8 @@ export function TaskDetailSlideOver() {
   const submitSubtask = async () => {
     if (!newSub || !newSub.name.trim() || !newSub.assignee_id || !me) return;
     const sub = await addSubtask(supabase, store, patch, t.id, newSub.name.trim(), newSub.assignee_id, newSub.due || null,
-      { accountable_id: newSub.raci.a, raci_c: newSub.raci.c, raci_i: newSub.raci.i });
+      { accountable_id: newSub.raci.a, raci_c: newSub.raci.c, raci_i: newSub.raci.i },
+      { value: newSub.difficulty, setById: me.id });
     if (sub && newSub.reminder) {
       await createReminder(supabase, store, patch, { profile_id: me.id, task_id: t.id, subtask_id: sub.id, title: newSub.name.trim(), remind_at: new Date(newSub.reminder).toISOString() });
     }
@@ -96,16 +136,48 @@ export function TaskDetailSlideOver() {
     </span>
   );
 
+  const taskComments = comments.filter((c) => c.task_id === t.id);
   const tabs: { key: typeof tab; label: string }[] = [
     { key: "details", label: "Details" },
+    { key: "comments", label: "Comments" },
     { key: "activity", label: "Activity" },
     { key: "files", label: "Files" },
   ];
 
+  const mentionCandidates = mentionFilter !== null
+    ? profiles.filter((p) => p.name.toLowerCase().includes(mentionFilter.toLowerCase())).slice(0, 6)
+    : [];
+
+  const onDraftChange = (v: string) => {
+    setCommentDraft(v);
+    const m = v.match(/@([^\s@]*)$/);
+    setMentionFilter(m ? m[1] : null);
+  };
+  const pickMention = (p: Profile) => {
+    setCommentDraft((v) => v.replace(/@([^\s@]*)$/, `@${p.name} `));
+    setPendingMentions((ids) => (ids.includes(p.id) ? ids : [...ids, p.id]));
+    setMentionFilter(null);
+  };
+  const postComment = async () => {
+    if (!commentDraft.trim() || !me) return;
+    setPostingComment(true);
+    await createComment(supabase, store, patch, t, me, commentDraft.trim(), pendingMentions);
+    setCommentDraft("");
+    setPendingMentions([]);
+    setMentionFilter(null);
+    setPostingComment(false);
+  };
+  const renderCommentBody = (body: string, mentionedIds: string[]) => {
+    const names = mentionedIds.map((id) => profiles.find((p) => p.id === id)?.name).filter((n): n is string => !!n);
+    if (!names.length) return body;
+    const re = new RegExp(`(@(?:${names.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")}))`, "g");
+    return body.split(re).map((part, i) => (names.some((n) => part === `@${n}`) ? <span key={i} style={{ color: "var(--crimson)", fontWeight: 500 }}>{part}</span> : <React.Fragment key={i}>{part}</React.Fragment>));
+  };
+
   return (
     <>
       <div style={{ position: "fixed", inset: 0, background: "rgba(23,18,15,0.4)", zIndex: 40 }} onClick={() => setActiveTaskId(null)} />
-      <div onClick={(e) => e.stopPropagation()} style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: 560, maxWidth: "94vw", background: "var(--sw-card)", boxShadow: "-24px 0 60px rgba(23,18,15,.25)", zIndex: 41, display: "flex", flexDirection: "column" }}>
+      <div ref={trapRef} role="dialog" aria-modal="true" aria-label={t.name} onClick={(e) => e.stopPropagation()} style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: 560, maxWidth: "94vw", background: "var(--sw-card)", boxShadow: "-24px 0 60px rgba(23,18,15,.25)", zIndex: 41, display: "flex", flexDirection: "column" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "16px 20px", borderBottom: "1px solid var(--sw-hair)", flex: "none" }}>
           <span style={{ width: 8, height: 8, borderRadius: 99, background: STATUS_COLORS[t.status], flex: "none" }} />
           <span style={{ fontSize: 11, fontWeight: 400, color: "var(--sw-muted)" }}>SW-{t.task_number}</span>
@@ -121,7 +193,7 @@ export function TaskDetailSlideOver() {
           >
             <IconLink size={11} /> Copy link
           </button>
-          <button onClick={() => setActiveTaskId(null)} style={{ border: "none", background: "var(--sw-hover)", width: 28, height: 28, borderRadius: 99, cursor: "pointer", fontSize: 13, color: "var(--sw-text-soft)" }}><IconX /></button>
+          <button onClick={() => setActiveTaskId(null)} aria-label="Close" style={{ border: "none", background: "var(--sw-hover)", width: 28, height: 28, borderRadius: 99, cursor: "pointer", fontSize: 13, color: "var(--sw-text-soft)" }}><IconX /></button>
         </div>
 
         <div style={{ display: "flex", gap: 4, padding: "0 20px", borderBottom: "1px solid var(--sw-hair)", flex: "none" }}>
@@ -133,6 +205,7 @@ export function TaskDetailSlideOver() {
             >
               {tb.label}
               {tb.key === "details" && mySubtasks.length > 0 && <span style={{ marginLeft: 5, fontSize: 10.5, color: "var(--sw-muted)" }}>{doneCount}/{mySubtasks.length}</span>}
+              {tb.key === "comments" && taskComments.length > 0 && <span style={{ marginLeft: 5, fontSize: 10.5, color: "var(--sw-muted)" }}>{taskComments.length}</span>}
             </button>
           ))}
         </div>
@@ -257,6 +330,17 @@ export function TaskDetailSlideOver() {
                 <span style={label}>Effort</span>
                 <span style={{ fontSize: 12.5, fontWeight: 400 }}>{t.effort} pts</span>
 
+                <span style={label}>Difficulty</span>
+                <span style={{ justifySelf: "start", width: 180 }}>
+                  <DifficultyPicker
+                    value={t.difficulty}
+                    disabled={!canEditDifficulty(profiles, levels, me, t.difficulty_set_by)}
+                    lockedReason={t.difficulty_set_by ? `Only ${profiles.find((p) => p.id === t.difficulty_set_by)?.name || "the setter"} or someone who outranks them can change this` : undefined}
+                    onChange={(v) => me && updateTaskDifficulty(supabase, store, patch, t, me, v)}
+                    compact
+                  />
+                </span>
+
                 <span style={label}>Reminder</span>
                 <span style={{ justifySelf: "start" }}><ReminderInline taskId={t.id} title={t.name} /></span>
 
@@ -303,7 +387,7 @@ export function TaskDetailSlideOver() {
                       style={{ height: 24, borderRadius: 6, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", fontSize: 10.5, color: "var(--sw-text-soft)", padding: "0 4px", maxWidth: 96 }}
                     >
                       <option value="">Unassigned</option>
-                      {scoped.map((p) => <option key={p.id} value={p.id}>{p.name.split(" ")[0]}</option>)}
+                      {profiles.map((p) => <option key={p.id} value={p.id}>{p.name.split(" ")[0]}</option>)}
                     </select>
                     <input
                       type="date"
@@ -312,6 +396,7 @@ export function TaskDetailSlideOver() {
                       title="Subtask due date"
                       style={{ height: 24, borderRadius: 6, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", fontSize: 10.5, color: s.due && s.due < today && !s.done ? "var(--red)" : "var(--sw-text-soft)", padding: "0 4px", width: 112 }}
                     />
+                    <DifficultyBadge value={s.difficulty} />
                     {who && <span title={who.name} style={{ width: 18, height: 18, borderRadius: 99, background: who.color, color: "#fff", fontSize: 7.5, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>{initials(who.name)}</span>}
                     <button onClick={() => setExpandedSub(expandedSub === s.id ? null : s.id)} title="RACI & reminder" style={{ border: "none", background: expandedSub === s.id ? "var(--sw-hover)" : "none", borderRadius: 6, color: "var(--sw-muted)", cursor: "pointer", padding: "2px 5px", fontSize: 11, lineHeight: 1 }}>⋯</button>
                     <button onClick={() => deleteSubtask(supabase, store, patch, s.id)} title="Delete subtask" style={{ border: "none", background: "none", color: "var(--sw-muted)", cursor: "pointer", padding: 2, display: "flex" }}><IconX size={10} /></button>
@@ -329,6 +414,18 @@ export function TaskDetailSlideOver() {
                         <span style={{ fontSize: 10, color: "var(--sw-muted)", width: 92, flex: "none" }}>Reminder</span>
                         <ReminderInline taskId={t.id} subtaskId={s.id} title={s.name} />
                       </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ fontSize: 10, color: "var(--sw-muted)", width: 92, flex: "none" }}>Difficulty</span>
+                        <span style={{ width: 160 }}>
+                          <DifficultyPicker
+                            value={s.difficulty}
+                            disabled={!canEditDifficulty(profiles, levels, me, s.difficulty_set_by)}
+                            lockedReason={s.difficulty_set_by ? `Only ${profiles.find((p) => p.id === s.difficulty_set_by)?.name || "the setter"} or someone who outranks them can change this` : undefined}
+                            onChange={(v) => me && updateSubtaskDifficulty(supabase, store, patch, s, me, v)}
+                            compact
+                          />
+                        </span>
+                      </div>
                     </div>
                   )}
                   </React.Fragment>
@@ -342,7 +439,6 @@ export function TaskDetailSlideOver() {
                       onChange={setNewSub}
                       onRemove={() => setNewSub(null)}
                       personal={personal}
-                      deptScoped={scoped}
                       deptLabel={deptLabel}
                     />
                     <button
@@ -418,13 +514,57 @@ export function TaskDetailSlideOver() {
             </>
           )}
 
+          {tab === "comments" && (
+            <div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 16 }}>
+                {taskComments.map((c) => {
+                  const who = profiles.find((p) => p.id === c.author_id);
+                  return (
+                    <div key={c.id} style={{ display: "flex", gap: 10 }}>
+                      {who && <Avatar person={who} size={24} ring={isHeadRank(who, levels)} onClick={(e) => { e.stopPropagation(); openProfile(who.id); }} />}
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 12.5 }}><b style={{ fontWeight: 400 }}>{who?.name || "Someone"}</b></div>
+                        <div style={{ fontSize: 12.5, marginTop: 2, whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{renderCommentBody(c.body, c.mentioned_ids)}</div>
+                        <div style={{ fontSize: 11, color: "var(--sw-muted)", marginTop: 3 }}>{relTime(c.created_at)}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {!taskComments.length && <p style={{ margin: 0, fontSize: 12.5, color: "var(--sw-muted)" }}>No comments yet — @mention anyone in the company to loop them in.</p>}
+              </div>
+              <div style={{ position: "relative" }}>
+                <textarea
+                  value={commentDraft}
+                  onChange={(e) => onDraftChange(e.target.value)}
+                  placeholder="Write a comment — type @ to mention anyone…"
+                  style={{ width: "100%", height: 70, resize: "vertical", borderRadius: 10, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "10px 12px", fontSize: 12.5, fontFamily: "var(--font-sans)", color: "var(--sw-text)", outline: "none", boxSizing: "border-box" }}
+                />
+                {mentionCandidates.length > 0 && (
+                  <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, width: 220, background: "var(--sw-card)", border: "1px solid var(--sw-hair)", borderRadius: 10, boxShadow: "0 14px 40px rgba(23,18,15,.2)", zIndex: 5, overflow: "hidden" }}>
+                    {mentionCandidates.map((p) => (
+                      <button key={p.id} onClick={() => pickMention(p)} style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "7px 10px", border: "none", background: "none", cursor: "pointer", textAlign: "left" }}>
+                        <Avatar person={p} size={20} />
+                        <span style={{ fontSize: 12 }}>{p.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
+                <button disabled={postingComment || !commentDraft.trim()} onClick={postComment} style={{ padding: "7px 16px", borderRadius: 999, border: "none", background: commentDraft.trim() ? "var(--crimson)" : "var(--sw-hair)", color: "#fff", fontSize: 12, cursor: commentDraft.trim() ? "pointer" : "default" }}>
+                  {postingComment ? "Posting…" : "Comment"}
+                </button>
+              </div>
+            </div>
+          )}
+
           {tab === "activity" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               {taskActivity.map((ev) => {
                 const who = profiles.find((p) => p.id === ev.actor_id);
                 return (
                   <div key={ev.id} style={{ display: "flex", gap: 10 }}>
-                    {who && <Avatar person={who} size={24} onClick={(e) => { e.stopPropagation(); openProfile(who.id); }} />}
+                    {who && <Avatar person={who} size={24} ring={isHeadRank(who, levels)} onClick={(e) => { e.stopPropagation(); openProfile(who.id); }} />}
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 12.5 }}><b style={{ fontWeight: 400 }}>{who?.name || "Someone"}</b> {ev.action}</div>
                       <div style={{ fontSize: 11, color: "var(--sw-muted)", marginTop: 1 }}>{relTime(ev.created_at)}</div>
@@ -437,7 +577,28 @@ export function TaskDetailSlideOver() {
           )}
 
           {tab === "files" && (
-            <p style={{ margin: 0, fontSize: 12.5, color: "var(--sw-muted)" }}>No files attached to this task yet. File uploads arrive in Phase 3.</p>
+            <div>
+              <FileDropZone inputId="sw-file-input-detail" onFiles={handleFiles} />
+              {uploading && <p style={{ margin: "8px 0 0", fontSize: 11.5, color: "var(--sw-muted)" }}>Uploading…</p>}
+              {attachments.length > 0 ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 12 }}>
+                  {attachments.map((a) => (
+                    <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 9, padding: "8px 10px", border: "1px solid var(--sw-hair)", borderRadius: 9, background: "var(--sw-card)" }}>
+                      <span style={{ width: 28, height: 28, borderRadius: 7, background: "rgba(122,13,32,0.08)", color: "var(--crimson)", fontSize: 11, fontWeight: 400, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
+                        {(a.name.split(".").pop() || "").toUpperCase().slice(0, 3)}
+                      </span>
+                      <button onClick={() => handleDownload(a)} style={{ flex: 1, minWidth: 0, border: "none", background: "none", textAlign: "left", cursor: "pointer", padding: 0 }}>
+                        <div style={{ fontSize: 12.5, fontWeight: 400, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: "var(--sw-text)" }}>{a.name}</div>
+                        <div style={{ fontSize: 10.5, color: "var(--sw-muted)" }}>{Math.max(1, Math.round(a.size_bytes / 1024))} KB · {relTime(a.created_at)}</div>
+                      </button>
+                      <button onClick={() => handleDelete(a)} title="Delete" style={{ border: "none", background: "none", color: "var(--sw-muted)", fontSize: 14, cursor: "pointer", flex: "none", lineHeight: 1 }}><IconX /></button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                !uploading && <p style={{ margin: "12px 0 0", fontSize: 12.5, color: "var(--sw-muted)" }}>No files attached to this task yet.</p>
+              )}
+            </div>
           )}
         </div>
       </div>

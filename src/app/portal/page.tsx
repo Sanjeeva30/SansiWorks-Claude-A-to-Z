@@ -18,6 +18,8 @@ function PortalInner() {
   const [sent, setSent] = useState(false);
   const [refNo, setRefNo] = useState("");
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [submitError, setSubmitError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     supabase.from("forms").select("id,title,list_id,fields").eq("active", true).then(({ data }) => setForms((data as PortalForm[]) || []));
@@ -27,8 +29,18 @@ function PortalInner() {
 
   const submit = async () => {
     if (!current) return;
-    await supabase.from("form_submissions").insert({ form_id: current.id, answers });
-    setRefNo(`SW-${Math.floor(1000 + Math.random() * 9000)}`);
+    setSubmitting(true);
+    setSubmitError("");
+    const { data, error } = await supabase.from("form_submissions").insert({ form_id: current.id, answers }).select().single();
+    setSubmitting(false);
+    if (error || !data) {
+      setSubmitError("We couldn't send this request — please try again in a moment.");
+      return;
+    }
+    try {
+      await fetch("/api/forms/notify-submission", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ formId: current.id, submissionId: data.id }) });
+    } catch {}
+    setRefNo(`SW-${data.id.slice(0, 4).toUpperCase()}`);
     setSent(true);
     setAnswers({});
   };
@@ -76,7 +88,8 @@ function PortalInner() {
                     </label>
                   ))}
                 </div>
-                <button onClick={submit} style={{ marginTop: 20, padding: "10px 26px", borderRadius: 999, border: "none", background: "#7A0D20", color: "#fff", fontSize: 13, fontWeight: 400, cursor: "pointer", boxShadow: "0 8px 20px rgba(122,13,32,.25)" }}>Send request</button>
+                {submitError && <p style={{ margin: "14px 0 0", fontSize: 12.5, color: "#7A0D20" }}>{submitError}</p>}
+                <button onClick={submit} disabled={submitting} style={{ marginTop: 20, padding: "10px 26px", borderRadius: 999, border: "none", background: "#7A0D20", color: "#fff", fontSize: 13, fontWeight: 400, cursor: submitting ? "default" : "pointer", opacity: submitting ? 0.6 : 1, boxShadow: "0 8px 20px rgba(122,13,32,.25)" }}>{submitting ? "Sending…" : "Send request"}</button>
               </div>
             </>
           )

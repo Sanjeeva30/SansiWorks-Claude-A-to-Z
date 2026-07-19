@@ -13,8 +13,12 @@ function AcceptInviteInner() {
   const [invite, setInvite] = useState<{ email: string; level_name: string; department_name: string; invited_by_name: string; expired: boolean } | null>(null);
   const [checked, setChecked] = useState(false);
   const [name, setName] = useState("");
+  const [designation, setDesignation] = useState("");
   const [countryCode, setCountryCode] = useState("+62");
   const [phone, setPhone] = useState("");
+  const [birthDay, setBirthDay] = useState("");
+  const [birthMonth, setBirthMonth] = useState("");
+  const [birthYear, setBirthYear] = useState("");
   const [password, setPassword] = useState("");
   const [terms, setTerms] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -39,7 +43,7 @@ function AcceptInviteInner() {
   const strengthColors = ["#E5DFD8", "#F3263E", "#B7791F", "#22409E", "#0D4F31"];
   const strengthLabels = ["", "Weak", "Fair", "Good", "Strong"];
   const pwMeetsRules = pw.length >= 8 && /[A-Z]/.test(pw) && /[0-9]/.test(pw) && /[^A-Za-z0-9]/.test(pw);
-  const disabled = !terms || !name.trim() || !phone.trim() || !pwMeetsRules || busy;
+  const disabled = !terms || !name.trim() || !designation.trim() || !phone.trim() || !pwMeetsRules || busy;
 
   const complete = async () => {
     if (disabled || !invite || !token) return;
@@ -54,6 +58,10 @@ function AcceptInviteInner() {
     const fullPhone = `${countryCode} ${phone.trim()}`;
     const { error: ciErr } = await supabase.rpc("complete_invite", {
       invite_token: token, user_id: signUp.user.id, full_name: name.trim(), phone_number: fullPhone,
+      designation_text: designation.trim(),
+      birthday_day_in: birthDay ? Number(birthDay) : null,
+      birthday_month_in: birthMonth ? Number(birthMonth) : null,
+      birthday_year_in: birthYear ? Number(birthYear) : null,
     });
     if (ciErr) {
       setErr(ciErr.message);
@@ -108,12 +116,15 @@ function AcceptInviteInner() {
                 </div>
                 <div>
                   <div style={{ fontSize: 13.5, fontWeight: 700 }}>Add a profile photo</div>
-                  <div style={{ fontSize: 11.5, color: "#9A918A" }}>Optional — you can also do this later.</div>
+                  <div style={{ fontSize: 11.5, color: "#9A918A" }}>Required — you'll be prompted right after you sign in.</div>
                 </div>
               </div>
 
-              <label style={label}>Full name</label>
+              <label style={label}>Full name <span style={{ color: "#7A0D20" }}>*</span></label>
               <input value={name} onChange={(e) => setName(e.target.value)} style={{ ...input, marginBottom: 14 }} />
+
+              <label style={label}>Job title / designation <span style={{ color: "#7A0D20" }}>*</span></label>
+              <input value={designation} onChange={(e) => setDesignation(e.target.value)} placeholder="e.g. Finance & Accounting Manager" style={{ ...input, marginBottom: 14 }} />
 
               <label style={label}>Email</label>
               <input value={invite.email} disabled style={{ ...input, background: "#F5F2EC", color: "#9A918A", marginBottom: 14 }} />
@@ -128,6 +139,19 @@ function AcceptInviteInner() {
                   <option value="+1">🇺🇸 +1</option>
                 </select>
                 <input value={phone} onChange={(e) => setPhone(e.target.value.replace(/[^0-9 ]/g, ""))} type="tel" inputMode="numeric" placeholder="812 3456 7890" style={{ ...input, flex: 1 }} />
+              </div>
+
+              <label style={label}>Birthday <span style={{ color: "#9A918A", fontWeight: 400 }}>(optional — year optional too)</span></label>
+              <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+                <select value={birthDay} onChange={(e) => setBirthDay(e.target.value)} style={{ ...input, flex: 1 }}>
+                  <option value="">Day</option>
+                  {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => <option key={d} value={d}>{d}</option>)}
+                </select>
+                <select value={birthMonth} onChange={(e) => setBirthMonth(e.target.value)} style={{ ...input, flex: 1 }}>
+                  <option value="">Month</option>
+                  {["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"].map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+                </select>
+                <input value={birthYear} onChange={(e) => setBirthYear(e.target.value.replace(/[^0-9]/g, ""))} placeholder="Year (optional)" style={{ ...input, flex: 1 }} />
               </div>
 
               <label style={label}>Create password</label>

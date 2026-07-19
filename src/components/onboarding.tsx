@@ -1,6 +1,7 @@
 "use client";
 import React, { useEffect, useState } from "react";
 import { useStore } from "@/lib/store";
+import { AvatarUploadButton } from "./avatar-upload";
 
 const CHECKLIST_BY_ROLE: Record<string, { id: string; label: string; hint: string }[]> = {
   staff: [
@@ -29,9 +30,10 @@ export function OnboardingChecklist() {
 
   if (stage === "hidden" || !me) return null;
 
-  const role = ["l1", "l2", "l3"].includes(me.level_id) ? "dept_head" : "staff";
+  const role = ["l1", "l2", "l2r", "l3"].includes(me.level_id) ? "dept_head" : "staff";
   const items = CHECKLIST_BY_ROLE[role];
-  const doneCount = Object.values(done).filter(Boolean).length;
+  const hasPhoto = !!me.avatar_url;
+  const doneCount = items.filter((ci) => (ci.id === "profile" ? hasPhoto : done[ci.id])).length;
   const pct = Math.round((doneCount / items.length) * 100);
   const allDone = doneCount === items.length;
   const firstName = me.name.split(" ")[0];
@@ -68,14 +70,32 @@ export function OnboardingChecklist() {
               <div style={{ fontSize: 13.5, fontWeight: 800 }}>Getting started</div>
               <div style={{ fontSize: 11, color: "var(--sw-muted)", fontWeight: 600 }}>{doneCount} of {items.length} complete</div>
             </div>
-            <button onClick={() => setStage("closed")} style={{ border: "none", background: "var(--sw-sidebar)", width: 24, height: 24, borderRadius: 99, cursor: "pointer", fontSize: 12, color: "var(--sw-text-soft)" }}>✕</button>
+            <button
+              onClick={() => hasPhoto && setStage("closed")}
+              title={hasPhoto ? "Minimize" : "A profile photo is required before you can dismiss this"}
+              style={{ border: "none", background: "var(--sw-sidebar)", width: 24, height: 24, borderRadius: 99, cursor: hasPhoto ? "pointer" : "not-allowed", fontSize: 12, color: hasPhoto ? "var(--sw-text-soft)" : "var(--sw-hair)" }}
+            >✕</button>
           </div>
           <div style={{ height: 4, background: "var(--sw-hover)" }}>
             <div style={{ height: "100%", background: "var(--crimson)", width: `${pct}%`, transition: "width .3s" }} />
           </div>
           <div style={{ padding: "8px 10px" }}>
             {items.map((ci) => {
-              const isDone = !!done[ci.id];
+              const isDone = ci.id === "profile" ? hasPhoto : !!done[ci.id];
+              if (ci.id === "profile") {
+                return (
+                  <div key={ci.id} className="sw-row" style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 8px", borderRadius: 8 }}>
+                    <span style={{ position: "relative", width: 28, height: 28, borderRadius: 99, flex: "none", background: me.color, overflow: "hidden" }}>
+                      {hasPhoto ? <img src={me.avatar_url!} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : null}
+                      <AvatarUploadButton profileId={me.id} />
+                    </span>
+                    <span style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 12.5, fontWeight: 700, color: isDone ? "var(--sw-muted)" : "var(--sw-text)", textDecoration: isDone ? "line-through" : "none" }}>{ci.label}</div>
+                      <div style={{ fontSize: 11, color: "var(--sw-muted)", marginTop: 1 }}>{isDone ? "Done — thanks!" : "Required · click the avatar to upload"}</div>
+                    </span>
+                  </div>
+                );
+              }
               return (
                 <button
                   key={ci.id}
@@ -83,9 +103,8 @@ export function OnboardingChecklist() {
                     const nowDone = !isDone;
                     setDone({ ...done, [ci.id]: nowDone });
                     if (nowDone) setJustChecked({ ...justChecked, [ci.id]: true });
-                    if (nowDone && Object.values({ ...done, [ci.id]: nowDone }).filter(Boolean).length === items.length) {
-                      setTimeout(finish, 2600);
-                    }
+                    const nextDoneCount = items.filter((x) => (x.id === "profile" ? hasPhoto : (x.id === ci.id ? nowDone : done[x.id]))).length;
+                    if (nowDone && nextDoneCount === items.length) setTimeout(finish, 2600);
                   }}
                   className="sw-row"
                   style={{ display: "flex", alignItems: "flex-start", gap: 10, width: "100%", textAlign: "left", padding: "10px 8px", border: "none", background: "none", cursor: "pointer", borderRadius: 8 }}

@@ -8,7 +8,7 @@ import { searchWorkspace, scoreMatch, getRecentSearches, pushRecentSearch } from
 export function CommandPalette() {
   const { showPalette, setShowPalette, setHomePage, setListPage, setCompanyPage, setWorkspacePage, setActiveTaskId, setActiveList, setShowQuickAdd, toggleTheme, setShowPortal } = useUI();
   const store = useStore();
-  const { openProfile } = useUI();
+  const { openProfile, setDocDetailId, openDetail } = useUI();
   const [query, setQuery] = useState("");
   const [index, setIndex] = useState(0);
   const [recents, setRecents] = useState<string[]>([]);
@@ -35,7 +35,7 @@ export function CommandPalette() {
       ["Overview", () => setCompanyPage("executive")],
       ["People", () => setCompanyPage("people")],
       ["Inbox", () => setWorkspacePage("inbox")],
-      ["Docs", () => setWorkspacePage("docs")],
+      ["SOPs & Docs", () => setWorkspacePage("docs")],
       ["Forms", () => setWorkspacePage("forms")],
       ["Settings", () => setWorkspacePage("settings")],
       ["Admin console", () => setWorkspacePage("admin")],
@@ -61,8 +61,8 @@ export function CommandPalette() {
             switch (nav.kind) {
               case "task": setActiveTaskId(nav.id); break;
               case "person": openProfile(nav.id); break;
-              case "doc": setWorkspacePage("docs"); break;
-              case "form": setWorkspacePage("forms"); break;
+              case "doc": setDocDetailId(nav.id); break;
+              case "form": openDetail("form", nav.id); break;
               case "list": setActiveList({ spaceId: nav.spaceId, listId: nav.listId }); break;
               case "run": nav.run(); break;
             }

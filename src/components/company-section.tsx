@@ -18,7 +18,7 @@ const SPARKS = [
 export function CompanySection() {
   const store = useStore();
   const { tasks, profiles, departments, deptMembers, deps, docs } = store;
-  const { companyPage, setSection, setListPage, setActiveTaskId, setMetricModal, openProfile, setWorkspacePage } = useUI();
+  const { companyPage, setSection, setListPage, setActiveTaskId, setMetricModal, openProfile, setDocDetailId } = useUI();
   const [deptFilter, setDeptFilter] = useState("All departments");
   const [showAllWidgets, setShowAllWidgets] = useState(false);
   const [showWidgetPicker, setShowWidgetPicker] = useState(false);
@@ -121,7 +121,7 @@ export function CompanySection() {
   /* widgets */
   const widgetCatalog = [
     { id: 1, title: "Open tasks", desc: "Total open tasks company-wide", render: () => <Metric value={String(openTasks.length)} color="var(--sw-text)" subtitle="Across all departments" />, drill: goEverything },
-    { id: 2, title: "On-time rate", desc: "Share of tasks completed by their due date", render: () => <Metric value={`${onTimeRate}%`} color="var(--green)" subtitle="Last 30 days" />, drill: () => {} },
+    { id: 2, title: "On-time rate", desc: "Share of tasks completed by their due date", render: () => <Metric value={`${onTimeRate}%`} color="var(--green)" subtitle="Last 30 days" />, drill: () => setMetricModal({ title: "On-time rate — recent completions", taskIds: tasks.filter((t) => t.status === "Done").slice(-8).map((t) => t.id) }) },
     { id: 3, title: "Tasks by status", desc: "Breakdown of open tasks by status", render: () => <Bars tasks={tasks} onOpen={(ids, title) => setMetricModal({ title, taskIds: ids })} /> },
     { id: 4, title: "At-risk tasks", desc: "Tasks overdue or marked stuck", render: () => (
       <>{atRisk.slice(0, 2).map((r) => (
@@ -131,10 +131,10 @@ export function CompanySection() {
         </button>
       ))}</>
     ) },
-    { id: 5, title: "Critical priority", desc: "Count of Critical-priority open tasks", render: () => <Metric value={String(criticalCount)} color="var(--crimson)" subtitle="Needs attention this week" />, drill: goEverything },
+    { id: 5, title: "Critical priority", desc: "Count of Critical-priority open tasks", render: () => <Metric value={String(criticalCount)} color="var(--crimson)" subtitle="Needs attention this week" />, drill: () => setMetricModal({ title: "Critical priority — open tasks", taskIds: openTasks.filter((t) => t.priority === "Critical").map((t) => t.id) }) },
     { id: 6, title: "Recent docs", desc: "Last updated documents in Docs & SOP Library", render: () => (
       <>{docs.slice(0, 2).map((d) => (
-        <button key={d.id} className="sw-row" onClick={() => { setSection("workspace"); setWorkspacePage("docs"); }} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: "1px solid var(--sw-hair)", fontSize: 12, width: "100%", border: "none", background: "none", cursor: "pointer", textAlign: "left", color: "var(--sw-text)" }}>
+        <button key={d.id} className="sw-row" onClick={() => setDocDetailId(d.id)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: "1px solid var(--sw-hair)", fontSize: 12, width: "100%", border: "none", background: "none", cursor: "pointer", textAlign: "left", color: "var(--sw-text)" }}>
           <span style={{ width: 6, height: 6, borderRadius: 99, background: "var(--green)", flex: "none" }} />
           <span style={{ flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{d.title}</span>
         </button>
@@ -371,7 +371,7 @@ export function CompanySection() {
             <>
               <h2 style={{ fontFamily: "var(--font-serif)", fontWeight: 400, fontSize: 24, margin: "0 0 3px", fontStyle: "italic" }}>People</h2>
               <div style={{ display: "flex", alignItems: "center", margin: "0 0 16px" }}>
-                <p style={{ margin: 0, fontSize: 12.5, color: "var(--sw-text-soft)", flex: 1 }}>{personStats.length} team members across {departments.length} departments.</p>
+                <p style={{ margin: 0, fontSize: 12.5, color: "var(--sw-text-soft)", flex: 1 }}>{personStats.length} team members across {new Set(personStats.map((x) => x.p.department_id).filter(Boolean)).size} departments.</p>
                 <button onClick={() => setPeopleDensity(peopleDensity === "compact" ? "comfortable" : "compact")} style={{ padding: "5px 13px", borderRadius: 999, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", color: "var(--sw-text-soft)", fontSize: 11, fontWeight: 400, cursor: "pointer" }}>
                   {peopleDensity === "compact" ? "Comfortable" : "Compact"}
                 </button>
@@ -390,7 +390,7 @@ export function CompanySection() {
                   <div key={st.p.id} style={{ background: "var(--sw-card)", border: "1px solid var(--sw-hair)", borderRadius: 12, boxShadow: "var(--shadow-card)", marginBottom: 10, overflow: "hidden" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: peoplePad }}>
                       <button onClick={() => openProfile(st.p.id)} title="View profile" style={{ width: 34, height: 34, borderRadius: 99, background: st.p.color, color: "#fff", fontSize: 12, fontWeight: 400, display: "flex", alignItems: "center", justifyContent: "center", flex: "none", border: "none", cursor: "pointer", padding: 0 }}>{initials(st.p.name)}</button>
-                      <button onClick={() => setOpenPerson(expanded ? null : st.p.name)} style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, textAlign: "left", padding: 0, border: "none", background: "none", cursor: "pointer" }}>
+                      <button onClick={() => openProfile(st.p.id)} style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, textAlign: "left", padding: 0, border: "none", background: "none", cursor: "pointer" }} title="View full profile">
                         <span style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontSize: 13, fontWeight: 400 }}>{st.p.name}</div>
                           <div style={{ fontSize: 11, color: "var(--sw-muted)" }}>{dept?.name || st.p.role_title}</div>
@@ -400,7 +400,9 @@ export function CompanySection() {
                           <div style={{ height: "100%", borderRadius: 99, background: effColor(st.eff), width: `${st.eff}%` }} />
                         </div>
                         <span style={{ fontSize: 11, fontWeight: 400, color: effColor(st.eff), width: 76, textAlign: "right" }}>{st.eff}% eff.</span>
-                        <span style={{ fontSize: 11, color: "var(--sw-muted)", transform: expanded ? "rotate(180deg)" : "none", transition: "transform .15s" }}>▾</span>
+                      </button>
+                      <button onClick={() => setOpenPerson(expanded ? null : st.p.name)} title="Peek at open tasks" style={{ border: "none", background: "none", cursor: "pointer", padding: 4, flex: "none" }}>
+                        <span style={{ fontSize: 11, color: "var(--sw-muted)", display: "inline-block", transform: expanded ? "rotate(180deg)" : "none", transition: "transform .15s" }}>▾</span>
                       </button>
                     </div>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 6, padding: "0 16px 13px 62px" }}>

@@ -8,16 +8,17 @@ import { IconX } from "./icons";
    search), tagged with their department so the cross-dept jump is visible. Personal
    tasks skip the picker entirely — you're the only possible R. */
 export function AssigneePicker({
-  personal, me, value, onChange, deptScoped, allProfiles, deptLabel, compact,
+  personal, me, value, onChange, deptScoped, allProfiles, deptLabel, compact, placeholder,
 }: {
   personal: boolean;
   me: Profile;
   value: string | null;
   onChange: (id: string | null) => void;
-  deptScoped: Profile[];   // destination department's members
+  deptScoped: Profile[];   // destination department's members (or the full org, if unscoped)
   allProfiles: Profile[];  // full org, for cross-dept search
   deptLabel: (p: Profile) => string | null;
   compact?: boolean;
+  placeholder?: string;
 }) {
   const [query, setQuery] = useState("");
 
@@ -51,7 +52,7 @@ export function AssigneePicker({
       <input
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        placeholder="Department shown below — type 2+ letters to search any department…"
+        placeholder={placeholder || "Department shown below — type 2+ letters to search any department…"}
         style={{ width: "100%", height: compact ? 30 : "var(--sw-field-h)", borderRadius: 9, border: "1.5px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "0 11px", fontSize: compact ? 12 : 13, marginBottom: 8, outline: "none", color: "var(--sw-text)" }}
       />
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>

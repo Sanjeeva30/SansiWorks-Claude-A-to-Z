@@ -8,7 +8,7 @@ import { IconSearch } from "./icons";
 /* Search-as-you-type box with grouped instant results. Used in the My Work topbar. */
 export function GlobalSearch({ width = 340 }: { width?: number }) {
   const store = useStore();
-  const { setActiveTaskId, openProfile, setActiveList, setWorkspacePage } = useUI();
+  const { setActiveTaskId, openProfile, setActiveList, setDocDetailId, openDetail } = useUI();
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [index, setIndex] = useState(0);
@@ -33,8 +33,8 @@ export function GlobalSearch({ width = 340 }: { width?: number }) {
     switch (h.nav.kind) {
       case "task": setActiveTaskId(h.nav.id); break;
       case "person": openProfile(h.nav.id); break;
-      case "doc": setWorkspacePage("docs"); break;
-      case "form": setWorkspacePage("forms"); break;
+      case "doc": setDocDetailId(h.nav.id); break;
+      case "form": openDetail("form", h.nav.id); break;
       case "list": setActiveList({ spaceId: h.nav.spaceId, listId: h.nav.listId }); break;
       case "run": h.nav.run(); break;
     }

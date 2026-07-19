@@ -4,10 +4,12 @@ import { useStore } from "@/lib/store";
 import { useUI } from "@/lib/ui";
 import { initials } from "@/lib/types";
 import { parseNLDate } from "@/lib/dates";
-import { createTask, eligibleAssignees, accountableCandidates, suggestAssignees, addSubtask, createReminder } from "@/lib/actions";
+import { createTask, eligibleAssignees, accountableCandidates, suggestAssignees, addSubtask, createReminder, uploadAttachment } from "@/lib/actions";
 import { AssigneePicker } from "./assignee-picker";
 import { RaciRows, RaciValue, raciNote } from "./raci";
 import { SubtaskFields, SubtaskDraft, blankSubtaskDraft } from "./subtask-fields";
+import { DifficultyPicker } from "./difficulty";
+import { FileDropZone } from "./dropzone";
 import { Subtask } from "@/lib/types";
 import { IconSparkle, IconTaskPlus, IconX } from "./icons";
 
@@ -35,8 +37,9 @@ export function QuickAddModal() {
   const [reminder, setReminder] = useState("");
   const [recur, setRecur] = useState("none");
   const [raci, setRaci] = useState<RaciValue>({ a: null, c: [], i: [] });
+  const [difficulty, setDifficulty] = useState<number | null>(null);
   const [description, setDescription] = useState("");
-  const [attachments, setAttachments] = useState<{ id: string; name: string; size: number }[]>([]);
+  const [attachments, setAttachments] = useState<{ id: string; name: string; size: number; file: File }[]>([]);
   const [drafts, setDrafts] = useState<SubtaskDraft[]>([]);
   const [addAnother, setAddAnother] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
@@ -51,7 +54,7 @@ export function QuickAddModal() {
 
   const reset = () => {
     setName(""); setDueText(""); setDue(""); setDueLabel(""); setDescription("");
-    setAttachments([]); setRaci({ a: null, c: [], i: [] }); setReminder(""); setDrafts([]);
+    setAttachments([]); setRaci({ a: null, c: [], i: [] }); setDifficulty(null); setReminder(""); setDrafts([]);
   };
 
   const submit = async () => {
@@ -70,12 +73,15 @@ export function QuickAddModal() {
       raci_i: raci.i,
       reminder_at: reminder || null,
       recur,
+      difficulty,
+      difficulty_set_by: difficulty ? me.id : null,
     });
     if (created) {
       for (const d of drafts) {
         if (!d.name.trim() || !d.assignee_id) continue;
         const sub = await addSubtask(supabase, store, patch, created.id, d.name.trim(), d.assignee_id, d.due || null,
-          { accountable_id: d.raci.a, raci_c: d.raci.c, raci_i: d.raci.i });
+          { accountable_id: d.raci.a, raci_c: d.raci.c, raci_i: d.raci.i },
+          { value: d.difficulty, setById: me.id });
         if (sub && d.reminder) {
           await createReminder(supabase, store, patch, { profile_id: me.id, task_id: created.id, subtask_id: (sub as Subtask).id, title: d.name.trim(), remind_at: new Date(d.reminder).toISOString() });
         }
@@ -83,7 +89,15 @@ export function QuickAddModal() {
       if (reminder) {
         await createReminder(supabase, store, patch, { profile_id: me.id, task_id: created.id, title: created.name, remind_at: new Date(reminder).toISOString() });
       }
-      pushToast(`Task "${created.name}" created${drafts.length ? ` with ${drafts.length} subtask${drafts.length > 1 ? "s" : ""}` : ""}`);
+      let uploadFailures = 0;
+      for (const a of attachments) {
+        const { error } = await uploadAttachment(supabase, created.id, a.file);
+        if (error) uploadFailures++;
+      }
+      pushToast(
+        `Task "${created.name}" created${drafts.length ? ` with ${drafts.length} subtask${drafts.length > 1 ? "s" : ""}` : ""}` +
+        (uploadFailures ? ` — ${uploadFailures} attachment${uploadFailures > 1 ? "s" : ""} failed to upload` : "")
+      );
     }
     if (addAnother) reset();
     else close();
@@ -218,6 +232,11 @@ export function QuickAddModal() {
               </div>
             </div>
 
+            <div style={{ marginBottom: 18 }}>
+              {label("Difficulty (optional — you're setting it as the assignor)")}
+              <DifficultyPicker value={difficulty} onChange={setDifficulty} />
+            </div>
+
             <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 6 }}>
               <label style={{ fontSize: 12.5, fontWeight: 400, color: "var(--sw-text-soft)" }}>RACI</label>
               <span style={{ fontSize: 11, color: "var(--sw-muted)" }}>{raciNote(personal)}</span>
@@ -235,7 +254,6 @@ export function QuickAddModal() {
                   onChange={(nd) => setDrafts(drafts.map((x) => (x.id === d.id ? nd : x)))}
                   onRemove={() => setDrafts(drafts.filter((x) => x.id !== d.id))}
                   personal={personal}
-                  deptScoped={deptScoped}
                   deptLabel={deptLabel}
                 />
               ))}
@@ -253,20 +271,10 @@ export function QuickAddModal() {
               style={{ width: "100%", height: 88, resize: "vertical", borderRadius: 10, border: "1.5px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "12px 14px", fontSize: 13.5, fontFamily: "var(--font-sans)", color: "var(--sw-text)", outline: "none", marginBottom: 18 }} />
 
             {label("Attachments")}
-            <label htmlFor="sw-file-input" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, width: "100%", minHeight: 76, borderRadius: 10, border: "1.5px dashed var(--sw-hair)", background: "var(--sw-hover)", cursor: "pointer", textAlign: "center", padding: 12 }}>
-              <span style={{ fontSize: 19, color: "var(--sw-muted)" }}>📎</span>
-              <span style={{ fontSize: 12.5, fontWeight: 400, color: "var(--sw-text)" }}>Click to attach files</span>
-              <span style={{ fontSize: 11, color: "var(--sw-muted)" }}>or drag and drop — PDF, image, doc, spreadsheet</span>
-              <input
-                id="sw-file-input" type="file" multiple
-                onChange={(e) => {
-                  const files = Array.from(e.target.files || []).map((f) => ({ id: Math.random().toString(36).slice(2), name: f.name, size: f.size }));
-                  if (files.length) setAttachments((a) => [...a, ...files]);
-                  e.target.value = "";
-                }}
-                style={{ display: "none" }}
-              />
-            </label>
+            <FileDropZone
+              inputId="sw-file-input"
+              onFiles={(files) => setAttachments((a) => [...a, ...files.map((file) => ({ id: Math.random().toString(36).slice(2), name: file.name, size: file.size, file }))])}
+            />
             {attachments.length > 0 && (
               <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 10 }}>
                 {attachments.map((f) => (

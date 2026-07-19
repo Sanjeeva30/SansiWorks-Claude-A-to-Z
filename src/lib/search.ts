@@ -37,9 +37,9 @@ export interface SearchHit {
   nav:
     | { kind: "task"; id: string }
     | { kind: "person"; id: string }
-    | { kind: "doc" }
+    | { kind: "doc"; id: string }
     | { kind: "list"; spaceId: string; listId: string }
-    | { kind: "form" }
+    | { kind: "form"; id: string }
     | { kind: "run"; run: () => void };
 }
 
@@ -72,7 +72,7 @@ export function searchWorkspace(query: string, store: StoreData, limitPerGroup =
   }
   for (const d of store.docs) {
     const s = Math.max(scoreMatch(q, d.title), d.excerpt ? scoreMatch(q, d.excerpt) * 0.5 : 0);
-    if (s > 12) hits.push({ group: "Doc", id: d.id, label: d.title, sub: d.category || d.type, score: s, nav: { kind: "doc" } });
+    if (s > 12) hits.push({ group: "Doc", id: d.id, label: d.title, sub: d.category || d.type, score: s, nav: { kind: "doc", id: d.id } });
   }
   for (const l of store.lists) {
     const sp = store.spaces.find((x) => x.id === l.space_id);
@@ -81,7 +81,7 @@ export function searchWorkspace(query: string, store: StoreData, limitPerGroup =
   }
   for (const f of store.forms) {
     const s = scoreMatch(q, f.title);
-    if (s > 12) hits.push({ group: "Form", id: f.id, label: f.title, sub: "Form", score: s * 0.9, nav: { kind: "form" } });
+    if (s > 12) hits.push({ group: "Form", id: f.id, label: f.title, sub: "Form", score: s * 0.9, nav: { kind: "form", id: f.id } });
   }
 
   // top N per group, then flatten sorted by score

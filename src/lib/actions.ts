@@ -1,7 +1,7 @@
 "use client";
 // Mutation helpers: optimistic local patch + Supabase write + instant-alert hook.
 import { StoreData } from "./store";
-import { Task } from "./types";
+import { Attachment, Comment, Task } from "./types";
 import { createClient } from "./supabase/client";
 
 type Supabase = ReturnType<typeof createClient>;
@@ -53,6 +53,8 @@ export async function createTask(
     raci_i?: string[];
     reminder_at?: string | null;
     recur?: string;
+    difficulty?: number | null;
+    difficulty_set_by?: string | null;
   }
 ): Promise<Task | null> {
   const { data, error } = await supabase
@@ -69,6 +71,8 @@ export async function createTask(
       accountable_id: input.accountable_id || null,
       reminder_at: input.reminder_at || null,
       recur: input.recur || "none",
+      difficulty: input.difficulty || null,
+      difficulty_set_by: input.difficulty ? input.difficulty_set_by || input.owner_id : null,
     })
     .select()
     .single();
@@ -78,7 +82,7 @@ export async function createTask(
     ...(input.raci_i || []).map((p) => ({ task_id: data.id, profile_id: p, role: "I" })),
   ];
   if (raciRows.length) await supabase.from("task_raci").insert(raciRows);
-  const task: Task = { ...data, raci_c: input.raci_c || [], raci_i: input.raci_i || [] };
+  const task: Task = { ...data, raci_c: input.raci_c || [], raci_i: input.raci_i || [], difficulty: data.difficulty ?? null, difficulty_set_by: data.difficulty_set_by ?? null };
   patch("tasks", [...tasks, task]);
   // fire-and-forget instant alerts for assignment
   fetch("/api/notify", {
@@ -90,15 +94,96 @@ export async function createTask(
 }
 
 /* ---------------- Phase 2: governance, subtasks, dependencies ---------------- */
-import { Approval, Dependency, Level, List, Profile, Space, Subtask, Task as TaskT } from "./types";
+import { Approval, Assignment, DIFFICULTY_LEVELS, Dependency, Level, List, Profile, Space, Subtask, Task as TaskT } from "./types";
 
-async function logActivity(supabase: Supabase, store: Pick<StoreData, "activity">, patch: Patch, taskId: string, actorId: string, action: string) {
+/** Who should decide an approval request from this person? Walks the real
+ *  reporting lines from the org engine, in order:
+ *  1. If they hold a function-assignment with a "reports to" unit set (e.g.
+ *     Ambar's F&A-manager assignment reports to the Jogja cluster), the
+ *     head(s) of that unit — this is how Ambar's request reaches Marlina,
+ *     and a Jogja plant manager's reaches Oskar.
+ *  2. Otherwise, the head(s) of their home department/unit (e.g. Wenny's
+ *     request as Finance & Accounting's own head climbs straight to
+ *     whoever heads Strategic Support — Jakarta has no regional layer).
+ *  3. Otherwise, their assigned manager_id.
+ *  4. Otherwise, any super admin, so a request is never silently stranded. */
+export function resolveApprovers(
+  store: Pick<StoreData, "profiles" | "assignments" | "deptHeads">,
+  personId: string
+): Profile[] {
+  const { profiles, assignments, deptHeads } = store;
+  const headsOf = (unitId: string) => deptHeads.filter((h) => h.unit_id === unitId).map((h) => profiles.find((p) => p.id === h.profile_id)).filter((p): p is Profile => !!p);
+
+  const person = profiles.find((p) => p.id === personId);
+  if (!person) return [];
+
+  const myAssignments = assignments.filter((a) => a.profile_id === personId && a.reports_to_unit_id);
+  for (const a of myAssignments) {
+    const heads = headsOf((a as Assignment).reports_to_unit_id!);
+    if (heads.length) return heads;
+  }
+
+  if (person.department_id) {
+    const heads = headsOf(person.department_id).filter((h) => h.id !== personId);
+    if (heads.length) return heads;
+  }
+
+  if (person.manager_id) {
+    const manager = profiles.find((p) => p.id === person.manager_id);
+    if (manager) return [manager];
+  }
+
+  const anySuper = profiles.find((p) => p.is_super && p.id !== personId);
+  return anySuper ? [anySuper] : [];
+}
+
+export async function logActivity(supabase: Supabase, store: Pick<StoreData, "activity">, patch: Patch, taskId: string, actorId: string, action: string) {
   const { data } = await supabase.from("task_activity").insert({ task_id: taskId, actor_id: actorId, action }).select().single();
   if (data) patch("activity", [data, ...store.activity]);
 }
 
-async function notify(supabase: Supabase, profileId: string, taskId: string | null, body: string, reason: string) {
+export async function notify(supabase: Supabase, profileId: string, taskId: string | null, body: string, reason: string) {
   await supabase.from("notifications").insert({ profile_id: profileId, task_id: taskId, body, reason });
+}
+
+/* Compliance/admin audit trail — org, permissions, and SOP-approval changes.
+   Distinct from task_activity (per-task history): this is what Internal Audit
+   actually needs, so every admin-level mutation should call this. */
+export async function logAudit(supabase: Supabase, actorId: string, action: string, target: string) {
+  await supabase.from("audit_log").insert({ actor_id: actorId, action, target });
+}
+
+/* ----- comments & @mentions ----- */
+export async function createComment(
+  supabase: Supabase,
+  store: Pick<StoreData, "comments">,
+  patch: Patch,
+  task: Task,
+  author: Profile,
+  body: string,
+  mentionedIds: string[]
+): Promise<Comment | null> {
+  const { data, error } = await supabase
+    .from("comments")
+    .insert({ task_id: task.id, author_id: author.id, body, mentioned_ids: mentionedIds })
+    .select()
+    .single();
+  if (error || !data) return null;
+  patch("comments", [...store.comments, data as Comment]);
+
+  const notified = new Set<string>([author.id]);
+  for (const pid of mentionedIds) {
+    if (notified.has(pid)) continue;
+    notified.add(pid);
+    await notify(supabase, pid, task.id, `${author.name} mentioned you on "${task.name}"`, "mention");
+  }
+  const involved = [task.assignee_id, task.accountable_id, ...task.raci_c, ...task.raci_i].filter((x): x is string => !!x);
+  for (const pid of involved) {
+    if (notified.has(pid)) continue;
+    notified.add(pid);
+    await notify(supabase, pid, task.id, `${author.name} commented on "${task.name}"`, "comment");
+  }
+  return data as Comment;
 }
 
 /* ----- permissions ----- */
@@ -148,10 +233,54 @@ export function accountableCandidates(
   if (!assigneeId) return profiles;
   const rRank = levelSort(profiles, levels, assigneeId);
   const r = profiles.find((p) => p.id === assigneeId);
-  const rDeptIds = new Set(deptMembers.filter((m) => m.department_id === r?.department_id).map((m) => m.profile_id));
+  // "Same department as R" = R's home unit (profiles.department_id) — this always
+  // works, even for someone just added to the org — unioned with any extra org-unit
+  // memberships an admin has curated on top (department_members).
+  const rDeptIds = new Set(
+    profiles.filter((p) => p.department_id === r?.department_id).map((p) => p.id)
+  );
+  for (const m of deptMembers) if (m.department_id === r?.department_id) rDeptIds.add(m.profile_id);
   return profiles.filter(
     (p) => p.id !== assigneeId && (rDeptIds.has(p.id) || levelSort(profiles, levels, p.id) < rRank || p.is_super)
   );
+}
+
+/* ----- difficulty (1 Trivial .. 5 Complex) ----- */
+const difficultyLabel = (d: number | null) => DIFFICULTY_LEVELS.find((x) => x.value === d)?.label || "—";
+
+/** Whoever set the difficulty last "owns" it. Anyone can set it the first time
+ *  (whoever assigns the task); after that, only someone who outranks that person
+ *  — or a super admin — may change it. */
+export function canEditDifficulty(profiles: Profile[], levels: Level[], me: Profile | null, currentSetterId: string | null): boolean {
+  if (!me) return false;
+  if (me.is_super) return true;
+  if (!currentSetterId) return true;
+  if (currentSetterId === me.id) return true;
+  return levelSort(profiles, levels, me.id) < levelSort(profiles, levels, currentSetterId);
+}
+
+export async function updateTaskDifficulty(
+  supabase: Supabase, store: Pick<StoreData, "tasks" | "activity">, patch: Patch,
+  task: TaskT, me: Profile, difficulty: number
+) {
+  const prev = task.difficulty;
+  patch("tasks", store.tasks.map((t) => (t.id === task.id ? { ...t, difficulty, difficulty_set_by: me.id } : t)));
+  await supabase.from("tasks").update({ difficulty, difficulty_set_by: me.id }).eq("id", task.id);
+  await logActivity(supabase, store, patch, task.id, me.id, prev == null
+    ? `set difficulty to ${difficultyLabel(difficulty)}`
+    : `changed difficulty from ${difficultyLabel(prev)} to ${difficultyLabel(difficulty)}`);
+}
+
+export async function updateSubtaskDifficulty(
+  supabase: Supabase, store: Pick<StoreData, "subtasks" | "activity">, patch: Patch,
+  subtask: Subtask, me: Profile, difficulty: number
+) {
+  const prev = subtask.difficulty;
+  patch("subtasks", store.subtasks.map((s) => (s.id === subtask.id ? { ...s, difficulty, difficulty_set_by: me.id } : s)));
+  await supabase.from("subtasks").update({ difficulty, difficulty_set_by: me.id }).eq("id", subtask.id);
+  await logActivity(supabase, store, patch, subtask.task_id, me.id, prev == null
+    ? `set subtask "${subtask.name}" difficulty to ${difficultyLabel(difficulty)}`
+    : `changed subtask "${subtask.name}" difficulty from ${difficultyLabel(prev)} to ${difficultyLabel(difficulty)}`);
 }
 
 /* ----- reminders ----- */
@@ -198,7 +327,7 @@ export function eligibleAssignees(
 /* ----- due-date requests ----- */
 export async function requestDueDate(
   supabase: Supabase,
-  store: Pick<StoreData, "approvals" | "activity" | "profiles" | "levels">,
+  store: Pick<StoreData, "approvals" | "activity" | "profiles" | "levels" | "assignments" | "deptHeads">,
   patch: Patch,
   task: TaskT,
   me: Profile,
@@ -213,9 +342,16 @@ export async function requestDueDate(
   if (error || !data) return null;
   patch("approvals", [data as Approval, ...store.approvals]);
   await logActivity(supabase, store, patch, task.id, me.id, `requested due date ${requestedDue} — "${reason}"`);
-  // notify the approver: manager first, else any higher level
-  const approverId = me.manager_id || store.profiles.find((p) => p.is_super && p.id !== me.id)?.id;
-  if (approverId) await notify(supabase, approverId, task.id, `${me.name} requested a new due date (${requestedDue}) on "${task.name}"`, "Approval");
+  // Notify whoever actually decides this — real reporting line, not just "the manager field".
+  const approvers = resolveApprovers(store, me.id);
+  for (const approver of approvers) {
+    await notify(supabase, approver.id, task.id, `${me.name} requested a new due date (${requestedDue}) on "${task.name}"`, "Approval");
+  }
+  fetch("/api/notify", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ kind: "approval_requested", approvalId: data.id, approverIds: approvers.map((a) => a.id) }),
+  }).catch(() => {});
   return data as Approval;
 }
 
@@ -239,18 +375,25 @@ export async function decideDueDate(
     await logActivity(supabase, store, patch, task.id, me.id, verdict === "approved" ? `approved due date ${approval.requested_due}${note ? ` — "${note}"` : ""}` : `declined due-date request${note ? ` — "${note}"` : ""}`);
   }
   await notify(supabase, approval.requester_id, approval.task_id, `Your due-date request on "${task?.name || "a task"}" was ${verdict}${note ? `: ${note}` : ""}`, "Approval");
+  fetch("/api/notify", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ kind: "approval_decided", approvalId: approval.id, verdict, note: note || null }),
+  }).catch(() => {});
 }
 
 /* ----- subtasks ----- */
 export async function addSubtask(
   supabase: Supabase, store: Pick<StoreData, "subtasks">, patch: Patch,
   taskId: string, name: string, assigneeId: string | null, due: string | null,
-  raci?: { accountable_id?: string | null; raci_c?: string[]; raci_i?: string[] }
+  raci?: { accountable_id?: string | null; raci_c?: string[]; raci_i?: string[] },
+  difficulty?: { value: number | null; setById: string }
 ) {
   const sort = store.subtasks.filter((s) => s.task_id === taskId).length;
   const { data } = await supabase.from("subtasks").insert({
     task_id: taskId, name, assignee_id: assigneeId, due, sort,
     accountable_id: raci?.accountable_id || null, raci_c: raci?.raci_c || [], raci_i: raci?.raci_i || [],
+    difficulty: difficulty?.value || null, difficulty_set_by: difficulty?.value ? difficulty.setById : null,
   }).select().single();
   if (data) patch("subtasks", [...store.subtasks, data as Subtask]);
   return data as Subtask | null;
@@ -343,4 +486,38 @@ export function managerOf(profiles: StoreData["profiles"], pid: string | undefin
   // design fallback: Dewi Santoso
   const dewi = profiles.find((x) => x.name === "Dewi Santoso");
   return dewi?.id || null;
+}
+
+/* ---------------- Phase 3C: file attachments (real upload, storage-backed) ---------------- */
+const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024; // 25MB
+
+export async function listAttachments(supabase: Supabase, taskId: string): Promise<Attachment[]> {
+  const { data } = await supabase.from("task_attachments").select("*").eq("task_id", taskId).order("created_at", { ascending: false });
+  return (data || []) as Attachment[];
+}
+
+export async function uploadAttachment(
+  supabase: Supabase, taskId: string, file: File
+): Promise<{ attachment: Attachment | null; error?: string }> {
+  if (file.size > MAX_ATTACHMENT_BYTES) return { attachment: null, error: `"${file.name}" is over the 25MB limit.` };
+  const path = `${taskId}/${Date.now()}-${Math.random().toString(36).slice(2)}-${file.name}`;
+  const { error: uploadError } = await supabase.storage.from("task-attachments").upload(path, file);
+  if (uploadError) return { attachment: null, error: uploadError.message };
+  const { data, error } = await supabase
+    .from("task_attachments")
+    .insert({ task_id: taskId, name: file.name, size_bytes: file.size, storage_path: path })
+    .select()
+    .single();
+  if (error || !data) return { attachment: null, error: error?.message || "Could not save the attachment record." };
+  return { attachment: data as Attachment };
+}
+
+export async function deleteAttachment(supabase: Supabase, attachment: Attachment) {
+  await supabase.storage.from("task-attachments").remove([attachment.storage_path]);
+  await supabase.from("task_attachments").delete().eq("id", attachment.id);
+}
+
+export async function downloadAttachmentUrl(supabase: Supabase, storagePath: string): Promise<string | null> {
+  const { data } = await supabase.storage.from("task-attachments").createSignedUrl(storagePath, 60);
+  return data?.signedUrl || null;
 }

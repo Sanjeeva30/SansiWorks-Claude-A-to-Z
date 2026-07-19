@@ -4,11 +4,28 @@
 // - Department efficiency = same formula, applied department-wide
 // - At-risk prediction = overdue OR (due ≤4 days AND (assignee has ≥5 open tasks OR assignee's on-time history <75%))
 // - Critical unblocker of the day = open task with the largest downstream dependency chain of other open tasks
-import { Task, Dependency, Profile } from "./types";
+import { Task, Dependency, Profile, Department } from "./types";
 import { todayIso } from "./dates";
 
 export const isOpen = (t: Task) => t.status !== "Done";
 export const isOverdue = (t: Task) => isOpen(t) && !!t.due && t.due < todayIso();
+
+/** Birthdays in the next 7 days, org-wide — year is optional and never shown.
+ *  Wraps the new-year boundary (e.g. today Dec 28 picks up a Jan 2 birthday). */
+export function upcomingBirthdays(profiles: Profile[], today: Date = new Date()): { p: Profile; daysAway: number }[] {
+  const y = today.getFullYear();
+  const todayMidnight = new Date(y, today.getMonth(), today.getDate());
+  return profiles
+    .filter((p) => p.birthday_day && p.birthday_month)
+    .map((p) => {
+      let next = new Date(y, p.birthday_month! - 1, p.birthday_day!);
+      if (next < todayMidnight) next = new Date(y + 1, p.birthday_month! - 1, p.birthday_day!);
+      const daysAway = Math.round((next.getTime() - todayMidnight.getTime()) / 86400000);
+      return { p, daysAway };
+    })
+    .filter((x) => x.daysAway >= 0 && x.daysAway <= 7)
+    .sort((a, b) => a.daysAway - b.daysAway);
+}
 
 export function onTimeStats(tasks: Task[]) {
   const done = tasks.filter((t) => t.status === "Done" && t.completed_at && t.due);
@@ -97,8 +114,40 @@ export function criticalUnblocker(tasks: Task[], deps: Dependency[]): { task: Ta
   return best;
 }
 
-export function workloadPct(tasks: Task[], person: Profile, capacity = 20): number {
+// capacity defaults to 20 points/week until the "capacity tracking" admin
+// toggle is on and a real capacity_points value is set per person.
+export function workloadPct(tasks: Task[], person: Profile): number {
   const open = tasksOfPerson(tasks, person.id).filter(isOpen);
   const points = open.reduce((s, t) => s + (t.effort || 1), 0);
+  const capacity = person.capacity_points || 20;
   return Math.min(100, Math.round((points / capacity) * 100));
+}
+
+/* ---- rank checks, used for SOP visibility/approval — always by rank/level, never by name ---- */
+export const isBoardOfDirectors = (p: Profile | null) => p?.level_id === "l1";
+export const isGroupHead = (p: Profile | null) => p?.level_id === "l2";
+export const isRegionalGroupHead = (p: Profile | null) => p?.level_id === "l2r";
+export const isSeniorRank = (p: Profile | null) => isBoardOfDirectors(p) || isGroupHead(p) || isRegionalGroupHead(p);
+
+export function internalAuditDept(departments: Department[]): Department | undefined {
+  return departments.find((d) => d.name === "Internal Audit");
+}
+export function isInternalAudit(p: Profile | null, departments: Department[]): boolean {
+  const dept = internalAuditDept(departments);
+  return !!dept && p?.department_id === dept.id;
+}
+export function isDeptHead(profileId: string, deptId: string | null, deptHeads: { unit_id: string; profile_id: string }[]): boolean {
+  return !!deptId && deptHeads.some((h) => h.unit_id === deptId && h.profile_id === profileId);
+}
+export function isInternalAuditManager(p: Profile | null, departments: Department[], deptHeads: { unit_id: string; profile_id: string }[]): boolean {
+  const dept = internalAuditDept(departments);
+  return !!dept && !!p && isDeptHead(p.id, dept.id, deptHeads);
+}
+
+/** SOP visibility: owning department + Board + Group Heads + Regional Group Heads + Internal Audit (always, everywhere). Plain (non-SOP) docs are unrestricted. */
+export function canViewSop(deptId: string | null, me: Profile | null, departments: Department[]): boolean {
+  if (!me) return false;
+  if (isSeniorRank(me)) return true;
+  if (isInternalAudit(me, departments)) return true;
+  return !!deptId && me.department_id === deptId;
 }

@@ -1,19 +1,33 @@
 "use client";
-import React, { createContext, useContext, useCallback, useEffect, useState } from "react";
+import React, { createContext, useContext, useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "./supabase/client";
 import {
-  Approval, AuditEntry, Automation, BoardRequest, CustomField, Department, DeptProposal,
-  Dependency, Doc, FormDef, Invite, Level, List, Nomination, Notification, Pin, Profile, Space,
+  Approval, AuditEntry, Automation, Assignment, BoardRequest, Comment, CustomField, Department, DeptProposal,
+  Dependency, Doc, DocVersion, FormDef, FormSubmission, Invite, Level, List, Nomination, Notification, PermissionTemplate, Pin, Profile, Space,
   Reminder, Subtask, Task, TaskActivity, Template,
 } from "./types";
+
+// Every table the app reads, kept live via one Realtime channel (see below) —
+// any insert/update/delete anywhere refetches the whole store (a full sync,
+// not a per-row patch: simpler and safer than hand-writing ~30 reducers, at
+// the cost of a refetch instead of a surgical update on every change).
+const REALTIME_TABLES = [
+  "profiles", "levels", "org_units", "org_unit_heads", "org_unit_members", "assignments", "permission_templates",
+  "spaces", "lists", "tasks", "task_raci", "subtasks", "reminders", "task_dependencies", "task_activity",
+  "docs", "doc_versions", "forms", "form_submissions", "notifications", "notification_prefs",
+  "approvals", "invites", "board_requests", "nominations", "dept_proposals", "audit_log",
+  "templates", "custom_fields", "automations", "features", "saved_views", "pins", "comments",
+];
 
 export interface StoreData {
   me: Profile | null;
   profiles: Profile[];
   levels: Level[];
   departments: Department[];
-  deptHeads: { department_id: string; profile_id: string }[];
+  deptHeads: { unit_id: string; profile_id: string }[];
   deptMembers: { department_id: string; profile_id: string }[];
+  assignments: Assignment[];
+  permissionTemplates: PermissionTemplate[];
   spaces: Space[];
   lists: List[];
   tasks: Task[];
@@ -22,7 +36,9 @@ export interface StoreData {
   deps: Dependency[];
   activity: TaskActivity[];
   docs: Doc[];
+  docVersions: DocVersion[];
   forms: FormDef[];
+  formSubmissions: FormSubmission[];
   notifications: Notification[];
   prefs: Record<string, string>;
   approvals: Approval[];
@@ -37,6 +53,7 @@ export interface StoreData {
   features: Record<string, boolean>;
   savedViews: { id: string; name: string; config: Record<string, unknown> }[];
   pins: Pin[];
+  comments: Comment[];
 }
 
 interface StoreCtx extends StoreData {
@@ -56,10 +73,11 @@ export function useStore() {
 
 const EMPTY: StoreData = {
   me: null, profiles: [], levels: [], departments: [], deptHeads: [], deptMembers: [],
-  spaces: [], lists: [], tasks: [], subtasks: [], reminders: [], deps: [], activity: [], docs: [], forms: [],
+  assignments: [], permissionTemplates: [],
+  spaces: [], lists: [], tasks: [], subtasks: [], reminders: [], deps: [], activity: [], docs: [], docVersions: [], forms: [], formSubmissions: [],
   notifications: [], prefs: {}, approvals: [], invites: [], boardRequests: [],
   nominations: [], proposals: [], audit: [], templates: [], customFields: [],
-  automations: [], features: {}, savedViews: [], pins: [],
+  automations: [], features: {}, savedViews: [], pins: [], comments: [],
 };
 
 export function StoreProvider({ children }: { children: React.ReactNode }) {
@@ -73,16 +91,18 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     if (!uid) return;
 
     const [
-      profiles, levels, departments, deptHeads, deptMembers, spaces, lists,
-      tasks, raci, subtasks, reminders, deps, activity, docs, forms, notifications, prefs,
+      profiles, levels, departments, deptHeads, deptMembers, assignments, permissionTemplates, spaces, lists,
+      tasks, raci, subtasks, reminders, deps, activity, docs, docVersions, forms, formSubmissions, notifications, prefs,
       approvals, invites, boardRequests, nominations, proposals, audit,
-      templates, customFields, automations, features, savedViews, pins,
+      templates, customFields, automations, features, savedViews, pins, comments,
     ] = await Promise.all([
       supabase.from("profiles").select("*").order("name"),
       supabase.from("levels").select("*").order("sort"),
-      supabase.from("departments").select("*").order("name"),
-      supabase.from("department_heads").select("*"),
-      supabase.from("department_members").select("*"),
+      supabase.from("org_units").select("*").order("sort").order("name"),
+      supabase.from("org_unit_heads").select("*"),
+      supabase.from("org_unit_members").select("*"),
+      supabase.from("assignments").select("*"),
+      supabase.from("permission_templates").select("*").order("name"),
       supabase.from("spaces").select("*").order("sort"),
       supabase.from("lists").select("*").order("sort"),
       supabase.from("tasks").select("*").order("due", { ascending: true, nullsFirst: false }),
@@ -92,7 +112,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       supabase.from("task_dependencies").select("*"),
       supabase.from("task_activity").select("*").order("created_at", { ascending: false }).limit(200),
       supabase.from("docs").select("*").order("created_at"),
+      supabase.from("doc_versions").select("*").order("version_number", { ascending: false }),
       supabase.from("forms").select("*").order("created_at"),
+      supabase.from("form_submissions").select("*").order("submitted_at", { ascending: false }),
       supabase.from("notifications").select("*").eq("profile_id", uid).order("created_at", { ascending: false }).limit(100),
       supabase.from("notification_prefs").select("*").eq("profile_id", uid),
       supabase.from("approvals").select("*").order("created_at", { ascending: false }).limit(300),
@@ -100,13 +122,14 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       supabase.from("board_requests").select("*").eq("status", "pending"),
       supabase.from("nominations").select("*").eq("status", "pending"),
       supabase.from("dept_proposals").select("*").eq("status", "pending"),
-      supabase.from("audit_log").select("*").order("created_at", { ascending: false }).limit(50),
+      supabase.from("audit_log").select("*").order("created_at", { ascending: false }).limit(2000),
       supabase.from("templates").select("*").order("created_at"),
       supabase.from("custom_fields").select("*").order("created_at"),
       supabase.from("automations").select("*").order("created_at"),
       supabase.from("features").select("*"),
       supabase.from("saved_views").select("*").eq("profile_id", uid).order("created_at"),
       supabase.from("pins").select("*").eq("profile_id", uid).order("sort"),
+      supabase.from("comments").select("*").order("created_at"),
     ]);
 
     const raciC = new Map<string, string[]>();
@@ -136,6 +159,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       departments: (departments.data || []) as Department[],
       deptHeads: deptHeads.data || [],
       deptMembers: deptMembers.data || [],
+      assignments: (assignments.data || []) as Assignment[],
+      permissionTemplates: (permissionTemplates.data || []) as PermissionTemplate[],
       spaces: (spaces.data || []) as Space[],
       lists: (lists.data || []) as List[],
       tasks: allTasks,
@@ -144,7 +169,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       deps: (deps.data || []) as Dependency[],
       activity: (activity.data || []) as TaskActivity[],
       docs: (docs.data || []) as Doc[],
+      docVersions: (docVersions.data || []) as DocVersion[],
       forms: (forms.data || []) as FormDef[],
+      formSubmissions: (formSubmissions.data || []) as FormSubmission[],
       notifications: (notifications.data || []) as Notification[],
       prefs: prefMap,
       approvals: (approvals.data || []) as Approval[],
@@ -159,6 +186,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       features: featMap,
       savedViews: savedViews.data || [],
       pins: (pins.data || []) as Pin[],
+      comments: (comments.data || []) as Comment[],
     });
     setLoading(false);
   }, [supabase]);
@@ -167,12 +195,40 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     refresh();
   }, [refresh]);
 
+  // Live sync: one Realtime channel across every table the app reads. Any
+  // change from any user (or another of your own tabs) debounces a full
+  // refresh() — so the whole store stays live without per-table reducers.
+  const refreshRef = useRef(refresh);
+  refreshRef.current = refresh;
+  useEffect(() => {
+    const debounceMs = 400;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleRefresh = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => refreshRef.current(), debounceMs);
+    };
+    let channel = supabase.channel("db-sync");
+    for (const table of REALTIME_TABLES) {
+      channel = channel.on("postgres_changes" as never, { event: "*", schema: "public", table }, scheduleRefresh);
+    }
+    channel.subscribe();
+    return () => {
+      if (timer) clearTimeout(timer);
+      supabase.removeChannel(channel);
+    };
+  }, [supabase]);
+
   const patch = useCallback(<K extends keyof StoreData>(key: K, value: StoreData[K]) => {
     setData((d) => ({ ...d, [key]: value }));
   }, []);
 
+  // `me` always tracks the live entry in `profiles` — so a patch to your own
+  // profile (avatar, color, capacity, overrides) shows up immediately instead
+  // of waiting for the next full refresh().
+  const liveMe = data.me ? data.profiles.find((p) => p.id === data.me!.id) || data.me : null;
+
   return (
-    <Ctx.Provider value={{ ...data, loading, refresh, patch, supabase }}>
+    <Ctx.Provider value={{ ...data, me: liveMe, loading, refresh, patch, supabase }}>
       {children}
     </Ctx.Provider>
   );

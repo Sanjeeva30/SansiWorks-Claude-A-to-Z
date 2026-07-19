@@ -10,12 +10,13 @@ import { WorkspaceSection } from "@/components/workspace-section";
 import { TaskDetailSlideOver } from "@/components/task-detail";
 import { QuickAddModal } from "@/components/quick-add";
 import { ProfileModal, MetricModal, Toasts } from "@/components/shared";
+import { EntityDetailModal, DocDetailModal } from "@/components/entity-detail-modal";
 import { CommandPalette, PublicPortal } from "@/components/palette-portal";
 import { OnboardingChecklist } from "@/components/onboarding";
 import { ReminderEngine } from "@/components/reminders";
 
 function AppShell() {
-  const { section } = useUI();
+  const { section, mobileNavOpen, setMobileNavOpen } = useUI();
   const { loading, me } = useStore();
 
   if (loading || !me) {
@@ -31,6 +32,14 @@ function AppShell() {
 
   return (
     <div style={{ display: "flex", height: "100vh", width: "100%", background: "var(--sw-page)", fontFamily: "var(--font-sans)", color: "var(--sw-text)", overflow: "hidden" }}>
+      <button
+        className="sw-hamburger"
+        aria-label="Open navigation"
+        onClick={() => setMobileNavOpen(!mobileNavOpen)}
+        style={{ position: "fixed", top: 12, left: 12, zIndex: 90, width: 36, height: 36, borderRadius: 10, border: "1px solid var(--sw-hair)", background: "var(--sw-card)", boxShadow: "var(--shadow-card)", cursor: "pointer", alignItems: "center", justifyContent: "center", fontSize: 16 }}
+      >
+        ☰
+      </button>
       <Sidebar />
       {section === "home" && <HomeSection />}
       {section === "list" && <ListSection />}
@@ -41,6 +50,8 @@ function AppShell() {
       <QuickAddModal />
       <ProfileModal />
       <MetricModal />
+      <EntityDetailModal />
+      <DocDetailModal />
       <CommandPalette />
       <PublicPortal />
       <OnboardingChecklist />

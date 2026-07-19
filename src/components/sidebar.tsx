@@ -8,11 +8,15 @@ import { IconChevDown, IconStar } from "./icons";
 const COLLAPSE_KEY = "sw-collapsed-spaces";
 
 export function Sidebar() {
-  const { me, spaces, lists, tasks, notifications, departments, pins, patch, supabase } = useStore();
+  const { me, spaces, lists, tasks, notifications, departments, pins, features, patch, supabase } = useStore();
+  // Spaces under a dormant (overseas) unit stay hidden until the admin turns that toggle on.
+  const dormantUnitIds = new Set(departments.filter((d) => d.dormant).map((d) => d.id));
+  const visibleSpaces = features.overseas_teams ? spaces : spaces.filter((s) => !s.department_id || !dormantUnitIds.has(s.department_id));
   const {
     section, homePage, setHomePage, listPage, setListPage,
     companyPage, setCompanyPage, workspacePage, setWorkspacePage,
     activeList, setActiveList, openProfile, setShowPalette, pushToast,
+    mobileNavOpen, setMobileNavOpen,
   } = useUI();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [hoverList, setHoverList] = useState<string | null>(null);
@@ -97,7 +101,9 @@ export function Sidebar() {
   const pinnedLists = pinnedListIds.map((id) => lists.find((l) => l.id === id)).filter(Boolean) as typeof lists;
 
   return (
-    <aside style={{ width: 228, flex: "none", background: "var(--sw-sidebar)", borderRight: "1px solid var(--sw-hair)", display: "flex", flexDirection: "column", height: "100%" }}>
+    <>
+      {mobileNavOpen && <div className="sw-sidebar-backdrop" onClick={() => setMobileNavOpen(false)} />}
+      <aside className={`sw-sidebar${mobileNavOpen ? " open" : ""}`} style={{ width: 228, flex: "none", background: "var(--sw-sidebar)", borderRight: "1px solid var(--sw-hair)", display: "flex", flexDirection: "column", height: "100%" }}>
       <div style={{ padding: "17px 16px 13px", display: "flex", alignItems: "center", gap: 7, borderBottom: "1px solid var(--sw-hair)" }}>
         <span style={{ fontWeight: 800, letterSpacing: "0.07em", fontSize: 11.5, color: "var(--crimson)" }}>SANSICO</span>
         <span style={{ fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 12.5, color: "var(--sw-text-soft)" }}>Group</span>
@@ -122,7 +128,7 @@ export function Sidebar() {
         {navBtn("People", section === "company" && companyPage === "people", () => setCompanyPage("people"))}
 
         {sectionLabel("Workspace")}
-        {navBtn("Docs", section === "workspace" && workspacePage === "docs", () => setWorkspacePage("docs"))}
+        {navBtn("SOPs & Docs", section === "workspace" && workspacePage === "docs", () => setWorkspacePage("docs"))}
         {navBtn("Forms", section === "workspace" && workspacePage === "forms", () => setWorkspacePage("forms"))}
 
         {pinnedLists.length > 0 && (
@@ -135,7 +141,7 @@ export function Sidebar() {
         <div style={{ margin: "13px 0 4px", padding: "0 9px", display: "flex", alignItems: "center" }}>
           <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--sw-muted)", flex: 1 }}>Spaces</span>
         </div>
-        {spaces.map((space) => {
+        {visibleSpaces.map((space) => {
           const isCollapsed = !!collapsed[space.id];
           const spaceLists = lists.filter((l) => l.space_id === space.id);
           return (
@@ -176,5 +182,6 @@ export function Sidebar() {
         </button>
       </div>
     </aside>
+    </>
   );
 }

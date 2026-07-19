@@ -64,6 +64,16 @@ interface UIState {
   showPortal: boolean;
   setShowPortal: (v: boolean) => void;
   escStack: React.MutableRefObject<Map<string, () => void>>;
+  // Generic drill-down popup for entities that don't have their own bespoke
+  // modal (audit entries, invites, org units, forms, etc.) — dismissible via
+  // Escape/X, never navigates. `type` picks which detail view to render.
+  detailPopup: { type: string; id: string } | null;
+  openDetail: (type: string, id: string) => void;
+  closeDetail: () => void;
+  docDetailId: string | null;
+  setDocDetailId: (id: string | null) => void;
+  mobileNavOpen: boolean;
+  setMobileNavOpen: (v: boolean) => void;
 }
 
 const Ctx = createContext<UIState | null>(null);
@@ -141,6 +151,11 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
   const [showPalette, setShowPalette] = useState(false);
   const [metricModal, setMetricModal] = useState<{ title: string; taskIds: string[] } | null>(null);
   const [showPortal, setShowPortal] = useState(false);
+  const [detailPopup, setDetailPopup] = useState<{ type: string; id: string } | null>(null);
+  const [docDetailId, setDocDetailId] = useState<string | null>(null);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const openDetail = useCallback((type: string, id: string) => setDetailPopup({ type, id }), []);
+  const closeDetail = useCallback(() => setDetailPopup(null), []);
   const toastSeq = useRef(0);
   const escStack = useRef(new Map<string, () => void>());
 
@@ -159,6 +174,7 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     pendingPatch.current = patch;
+    setMobileNavOpen(false);
     queueMicrotask(() => {
       const merged = { ...routeRef.current, ...pendingPatch.current };
       pendingPatch.current = null;
@@ -264,6 +280,8 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
             setActiveTaskId(null);
             setMetricModal(null);
             openProfile(null);
+            setDetailPopup(null);
+            setDocDetailId(null);
           }
           return v;
         });
@@ -287,6 +305,7 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
         activeTaskId, setActiveTaskId, showQuickAdd, setShowQuickAdd,
         quickAddStatus, setQuickAddStatus, showPalette, setShowPalette,
         metricModal, setMetricModal, showPortal, setShowPortal, escStack,
+        detailPopup, openDetail, closeDetail, docDetailId, setDocDetailId, mobileNavOpen, setMobileNavOpen,
       }}
     >
       {children}

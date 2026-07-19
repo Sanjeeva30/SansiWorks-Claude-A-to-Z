@@ -4,7 +4,8 @@ import { useStore } from "@/lib/store";
 import { useUI } from "@/lib/ui";
 import { STATUS_COLORS, PRIORITY_COLORS, STATUSES, Task, initials } from "@/lib/types";
 import { iso, fmtShort, fmtFull, todayIso } from "@/lib/dates";
-import { atRiskTasks, isOpen, tasksOfPerson, workloadPct, efficiencyScore, departmentRisk } from "@/lib/logic";
+import { atRiskTasks, isOpen, tasksOfPerson, workloadPct, efficiencyScore, departmentRisk, upcomingBirthdays } from "@/lib/logic";
+import { isHeadRank } from "@/lib/colors";
 import { FilterState, EMPTY_FILTERS, applyFilters } from "@/lib/search";
 import { TopIcons, Avatar } from "./shared";
 import { GlobalSearch } from "./global-search";
@@ -15,7 +16,7 @@ import { IconCheckSquare, IconClock, IconFlag, IconGrid, IconSquare, IconX } fro
    Tabs: Today (overview) · This Week (day columns) · All tasks (filterable) · Personal. */
 export function HomeSection() {
   const store = useStore();
-  const { me, tasks, lists, spaces, profiles, notifications, departments, deptMembers } = store;
+  const { me, tasks, lists, spaces, profiles, notifications, departments, deptMembers, levels } = store;
   const {
     homePage, setHomePage, setShowQuickAdd, setActiveTaskId,
     setCompanyPage, setWorkspacePage, openProfile,
@@ -45,6 +46,7 @@ export function HomeSection() {
   const myOpen = myTasks.filter(isOpen);
   const dueThisWeek = myOpen.filter((t) => t.due && t.due >= weekStartIso && t.due <= weekEnd);
   const atRiskAll = atRiskTasks(tasks);
+  const birthdays = upcomingBirthdays(profiles);
   const myAtRisk = atRiskAll.filter((r) => r.task.assignee_id === me.id);
   const completedThisWeek = myTasks.filter((t) => t.status === "Done" && t.completed_at && t.completed_at.slice(0, 10) >= weekStartIso);
   const activeProjects = lists.filter((l) => tasks.some((t) => t.list_id === l.id && isOpen(t))).length;
@@ -377,7 +379,7 @@ export function HomeSection() {
                   {workloadPeople.map(({ p, pct }) => (
                     <div key={p.id} style={{ flex: 1 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 5 }}>
-                        <Avatar person={p} size={19} fontSize={8.5} onClick={(e) => { e.stopPropagation(); openProfile(p.id); }} />
+                        <Avatar person={p} size={19} fontSize={8.5} ring={isHeadRank(p, levels)} onClick={(e) => { e.stopPropagation(); openProfile(p.id); }} />
                         <span style={{ fontSize: 11.5, fontWeight: 400 }}>{p.name}</span>
                         <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--sw-muted)", fontWeight: 400 }}>{pct}%</span>
                       </div>
@@ -395,6 +397,25 @@ export function HomeSection() {
                   View executive report →
                 </a>
               </section>
+
+              {birthdays.length > 0 && (
+                <section style={{ background: "var(--sw-card)", border: "1px solid var(--sw-hair)", borderRadius: 12, padding: "16px 18px", boxShadow: "var(--shadow-card)", marginTop: 12 }}>
+                  <h3 style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 400 }}>🎂 Birthdays this week</h3>
+                  <div style={{ display: "flex", gap: 18, flexWrap: "wrap" }}>
+                    {birthdays.map(({ p, daysAway }) => (
+                      <div key={p.id} onClick={() => openProfile(p.id)} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                        <Avatar person={p} size={28} ring={isHeadRank(p, levels)} />
+                        <div>
+                          <div style={{ fontSize: 12, fontWeight: 400 }}>{p.name}</div>
+                          <div style={{ fontSize: 10.5, fontWeight: daysAway <= 1 ? 500 : 400, color: daysAway === 0 ? "var(--crimson)" : daysAway === 1 ? "#B7791F" : "var(--sw-muted)" }}>
+                            {daysAway === 0 ? "Today!" : daysAway === 1 ? "Tomorrow" : `In ${daysAway} days`}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
             </>
           )}
         </div>

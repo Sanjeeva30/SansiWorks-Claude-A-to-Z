@@ -4,13 +4,15 @@ import { useStore } from "@/lib/store";
 import { useUI } from "@/lib/ui";
 import { initials, Doc, PRIORITY_COLORS } from "@/lib/types";
 import { relTime, fmtShort, todayIso } from "@/lib/dates";
-import { isOpen, isOverdue, onTimeStats, tasksOfPerson } from "@/lib/logic";
+import { isOpen, isOverdue, onTimeStats, tasksOfPerson, canViewSop, isSeniorRank, isInternalAudit, isInternalAuditManager, isDeptHead, internalAuditDept } from "@/lib/logic";
 import { TopIcons } from "./shared";
 import { IconX } from "./icons";
+import { OrgAdmin } from "./org-admin";
 
 const STATUS_TINT: Record<string, [string, string]> = {
   Active: ["var(--green)", "rgba(13,79,49,0.09)"],
   "Under review": ["#B7791F", "rgba(183,121,31,0.12)"],
+  "Revisions requested": ["var(--red)", "rgba(243,38,62,0.09)"],
   Draft: ["var(--sw-muted)", "var(--sw-hover)"],
 };
 
@@ -42,6 +44,12 @@ const FEATURE_LABELS: Record<string, string> = {
   time_tracking: "Time tracking",
   file_uploads: "File attachments",
   member_can_create_board: "Members can create boards",
+  capacity_tracking: "Capacity tracking (per-person workload limits)",
+  overseas_teams: "Overseas teams (Minneapolis, Foshan units — hidden until on)",
+};
+const FEATURE_HELP: Record<string, string> = {
+  capacity_tracking: "The workload math is built and correct — this just decides whether people see a capacity number and whether it's used to flag overload. Off by default until you're ready to switch it on.",
+  overseas_teams: "Trends & BD, Design & Product Development, and other overseas-reporting units exist in the org tree but stay invisible everywhere until this is on.",
 };
 
 const card: React.CSSProperties = { background: "var(--sw-card)", border: "1px solid var(--sw-hair)", borderRadius: 12, boxShadow: "var(--shadow-card)", padding: "16px 18px" };
@@ -50,23 +58,27 @@ const pillBtn = (color: string): React.CSSProperties => ({ padding: "6px 12px", 
 export function WorkspaceSection() {
   const store = useStore();
   const {
-    me, profiles, tasks, lists, spaces, departments, deptHeads, deptMembers, levels, docs, forms,
+    me, profiles, tasks, lists, spaces, departments, deptHeads, deptMembers, levels, docs, docVersions, forms, formSubmissions,
     notifications, prefs, approvals, invites, boardRequests, nominations, proposals, audit, features,
     patch, supabase, refresh,
   } = store;
-  const { workspacePage, setActiveTaskId, openProfile, pushToast, setShowPortal } = useUI();
+  const { workspacePage, setActiveTaskId, openProfile, pushToast, setShowPortal, setDocDetailId, openDetail, setSection, setWorkspacePage } = useUI();
 
   const [inboxFilter, setInboxFilter] = useState<"all" | "unread">("all");
   const [inboxDensity, setInboxDensity] = useState<"comfortable" | "compact">("comfortable");
   const [adminTab, setAdminTab] = useState("users");
-  const [docFilters, setDocFilters] = useState({ dept: "All", type: "All", status: "All" });
+  const [docFilters, setDocFilters] = useState({ dept: "All", type: "All", status: "All", text: "", overdueOnly: false });
   const [formFilters, setFormFilters] = useState({ dept: "All", status: "All" });
-  const [docDetailId, setDocDetailId] = useState<string | null>(null);
   const [showNewDoc, setShowNewDoc] = useState(false);
-  const [newDoc, setNewDoc] = useState({ title: "", type: "SOP", category: "", excerpt: "" });
+  const [newDoc, setNewDoc] = useState({ title: "", type: "SOP", category: "", excerpt: "", departmentId: "", reviewDue: "", headReviewerId: "" });
+  const [newDocFile, setNewDocFile] = useState<File | null>(null);
+  const [creatingDoc, setCreatingDoc] = useState(false);
   const [showNewForm, setShowNewForm] = useState(false);
-  const [newForm, setNewForm] = useState({ title: "", listId: "", fields: [{ id: 1, label: "What do you need?", type: "Short answer" }] });
+  const [newForm, setNewForm] = useState({ title: "", listId: "", ownerId: "", fields: [{ id: 1, label: "What do you need?", type: "Short answer" }] });
   const [copiedFormId, setCopiedFormId] = useState<string | null>(null);
+  const [editingForm, setEditingForm] = useState<{ id: string; title: string; listId: string; ownerId: string; fields: { id: number; label: string; type: string }[] } | null>(null);
+  const [expandedSubmissionsFor, setExpandedSubmissionsFor] = useState<string | null>(null);
+  const [convertingSubmission, setConvertingSubmission] = useState<string | null>(null);
   const [emailPreview, setEmailPreview] = useState<"digest" | "wrap" | "plan" | "instant" | null>(null);
   const [nominateFor, setNominateFor] = useState<string | null>(null);
   const [nominate, setNominate] = useState({ name: "", reason: "" });
@@ -83,7 +95,7 @@ export function WorkspaceSection() {
   };
 
   const pageTitle =
-    workspacePage === "inbox" ? "Inbox" : workspacePage === "docs" ? "Docs" : workspacePage === "forms" ? "Forms" :
+    workspacePage === "inbox" ? "Inbox" : workspacePage === "docs" ? "SOPs & Docs" : workspacePage === "forms" ? "Forms" :
     workspacePage === "settings" ? "Settings" : "Admin console";
 
   /* ------- helpers ------- */
@@ -109,27 +121,44 @@ export function WorkspaceSection() {
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   /* ------- docs ------- */
-  const docsMapped = docs.map((d) => {
-    const owner = profiles.find((p) => p.id === d.owner_id);
-    const reviewState = !d.review_date ? "none" : d.review_date < today ? "overdue" : new Date(d.review_date).getTime() - Date.now() < 21 * 86400000 ? "soon" : "ok";
-    const review = !d.review_date ? "No review date" : reviewState === "overdue" ? "Review overdue" : `Review ${fmtShort(d.review_date)}`;
-    return { ...d, owner, reviewState, review, reviewColor: reviewState === "overdue" ? "var(--red)" : reviewState === "soon" ? "#B7791F" : "var(--sw-muted)" };
-  });
-  const docDeptOptions = ["All", ...Array.from(new Set(docs.map((d) => d.category).filter(Boolean)))] as string[];
-  const docTypeOptions = ["All", ...Array.from(new Set(docs.map((d) => d.type)))];
-  const docStatusOptions = ["All", "Active", "Under review", "Draft"];
+  const docsMapped = docs
+    .filter((d) => !d.is_sop || canViewSop(d.department_id, me, departments))
+    .map((d) => {
+      const owner = profiles.find((p) => p.id === d.owner_id);
+      const reviewState = !d.review_date ? "none" : d.review_date < today ? "overdue" : new Date(d.review_date).getTime() - Date.now() < 21 * 86400000 ? "soon" : "ok";
+      const review = !d.review_date ? "No review date" : reviewState === "overdue" ? "Review overdue" : `Review ${fmtShort(d.review_date)}`;
+      return { ...d, owner, reviewState, review, reviewColor: reviewState === "overdue" ? "var(--red)" : reviewState === "soon" ? "#B7791F" : "var(--sw-muted)" };
+    });
+  const docDeptOptions = ["All", ...Array.from(new Set(docsMapped.map((d) => d.category).filter(Boolean)))] as string[];
+  const docTypeOptions = ["All", ...Array.from(new Set(docsMapped.map((d) => d.type)))];
+  const docStatusOptions = ["All", "Active", "Under review", "Revisions requested", "Draft"];
   const filteredDocs = docsMapped
     .filter((d) => docFilters.dept === "All" || d.category === docFilters.dept)
     .filter((d) => docFilters.type === "All" || d.type === docFilters.type)
-    .filter((d) => docFilters.status === "All" || d.status === docFilters.status);
+    .filter((d) => docFilters.status === "All" || d.status === docFilters.status)
+    .filter((d) => !docFilters.overdueOnly || d.reviewState === "overdue")
+    .filter((d) => !docFilters.text.trim() || `${d.title} ${d.excerpt || ""} ${d.category || ""}`.toLowerCase().includes(docFilters.text.trim().toLowerCase()));
+  const clearDocFilters = () => setDocFilters({ dept: "All", type: "All", status: "All", text: "", overdueOnly: false });
   const docStats = [
-    { value: docs.length, label: "Documents", color: "var(--sw-text)" },
-    { value: docs.filter((d) => d.status === "Active").length, label: "Active", color: "var(--green)" },
-    { value: docs.filter((d) => d.status === "Under review").length, label: "Under review", color: "#B7791F" },
-    { value: docs.filter((d) => d.status === "Draft").length, label: "Drafts", color: "var(--sw-muted)" },
-    { value: docsMapped.filter((d) => d.reviewState === "overdue").length, label: "Review overdue", color: "var(--red)" },
+    { value: docsMapped.length, label: "Documents", color: "var(--sw-text)", onClick: clearDocFilters },
+    { value: docsMapped.filter((d) => d.status === "Active").length, label: "Active", color: "var(--green)", onClick: () => setDocFilters({ ...docFilters, status: "Active", overdueOnly: false }) },
+    { value: docsMapped.filter((d) => d.status === "Under review" || d.status === "Revisions requested").length, label: "Under review", color: "#B7791F", onClick: () => setDocFilters({ ...docFilters, status: "Under review", overdueOnly: false }) },
+    { value: docsMapped.filter((d) => d.status === "Draft").length, label: "Drafts", color: "var(--sw-muted)", onClick: () => setDocFilters({ ...docFilters, status: "Draft", overdueOnly: false }) },
+    { value: docsMapped.filter((d) => d.reviewState === "overdue").length, label: "Review overdue", color: "var(--red)", onClick: () => setDocFilters({ ...docFilters, status: "All", overdueOnly: true }) },
   ];
-  const docDetail = docsMapped.find((d) => d.id === docDetailId);
+
+  /* ------- SOP review routing — resolved by role, never hardcoded names ------- */
+  const auditDept = internalAuditDept(departments);
+  const auditManager = profiles.find((p) => deptHeads.some((h) => h.unit_id === auditDept?.id && h.profile_id === p.id));
+  // Head-reviewer candidates for a department: its head(s) first, plus Department-Head-rank-or-above people as fallback choices
+  const headReviewerCandidates = (deptId: string) => {
+    const headIds = deptHeads.filter((h) => h.unit_id === deptId).map((h) => h.profile_id);
+    const heads = profiles.filter((p) => headIds.includes(p.id));
+    const seniorSorts = levels.filter((l) => l.sort <= (levels.find((x) => x.id === "l3")?.sort ?? 4)).map((l) => l.id);
+    const seniors = profiles.filter((p) => seniorSorts.includes(p.level_id) && !headIds.includes(p.id));
+    return [...heads, ...seniors];
+  };
+  const defaultReviewDue = () => { const d = new Date(); d.setDate(d.getDate() + 7); return d.toISOString().slice(0, 10); };
 
   /* ------- forms ------- */
   const formsMapped = forms.map((f) => ({ ...f, department: listPath(f.list_id).split(" / ")[0] || "Unassigned" }));
@@ -137,11 +166,69 @@ export function WorkspaceSection() {
   const filteredForms = formsMapped
     .filter((f) => formFilters.dept === "All" || f.department === formFilters.dept)
     .filter((f) => formFilters.status === "All" || (formFilters.status === "Live" ? f.active : !f.active));
+  const submissionsFor = (formId: string) => formSubmissions.filter((s) => s.form_id === formId);
+
+  const convertSubmission = async (formId: string, submissionId: string, answers: Record<string, string>) => {
+    if (!me) return;
+    const f = forms.find((x) => x.id === formId);
+    if (!f) return;
+    setConvertingSubmission(submissionId);
+    const { createTask } = await import("@/lib/actions");
+    const summary = Object.entries(answers).map(([q, a]) => `${q}: ${a}`).join("\n");
+    const assigneeId = f.default_assignee_id || me.id;
+    const created = await createTask(supabase, tasks, patch, {
+      name: `${f.title} — submission`,
+      list_id: f.list_id,
+      owner_id: me.id,
+      assignee_id: assigneeId,
+      description: summary,
+    });
+    if (created) {
+      patch("formSubmissions", formSubmissions.map((s) => (s.id === submissionId ? { ...s, task_id: created.id } : s)));
+      await supabase.from("form_submissions").update({ task_id: created.id }).eq("id", submissionId);
+      pushToast("Submission converted to a task");
+    }
+    setConvertingSubmission(null);
+  };
+
+  /* ------- audit package export ------- */
+  const csvCell = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const exportAuditPackage = () => {
+    const nameOf = (id: string | null) => profiles.find((p) => p.id === id)?.name || "—";
+    const lines: string[] = [];
+    lines.push("SECTION,DATE,ACTOR,ACTION,TARGET,DETAIL");
+    for (const a of audit) {
+      lines.push([csvCell("Admin/permission/org"), csvCell(a.created_at), csvCell(nameOf(a.actor_id)), csvCell(a.action), csvCell(a.target), csvCell("")].join(","));
+    }
+    for (const v of docVersions) {
+      const doc = docs.find((d) => d.id === v.doc_id);
+      if (!doc?.is_sop) continue;
+      if (v.head_status !== "pending") {
+        lines.push([csvCell("SOP review — Dept head"), csvCell(v.head_at || v.submitted_at), csvCell(nameOf(v.head_by)), csvCell(v.head_status), csvCell(`${doc.title} v${v.version_number}`), csvCell(v.change_note || "")].join(","));
+      }
+      if (v.audit_status !== "pending") {
+        lines.push([csvCell("SOP review — Internal Audit"), csvCell(v.audit_at || v.submitted_at), csvCell(nameOf(v.audit_by)), csvCell(v.audit_status), csvCell(`${doc.title} v${v.version_number}`), csvCell(v.change_note || "")].join(","));
+      }
+      if (v.head_status === "pending" && v.audit_status === "pending") {
+        lines.push([csvCell("SOP submitted (awaiting review)"), csvCell(v.submitted_at), csvCell(nameOf(v.submitted_by)), csvCell("submitted"), csvCell(`${doc.title} v${v.version_number}`), csvCell(v.change_note || "")].join(","));
+      }
+    }
+    const csv = lines.join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `sansiworks-audit-package-${todayIso()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    pushToast("Audit package downloaded");
+  };
 
   /* ------- admin data ------- */
   const sansicoUsers = profiles;
   const adminTabDefs: [string, string][] = [
     ["users", "Users"], ["hierarchy", "Hierarchy"], ["departments", "Departments"],
+    ["organisation", "Organisation"], ["permissions", "Permissions"],
     ["approvals", `Approvals${approvals.filter((a) => a.status === "pending").length ? ` (${approvals.filter((a) => a.status === "pending").length})` : ""}`],
     ["invites", "Invites"], ["features", "Features"], ["audit", "Audit log"],
   ];
@@ -175,7 +262,7 @@ export function WorkspaceSection() {
         {workspacePage === "forms" && (
           <>
             <button onClick={() => setShowPortal(true)} style={{ padding: "7px 15px", borderRadius: 999, border: "1px solid var(--crimson)", background: "none", color: "var(--crimson)", fontSize: 12, fontWeight: 400, cursor: "pointer" }}>View public portal</button>
-            <button onClick={() => setShowNewForm(true)} style={{ padding: "7px 15px", borderRadius: 999, border: "none", background: "var(--crimson)", color: "#fff", fontSize: 12.5, fontWeight: 400, cursor: "pointer" }}>+ New form</button>
+            <button onClick={() => { setNewForm((f) => ({ ...f, ownerId: f.ownerId || me?.id || "" })); setShowNewForm(true); }} style={{ padding: "7px 15px", borderRadius: 999, border: "none", background: "var(--crimson)", color: "#fff", fontSize: 12.5, fontWeight: 400, cursor: "pointer" }}>+ New form</button>
           </>
         )}
         <TopIcons />
@@ -236,18 +323,18 @@ export function WorkspaceSection() {
           {/* ============ DOCS ============ */}
           {workspacePage === "docs" && (
             <>
-              <h2 style={{ fontFamily: "var(--font-serif)", fontWeight: 400, fontSize: 24, margin: "0 0 3px", fontStyle: "italic" }}>Docs & SOP library</h2>
-              <p style={{ margin: "0 0 16px", fontSize: 12.5, color: "var(--sw-text-soft)" }}>Policies, SOPs, handovers and meeting notes in one searchable place.</p>
+              <h2 style={{ fontFamily: "var(--font-serif)", fontWeight: 400, fontSize: 24, margin: "0 0 3px", fontStyle: "italic" }}>SOPs & Docs</h2>
+              <p style={{ margin: "0 0 16px", fontSize: 12.5, color: "var(--sw-text-soft)" }}>Company SOPs go through department-head and Internal Audit review before they're official. Plain docs (handovers, briefs, notes) don&apos;t.</p>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 12, marginBottom: 16 }}>
                 {docStats.map((s) => (
-                  <div key={s.label} style={{ background: "var(--sw-card)", border: "1px solid var(--sw-hair)", borderRadius: 12, padding: "12px 14px", boxShadow: "var(--shadow-card)" }}>
+                  <button key={s.label} onClick={s.onClick} style={{ background: "var(--sw-card)", border: "1px solid var(--sw-hair)", borderRadius: 12, padding: "12px 14px", boxShadow: "var(--shadow-card)", cursor: "pointer", textAlign: "left" }}>
                     <div style={{ fontSize: 19, fontWeight: 800, color: s.color }}>{s.value}</div>
                     <div style={{ fontSize: 10.5, color: "var(--sw-text-soft)", marginTop: 5, fontWeight: 400 }}>{s.label}</div>
-                  </div>
+                  </button>
                 ))}
               </div>
               <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
-                <input placeholder="Search docs, SOPs, categories…" style={{ flex: 1, maxWidth: 280, height: 32, borderRadius: 8, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "0 12px", fontSize: 12, color: "var(--sw-text)", outline: "none" }} />
+                <input value={docFilters.text} onChange={(e) => setDocFilters({ ...docFilters, text: e.target.value })} placeholder="Search docs, SOPs, categories…" style={{ flex: 1, maxWidth: 280, height: 32, borderRadius: 8, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "0 12px", fontSize: 12, color: "var(--sw-text)", outline: "none" }} />
                 {[
                   { val: docFilters.dept, opts: docDeptOptions, set: (v: string) => setDocFilters({ ...docFilters, dept: v }) },
                   { val: docFilters.type, opts: docTypeOptions, set: (v: string) => setDocFilters({ ...docFilters, type: v }) },
@@ -268,6 +355,7 @@ export function WorkspaceSection() {
                         <h3 style={{ margin: "0 0 6px", fontSize: 14, fontWeight: 400, lineHeight: 1.35, color: "var(--sw-text)" }}>{d.title}</h3>
                         <p style={{ margin: 0, fontSize: 12, color: "var(--sw-text-soft)", lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{d.excerpt}</p>
                         <div style={{ display: "flex", gap: 10, marginTop: 10, fontSize: 10.5, color: "var(--sw-muted)", fontWeight: 400 }}>
+                          {d.is_sop && <span style={{ color: "var(--crimson)", fontWeight: 800 }}>SOP</span>}
                           <span>{d.type}</span><span>{d.category}</span><span>v{d.version}</span>
                         </div>
                       </button>
@@ -303,16 +391,39 @@ export function WorkspaceSection() {
                   <option value="All">All</option><option value="Live">Live</option><option value="Paused">Paused</option>
                 </select>
               </div>
-              {filteredForms.map((f) => (
+              {filteredForms.map((f) => {
+                const subs = submissionsFor(f.id);
+                const pendingSubs = subs.filter((s) => !s.task_id);
+                const owner = profiles.find((p) => p.id === f.default_assignee_id);
+                const showSubs = expandedSubmissionsFor === f.id;
+                return (
                 <div key={f.id} style={{ ...card, marginBottom: 10 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 5 }}>
-                    <h3 style={{ margin: 0, fontSize: 14, fontWeight: 400, flex: 1 }}>{f.title}</h3>
+                    <button onClick={() => openDetail("form", f.id)} style={{ margin: 0, fontSize: 14, fontWeight: 400, flex: 1, textAlign: "left", border: "none", background: "none", color: "var(--sw-text)", cursor: "pointer", padding: 0 }}>{f.title}</button>
                     <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, fontWeight: 400, color: f.active ? "var(--green)" : "var(--sw-muted)" }}>
                       <span style={{ width: 6, height: 6, borderRadius: 99, background: f.active ? "var(--green)" : "var(--sw-muted)" }} />{f.active ? "Live" : "Paused"}
                     </span>
                   </div>
-                  <p style={{ margin: "0 0 12px", fontSize: 12, color: "var(--sw-text-soft)" }}>Submissions → {listPath(f.list_id)} · {f.fields.length} questions</p>
-                  <div style={{ display: "flex", gap: 8 }}>
+                  <p style={{ margin: "0 0 4px", fontSize: 12, color: "var(--sw-text-soft)" }}>Submissions → {listPath(f.list_id)} · {f.fields.length} questions</p>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 12 }}>
+                    <span style={{ fontSize: 11.5, color: owner ? "var(--sw-muted)" : "var(--red)" }}>
+                      {owner ? `Notifies & assigns to ${owner.name}` : "No owner set — submissions won't notify anyone"}
+                    </span>
+                    <select
+                      className="sw-select"
+                      value={f.default_assignee_id || ""}
+                      onChange={async (e) => {
+                        const ownerId = e.target.value || null;
+                        patch("forms", forms.map((x) => (x.id === f.id ? { ...x, default_assignee_id: ownerId } : x)));
+                        await supabase.from("forms").update({ default_assignee_id: ownerId }).eq("id", f.id);
+                      }}
+                      style={{ height: 22, borderRadius: 999, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", color: "var(--sw-text-soft)", fontSize: 10.5, padding: "0 6px" }}
+                    >
+                      <option value="">Set owner…</option>
+                      {profiles.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                  </div>
+                  <div style={{ display: "flex", gap: 8, marginBottom: subs.length && showSubs ? 12 : 0 }}>
                     <button
                       onClick={() => {
                         try { navigator.clipboard.writeText(`${window.location.origin}/portal?form=${f.id}`); } catch {}
@@ -323,7 +434,15 @@ export function WorkspaceSection() {
                     >
                       {copiedFormId === f.id ? "✓ Copied" : "Copy link"}
                     </button>
-                    <button onClick={() => pushToast("Form editing arrives with the next update")} style={pillBtn("var(--sw-text-soft)")}>Edit</button>
+                    <button
+                      onClick={() => {
+                        if (f.active) { pushToast("Pause the form to edit its questions"); return; }
+                        setEditingForm({ id: f.id, title: f.title, listId: f.list_id || "", ownerId: f.default_assignee_id || "", fields: f.fields });
+                      }}
+                      style={pillBtn(f.active ? "var(--sw-muted)" : "var(--sw-text-soft)")}
+                    >
+                      Edit
+                    </button>
                     <button
                       onClick={async () => {
                         patch("forms", forms.map((x) => (x.id === f.id ? { ...x, active: !f.active } : x)));
@@ -333,14 +452,40 @@ export function WorkspaceSection() {
                     >
                       {f.active ? "Pause" : "Activate"}
                     </button>
+                    <button onClick={() => setExpandedSubmissionsFor(showSubs ? null : f.id)} style={pillBtn(pendingSubs.length ? "var(--crimson)" : "var(--sw-text-soft)")}>
+                      {showSubs ? "Hide" : "Show"} submissions ({subs.length}{pendingSubs.length ? ` · ${pendingSubs.length} pending` : ""})
+                    </button>
                   </div>
+                  {showSubs && (
+                    <div style={{ borderTop: "1px solid var(--sw-hair)", paddingTop: 10 }}>
+                      {!subs.length && <p style={{ margin: 0, fontSize: 11.5, color: "var(--sw-muted)" }}>No submissions yet.</p>}
+                      {subs.map((s) => (
+                        <div key={s.id} style={{ padding: "8px 0", borderBottom: "1px solid var(--sw-hair)" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                            <span style={{ flex: 1, fontSize: 11, color: "var(--sw-muted)" }}>{relTime(s.submitted_at)}</span>
+                            {s.task_id ? (
+                              <button onClick={() => setActiveTaskId(s.task_id)} style={pillBtn("var(--green)")}>View task</button>
+                            ) : (
+                              <button disabled={convertingSubmission === s.id} onClick={() => convertSubmission(f.id, s.id, s.answers)} style={pillBtn("var(--crimson)")}>
+                                {convertingSubmission === s.id ? "Converting…" : "Convert to task"}
+                              </button>
+                            )}
+                          </div>
+                          {Object.entries(s.answers).map(([q, a]) => (
+                            <p key={q} style={{ margin: "0 0 2px", fontSize: 12, color: "var(--sw-text-soft)" }}><b style={{ fontWeight: 500, color: "var(--sw-text)" }}>{q}:</b> {String(a)}</p>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              ))}
+                );
+              })}
               {!filteredForms.length && (
                 <div style={{ textAlign: "center", padding: "44px 0 34px" }}>
                   <div style={{ fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 19, color: "var(--sw-text-soft)", marginBottom: 6 }}>Nothing here yet.</div>
                   <p style={{ margin: "0 0 16px", fontSize: 12, color: "var(--sw-muted)" }}>No forms match these filters.</p>
-                  <button onClick={() => setShowNewForm(true)} style={{ padding: "8px 18px", borderRadius: 999, border: "1px solid var(--crimson)", background: "none", color: "var(--crimson)", fontSize: 12, fontWeight: 400, cursor: "pointer" }}>+ New form</button>
+                  <button onClick={() => { setNewForm((f) => ({ ...f, ownerId: f.ownerId || me?.id || "" })); setShowNewForm(true); }} style={{ padding: "8px 18px", borderRadius: 999, border: "1px solid var(--crimson)", background: "none", color: "var(--crimson)", fontSize: 12, fontWeight: 400, cursor: "pointer" }}>+ New form</button>
                 </div>
               )}
             </>
@@ -459,17 +604,18 @@ export function WorkspaceSection() {
                   {sansicoUsers.map((u) => (
                     <div key={u.id} style={{ display: "flex", alignItems: "center", gap: 11, padding: "9px 0", borderBottom: "1px solid var(--sw-hair)" }}>
                       <button onClick={() => openProfile(u.id)} title="View profile" style={{ width: 28, height: 28, borderRadius: 99, background: u.color, color: "#fff", fontSize: 10.5, fontWeight: 400, display: "flex", alignItems: "center", justifyContent: "center", flex: "none", border: "none", cursor: "pointer", padding: 0 }}>{initials(u.name)}</button>
-                      <span style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 12.5, fontWeight: 400, display: "flex", alignItems: "center", gap: 6 }}>
+                      <button onClick={() => openProfile(u.id)} style={{ flex: 1, minWidth: 0, textAlign: "left", border: "none", background: "none", cursor: "pointer", padding: 0 }}>
+                        <div style={{ fontSize: 12.5, fontWeight: 400, display: "flex", alignItems: "center", gap: 6, color: "var(--sw-text)" }}>
                           {u.name}
                           {u.is_super && <span style={{ fontSize: 9.5, fontWeight: 400, color: "var(--crimson)", background: "rgba(122,13,32,0.08)", padding: "1px 7px", borderRadius: 999 }}>Super admin</span>}
                         </div>
                         <div style={{ fontSize: 11, color: "var(--sw-muted)" }}>{u.email}</div>
-                      </span>
+                      </button>
                       <button
                         onClick={async () => {
                           patch("profiles", profiles.map((p) => (p.id === u.id ? { ...p, is_super: !u.is_super } : p)));
                           await supabase.from("profiles").update({ is_super: !u.is_super }).eq("id", u.id);
+                          if (me) { const { logAudit } = await import("@/lib/actions"); await logAudit(supabase, me.id, u.is_super ? "revoked super admin from" : "granted super admin to", u.name); }
                         }}
                         style={pillBtn("var(--sw-text-soft)")}
                       >
@@ -511,6 +657,7 @@ export function WorkspaceSection() {
                                       onChange={async () => {
                                         patch("levels", levels.map((x) => (x.id === lv.id ? { ...x, [key]: !on } : x)));
                                         await supabase.from("levels").update({ [key]: !on }).eq("id", lv.id);
+                                        if (me) { const { logAudit } = await import("@/lib/actions"); await logAudit(supabase, me.id, `${!on ? "granted" : "revoked"} "${label}" for level`, lv.name); }
                                       }}
                                       style={{ width: 15, height: 15 }}
                                     />
@@ -540,8 +687,11 @@ export function WorkspaceSection() {
                           className="sw-select"
                           value={u.level_id}
                           onChange={async (e) => {
+                            const prevLevel = levels.find((l) => l.id === u.level_id)?.name || u.level_id;
+                            const newLevel = levels.find((l) => l.id === e.target.value)?.name || e.target.value;
                             patch("profiles", profiles.map((p) => (p.id === u.id ? { ...p, level_id: e.target.value } : p)));
                             await supabase.from("profiles").update({ level_id: e.target.value }).eq("id", u.id);
+                            if (me) { const { logAudit } = await import("@/lib/actions"); await logAudit(supabase, me.id, `changed level from ${prevLevel} to ${newLevel} for`, u.name); }
                           }}
                           style={{ height: 32, borderRadius: 8, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "0 10px", fontSize: 12, color: "var(--sw-text)", width: 150 }}
                         >
@@ -576,13 +726,13 @@ export function WorkspaceSection() {
                     </div>
                     <p style={{ margin: "0 0 12px", fontSize: 11.5, color: "var(--sw-muted)" }}>Board / Group Heads assign department heads. A department head manages their own members and can nominate an additional space admin, subject to Board approval.</p>
                     {departments.map((d) => {
-                      const heads = deptHeads.filter((h) => h.department_id === d.id).map((h) => profiles.find((p) => p.id === h.profile_id)).filter(Boolean);
+                      const heads = deptHeads.filter((h) => h.unit_id === d.id).map((h) => profiles.find((p) => p.id === h.profile_id)).filter(Boolean);
                       const members = deptMembers.filter((m) => m.department_id === d.id).map((m) => profiles.find((p) => p.id === m.profile_id)).filter(Boolean);
                       return (
                         <div key={d.id} style={{ padding: "12px 0", borderBottom: "1px solid var(--sw-hair)" }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
                             <span style={{ width: 8, height: 8, borderRadius: 99, background: d.color, flex: "none" }} />
-                            <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 400 }}>{d.name}</span>
+                            <button onClick={() => openDetail("department", d.id)} style={{ flex: 1, minWidth: 0, textAlign: "left", fontSize: 12.5, fontWeight: 400, border: "none", background: "none", color: "var(--sw-text)", cursor: "pointer", padding: 0 }}>{d.name}</button>
                             <span style={{ fontSize: 11, fontWeight: 400, color: "var(--sw-text-soft)", background: "var(--sw-hover)", border: "1px solid var(--sw-hair)", borderRadius: 999, padding: "4px 11px", marginRight: 6 }}>{d.mode}</span>
                             <button onClick={() => pushToast("Archiving departments needs Board sign-off (demo)")} style={{ padding: "6px 12px", borderRadius: 999, border: "1px solid var(--sw-hair)", background: "none", color: "var(--sw-muted)", fontSize: 11, fontWeight: 400, cursor: "pointer" }}>Archive</button>
                           </div>
@@ -596,8 +746,8 @@ export function WorkspaceSection() {
                                     {isBoardish && (
                                       <button
                                         onClick={async () => {
-                                          patch("deptHeads", deptHeads.filter((x) => !(x.department_id === d.id && x.profile_id === h!.id)));
-                                          await supabase.from("department_heads").delete().eq("department_id", d.id).eq("profile_id", h!.id);
+                                          patch("deptHeads", deptHeads.filter((x) => !(x.unit_id === d.id && x.profile_id === h!.id)));
+                                          await supabase.from("org_unit_heads").delete().eq("unit_id", d.id).eq("profile_id", h!.id);
                                         }}
                                         style={{ border: "none", background: "none", color: "var(--sw-muted)", cursor: "pointer", fontSize: 12, padding: "0 2px" }}
                                       >
@@ -614,8 +764,8 @@ export function WorkspaceSection() {
                                   onChange={async (e) => {
                                     const pid = e.target.value;
                                     if (!pid) return;
-                                    patch("deptHeads", [...deptHeads, { department_id: d.id, profile_id: pid }]);
-                                    await supabase.from("department_heads").insert({ department_id: d.id, profile_id: pid });
+                                    patch("deptHeads", [...deptHeads, { unit_id: d.id, profile_id: pid }]);
+                                    await supabase.from("org_unit_heads").insert({ unit_id: d.id, profile_id: pid });
                                   }}
                                   style={{ height: 28, borderRadius: 7, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", fontSize: 11, color: "var(--sw-text-soft)", padding: "0 6px" }}
                                 >
@@ -633,7 +783,7 @@ export function WorkspaceSection() {
                                     <button
                                       onClick={async () => {
                                         patch("deptMembers", deptMembers.filter((x) => !(x.department_id === d.id && x.profile_id === m!.id)));
-                                        await supabase.from("department_members").delete().eq("department_id", d.id).eq("profile_id", m!.id);
+                                        await supabase.from("org_unit_members").delete().eq("department_id", d.id).eq("profile_id", m!.id);
                                       }}
                                       style={{ border: "none", background: "none", color: "var(--sw-muted)", cursor: "pointer", fontSize: 12, padding: "0 2px" }}
                                     >
@@ -650,7 +800,7 @@ export function WorkspaceSection() {
                                     const pid = e.target.value;
                                     if (!pid) return;
                                     patch("deptMembers", [...deptMembers, { department_id: d.id, profile_id: pid }]);
-                                    await supabase.from("department_members").insert({ department_id: d.id, profile_id: pid });
+                                    await supabase.from("org_unit_members").insert({ department_id: d.id, profile_id: pid });
                                   }}
                                   style={{ height: 28, borderRadius: 7, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", fontSize: 11, color: "var(--sw-text-soft)", padding: "0 6px" }}
                                 >
@@ -690,7 +840,7 @@ export function WorkspaceSection() {
                           </button>
                           <button
                             onClick={async () => {
-                              await supabase.from("departments").insert({ name: p.name, color: "#22409E", mode: "Workspace visible" });
+                              await supabase.from("org_units").insert({ name: p.name, color: "#22409E", mode: "Workspace visible" });
                               await supabase.from("dept_proposals").update({ status: "accepted" }).eq("id", p.id);
                               await refresh();
                               pushToast(`Department "${p.name}" created`);
@@ -707,8 +857,65 @@ export function WorkspaceSection() {
                 </>
               )}
 
+              {adminTab === "organisation" && <OrgAdmin tab="organisation" />}
+              {adminTab === "permissions" && <OrgAdmin tab="permissions" />}
+
               {adminTab === "approvals" && (
                 <>
+                  <section style={{ ...card, marginBottom: 14 }}>
+                    <h3 style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 400 }}>SOP reviews waiting</h3>
+                    {docVersions
+                      .filter((v) => {
+                        const doc = docs.find((x) => x.id === v.doc_id);
+                        if (!doc?.is_sop || doc.current_version_id === v.id) return false;
+                        const isCurrentLatest = !docVersions.some((o) => o.doc_id === v.doc_id && o.version_number > v.version_number);
+                        return isCurrentLatest && (v.head_status === "pending" || v.audit_status === "pending");
+                      })
+                      .map((v) => {
+                        const doc = docs.find((x) => x.id === v.doc_id)!;
+                        const reviewer = profiles.find((p) => p.id === v.head_reviewer_id);
+                        const submitter = profiles.find((p) => p.id === v.submitted_by);
+                        const overdueReview = !!v.review_due && v.review_due < today;
+                        const waitingOn = [v.head_status === "pending" ? (reviewer?.name || "Dept head") : null, v.audit_status === "pending" ? "Internal Audit" : null].filter(Boolean).join(" + ");
+                        return (
+                          <div key={v.id} style={{ display: "flex", alignItems: "center", gap: 11, padding: "10px 0", borderBottom: "1px solid var(--sw-hair)" }}>
+                            <span style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 12.5, fontWeight: 400 }}>&quot;{doc.title}&quot; v{v.version_number} — waiting on {waitingOn}</div>
+                              <div style={{ fontSize: 11, color: overdueReview ? "var(--red)" : "var(--sw-muted)" }}>
+                                Submitted by {submitter?.name || "—"} · {v.review_due ? `review due ${fmtShort(v.review_due)}${overdueReview ? " — overdue" : ""}` : "no review deadline"}
+                              </div>
+                            </span>
+                            <button onClick={() => setDocDetailId(doc.id)} style={pillBtn("var(--crimson)")}>Open review</button>
+                          </div>
+                        );
+                      })}
+                    {!docVersions.some((v) => {
+                      const doc = docs.find((x) => x.id === v.doc_id);
+                      if (!doc?.is_sop) return false;
+                      const isCurrentLatest = !docVersions.some((o) => o.doc_id === v.doc_id && o.version_number > v.version_number);
+                      return isCurrentLatest && doc.current_version_id !== v.id && (v.head_status === "pending" || v.audit_status === "pending");
+                    }) && <p style={{ margin: "8px 0 0", fontSize: 12, color: "var(--sw-muted)" }}>No SOP reviews waiting.</p>}
+                  </section>
+
+                  <section style={{ ...card, marginBottom: 14 }}>
+                    <h3 style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 400 }}>Form submissions waiting to be converted</h3>
+                    {formSubmissions.filter((s) => !s.task_id).map((s) => {
+                      const f = forms.find((x) => x.id === s.form_id);
+                      if (!f) return null;
+                      const owner = profiles.find((p) => p.id === f.default_assignee_id);
+                      return (
+                        <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 11, padding: "10px 0", borderBottom: "1px solid var(--sw-hair)" }}>
+                          <span style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 12.5, fontWeight: 400 }}>&quot;{f.title}&quot; — new submission {relTime(s.submitted_at)}</div>
+                            <div style={{ fontSize: 11, color: "var(--sw-muted)" }}>{owner ? `Assigned to ${owner.name} on conversion` : "No owner set on this form"}</div>
+                          </span>
+                          <button onClick={() => { setSection("workspace"); setWorkspacePage("forms"); setExpandedSubmissionsFor(f.id); }} style={pillBtn("var(--crimson)")}>Open in Forms</button>
+                        </div>
+                      );
+                    })}
+                    {!formSubmissions.some((s) => !s.task_id) && <p style={{ margin: "8px 0 0", fontSize: 12, color: "var(--sw-muted)" }}>No form submissions waiting.</p>}
+                  </section>
+
                   <section style={{ ...card, marginBottom: 14 }}>
                     <div style={{ display: "flex", alignItems: "center", marginBottom: 4 }}>
                       <h3 style={{ margin: 0, fontSize: 13, fontWeight: 400, flex: 1 }}>Space admin nominations</h3>
@@ -731,7 +938,7 @@ export function WorkspaceSection() {
                                 patch("nominations", nominations.filter((x) => x.id !== nm.id));
                                 await supabase.from("nominations").update({ status: verdict }).eq("id", nm.id);
                                 if (verdict === "approved" && nominee && dept) {
-                                  await supabase.from("department_heads").insert({ department_id: dept.id, profile_id: nominee.id });
+                                  await supabase.from("org_unit_heads").insert({ unit_id: dept.id, profile_id: nominee.id });
                                   await refresh();
                                 }
                               }}
@@ -868,13 +1075,13 @@ export function WorkspaceSection() {
                   <section style={card}>
                     <h3 style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 400 }}>Invites</h3>
                     {invites.map((i) => (
-                      <div key={i.id} style={{ display: "flex", alignItems: "center", gap: 11, padding: "9px 0", borderBottom: "1px solid var(--sw-hair)" }}>
+                      <button key={i.id} onClick={() => openDetail("invite", i.id)} className="sw-row" style={{ display: "flex", alignItems: "center", gap: 11, padding: "9px 0", width: "100%", border: "none", borderBottom: "1px solid var(--sw-hair)", background: "none", cursor: "pointer", textAlign: "left" }}>
                         <span style={{ flex: 1, fontSize: 12.5, fontWeight: 400 }}>{i.email}</span>
                         <span style={{ fontSize: 11, fontWeight: 400, color: i.status === "registered" ? "var(--green)" : "#B7791F" }}>
                           {i.status === "registered" ? "Registered · active" : "Email sent · not registered"}
                         </span>
                         <span style={{ fontSize: 11, color: "var(--sw-muted)" }}>{fmtShort(i.created_at.slice(0, 10))}</span>
-                      </div>
+                      </button>
                     ))}
                   </section>
                 </>
@@ -897,7 +1104,10 @@ export function WorkspaceSection() {
                         >
                           <span style={{ position: "absolute", top: 2, left: on ? 18 : 2, width: 16, height: 16, borderRadius: 99, background: "#fff", transition: "left .15s", boxShadow: "0 1px 3px rgba(0,0,0,.25)" }} />
                         </span>
-                        <span style={{ fontSize: 12.5, fontWeight: 400 }}>{FEATURE_LABELS[key]}</span>
+                        <span>
+                          <div style={{ fontSize: 12.5, fontWeight: 400 }}>{FEATURE_LABELS[key]}</div>
+                          {FEATURE_HELP[key] && <div style={{ fontSize: 11, color: "var(--sw-muted)", marginTop: 2 }}>{FEATURE_HELP[key]}</div>}
+                        </span>
                       </label>
                     );
                   })}
@@ -906,16 +1116,20 @@ export function WorkspaceSection() {
 
               {adminTab === "audit" && (
                 <section style={card}>
-                  <h3 style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 400 }}>Audit log</h3>
+                  <div style={{ display: "flex", alignItems: "center", marginBottom: 12 }}>
+                    <h3 style={{ margin: 0, fontSize: 13, fontWeight: 400, flex: 1 }}>Audit log</h3>
+                    <button onClick={exportAuditPackage} style={{ padding: "7px 15px", borderRadius: 999, border: "1px solid var(--crimson)", background: "none", color: "var(--crimson)", fontSize: 12, fontWeight: 400, cursor: "pointer" }}>Export audit package (CSV)</button>
+                  </div>
+                  <p style={{ margin: "0 0 14px", fontSize: 11.5, color: "var(--sw-muted)" }}>Admin/permission/org changes and every SOP review decision, in one file — for handing to Internal Audit.</p>
                   {audit.map((a) => {
                     const who = profiles.find((p) => p.id === a.actor_id);
                     return (
-                      <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 0", borderBottom: "1px solid var(--sw-hair)", fontSize: 12 }}>
+                      <button key={a.id} onClick={() => openDetail("audit", a.id)} className="sw-row" style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 0", fontSize: 12, width: "100%", border: "none", borderBottom: "1px solid var(--sw-hair)", background: "none", cursor: "pointer", textAlign: "left" }}>
                         <b style={{ fontWeight: 400 }}>{who?.name || "System"}</b>
                         <span style={{ color: "var(--sw-text-soft)" }}>{a.action}</span>
                         <span style={{ color: "var(--sw-muted)", flex: 1 }}>{a.target}</span>
                         <span style={{ color: "var(--sw-muted)", fontSize: 11 }}>{relTime(a.created_at)}</span>
-                      </div>
+                      </button>
                     );
                   })}
                 </section>
@@ -925,29 +1139,6 @@ export function WorkspaceSection() {
         </div>
       </main>
 
-      {/* ===== DOC DETAIL MODAL ===== */}
-      {docDetail && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(23,18,15,0.45)", backdropFilter: "blur(2px)", zIndex: 48, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setDocDetailId(null)}>
-          <div onClick={(e) => e.stopPropagation()} style={{ width: 520, maxWidth: "92vw", maxHeight: "86vh", overflowY: "auto", background: "var(--sw-card)", borderRadius: 18, boxShadow: "0 30px 90px rgba(23,18,15,0.35)", padding: "26px 28px" }}>
-            <div style={{ display: "flex", alignItems: "center", marginBottom: 10 }}>
-              <span style={{ display: "inline-block", fontSize: 10, fontWeight: 800, letterSpacing: "0.04em", color: (STATUS_TINT[docDetail.status] || STATUS_TINT.Draft)[0], background: (STATUS_TINT[docDetail.status] || STATUS_TINT.Draft)[1], padding: "3px 10px", borderRadius: 999 }}>{docDetail.status}</span>
-              <div style={{ flex: 1 }} />
-              <button onClick={() => setDocDetailId(null)} style={{ border: "none", background: "var(--sw-hover)", width: 28, height: 28, borderRadius: 99, cursor: "pointer", fontSize: 13, color: "var(--sw-text-soft)" }}><IconX /></button>
-            </div>
-            <h2 style={{ margin: "0 0 10px", fontSize: 20, fontWeight: 800, lineHeight: 1.3 }}>{docDetail.title}</h2>
-            <p style={{ margin: "0 0 16px", fontSize: 13, color: "var(--sw-text-soft)", lineHeight: 1.6 }}>{docDetail.excerpt}</p>
-            <div style={{ display: "flex", gap: 18, marginBottom: 16, fontSize: 11.5, color: "var(--sw-muted)", fontWeight: 400 }}>
-              <span>{docDetail.type}</span><span>{docDetail.category}</span><span>Version {docDetail.version}</span>
-              <span style={{ color: docDetail.reviewColor }}>{docDetail.review}</span>
-            </div>
-            <button onClick={() => docDetail.owner && openProfile(docDetail.owner.id)} style={{ display: "flex", alignItems: "center", gap: 9, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", borderRadius: 999, padding: "6px 14px 6px 6px", cursor: "pointer" }}>
-              <span style={{ width: 24, height: 24, borderRadius: 99, background: docDetail.owner?.color || "#9A918A", color: "#fff", fontSize: 9.5, fontWeight: 400, display: "flex", alignItems: "center", justifyContent: "center" }}>{docDetail.owner ? initials(docDetail.owner.name) : "?"}</span>
-              <span style={{ fontSize: 12.5, fontWeight: 400 }}>{docDetail.owner?.name || "—"}</span>
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* ===== NEW SOP MODAL ===== */}
       {showNewDoc && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(23,18,15,0.45)", backdropFilter: "blur(2px)", zIndex: 40, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setShowNewDoc(false)}>
@@ -956,33 +1147,135 @@ export function WorkspaceSection() {
               <h3 style={{ margin: 0, fontSize: 17, fontWeight: 400, flex: 1 }}>New SOP / document</h3>
               <button onClick={() => setShowNewDoc(false)} style={{ border: "none", background: "var(--sw-hover)", width: 26, height: 26, borderRadius: 99, cursor: "pointer", fontSize: 13, color: "var(--sw-text-soft)" }}><IconX /></button>
             </div>
-            {[
-              { label: "Title", node: <input value={newDoc.title} onChange={(e) => setNewDoc({ ...newDoc, title: e.target.value })} placeholder="e.g. Customs clearance SOP" style={{ width: "100%", height: 40, borderRadius: 10, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "0 12px", fontSize: 13.5, marginBottom: 14, outline: "none", color: "var(--sw-text)" }} /> },
-              { label: "Type", node: <select className="sw-select" value={newDoc.type} onChange={(e) => setNewDoc({ ...newDoc, type: e.target.value })} style={{ width: "100%", height: 40, borderRadius: 10, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "0 12px", fontSize: 13, marginBottom: 14, color: "var(--sw-text)" }}><option>SOP</option><option>Handover</option><option>Brief</option><option>Meeting notes</option></select> },
-              { label: "Category", node: <select className="sw-select" value={newDoc.category} onChange={(e) => setNewDoc({ ...newDoc, category: e.target.value })} style={{ width: "100%", height: 40, borderRadius: 10, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "0 12px", fontSize: 13, marginBottom: 14, color: "var(--sw-text)" }}><option value="">Choose…</option>{departments.map((d) => <option key={d.id}>{d.name}</option>)}<option>Operations</option><option>Finance</option></select> },
-              { label: "Summary", node: <textarea value={newDoc.excerpt} onChange={(e) => setNewDoc({ ...newDoc, excerpt: e.target.value })} placeholder="One or two lines about what this document covers." style={{ width: "100%", height: 70, resize: "vertical", borderRadius: 10, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "10px 12px", fontSize: 13, fontFamily: "var(--font-sans)", color: "var(--sw-text)", outline: "none", marginBottom: 18 }} /> },
-            ].map((f) => (
-              <React.Fragment key={f.label}>
-                <label style={{ display: "block", fontSize: 12, fontWeight: 400, color: "var(--sw-text-soft)", marginBottom: 6 }}>{f.label}</label>
-                {f.node}
-              </React.Fragment>
-            ))}
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-              <button onClick={() => setShowNewDoc(false)} style={{ padding: "9px 16px", borderRadius: 999, border: "1px solid var(--sw-hair)", background: "none", fontSize: 13, fontWeight: 400, cursor: "pointer", color: "var(--sw-text-soft)" }}>Cancel</button>
-              <button
-                onClick={async () => {
-                  if (!newDoc.title.trim() || !me) return;
-                  const { data } = await supabase.from("docs").insert({ title: newDoc.title.trim(), type: newDoc.type, category: newDoc.category || null, excerpt: newDoc.excerpt || null, status: "Draft", owner_id: me.id }).select().single();
-                  if (data) patch("docs", [...docs, data as Doc]);
-                  setShowNewDoc(false);
-                  setNewDoc({ title: "", type: "SOP", category: "", excerpt: "" });
-                  pushToast("Document created as Draft");
-                }}
-                style={{ padding: "9px 18px", borderRadius: 999, border: "none", background: "var(--crimson)", color: "#fff", fontSize: 13, fontWeight: 400, cursor: "pointer", boxShadow: "0 8px 20px rgba(122,13,32,.3)" }}
-              >
-                Create document
-              </button>
-            </div>
+            {(() => {
+              const isSop = newDoc.type === "SOP";
+              return (
+                <>
+                  <label style={{ display: "block", fontSize: 12, fontWeight: 400, color: "var(--sw-text-soft)", marginBottom: 6 }}>Title</label>
+                  <input value={newDoc.title} onChange={(e) => setNewDoc({ ...newDoc, title: e.target.value })} placeholder="e.g. Customs clearance SOP" style={{ width: "100%", height: 40, borderRadius: 10, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "0 12px", fontSize: 13.5, marginBottom: 14, outline: "none", color: "var(--sw-text)" }} />
+                  <label style={{ display: "block", fontSize: 12, fontWeight: 400, color: "var(--sw-text-soft)", marginBottom: 6 }}>Type</label>
+                  <select className="sw-select" value={newDoc.type} onChange={(e) => setNewDoc({ ...newDoc, type: e.target.value })} style={{ width: "100%", height: 40, borderRadius: 10, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "0 12px", fontSize: 13, marginBottom: 14, color: "var(--sw-text)" }}>
+                    <option>SOP</option><option>Handover</option><option>Brief</option><option>Meeting notes</option>
+                  </select>
+                  {isSop ? (
+                    <>
+                      <p style={{ margin: "0 0 14px", fontSize: 11.5, color: "var(--sw-muted)" }}>SOPs go through department-head and Internal Audit review before they become official. It stays visible only to your department, Board, Group/Regional Group Heads, and Audit until approved.</p>
+                      <label style={{ display: "block", fontSize: 12, fontWeight: 400, color: "var(--sw-text-soft)", marginBottom: 6 }}>Department</label>
+                      <select
+                        className="sw-select"
+                        value={newDoc.departmentId}
+                        onChange={(e) => {
+                          const deptId = e.target.value;
+                          const firstHead = deptHeads.find((h) => h.unit_id === deptId)?.profile_id || "";
+                          setNewDoc({ ...newDoc, departmentId: deptId, headReviewerId: firstHead, reviewDue: newDoc.reviewDue || defaultReviewDue() });
+                        }}
+                        style={{ width: "100%", height: 40, borderRadius: 10, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "0 12px", fontSize: 13, marginBottom: 14, color: "var(--sw-text)" }}
+                      >
+                        <option value="">Choose…</option>
+                        {departments.filter((d) => !d.archived).map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+                      </select>
+                      {newDoc.departmentId && (
+                        <>
+                          <label style={{ display: "block", fontSize: 12, fontWeight: 400, color: "var(--sw-text-soft)", marginBottom: 6 }}>Department reviewer</label>
+                          <select className="sw-select" value={newDoc.headReviewerId} onChange={(e) => setNewDoc({ ...newDoc, headReviewerId: e.target.value })} style={{ width: "100%", height: 40, borderRadius: 10, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "0 12px", fontSize: 13, marginBottom: 4, color: "var(--sw-text)" }}>
+                            <option value="">Choose reviewer…</option>
+                            {headReviewerCandidates(newDoc.departmentId).map((p) => <option key={p.id} value={p.id}>{p.name}{deptHeads.some((h) => h.unit_id === newDoc.departmentId && h.profile_id === p.id) ? " — department head" : ""}</option>)}
+                          </select>
+                          <p style={{ margin: "0 0 14px", fontSize: 10.5, color: "var(--sw-muted)" }}>Internal Audit approval: {auditManager ? auditManager.name : "no Audit manager set"} (Manager, Internal Audit) — always required, not selectable.</p>
+                        </>
+                      )}
+                      <label style={{ display: "block", fontSize: 12, fontWeight: 400, color: "var(--sw-text-soft)", marginBottom: 6 }}>Review due date</label>
+                      <input type="date" value={newDoc.reviewDue || defaultReviewDue()} onChange={(e) => setNewDoc({ ...newDoc, reviewDue: e.target.value })} style={{ width: "100%", height: 40, borderRadius: 10, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "0 12px", fontSize: 13, marginBottom: 14, color: "var(--sw-text)", boxSizing: "border-box" }} />
+                      <label style={{ display: "block", fontSize: 12, fontWeight: 400, color: "var(--sw-text-soft)", marginBottom: 6 }}>File (Word, PPT, or PDF)</label>
+                      <input type="file" accept=".doc,.docx,.ppt,.pptx,.pdf" onChange={(e) => setNewDocFile(e.target.files?.[0] || null)} style={{ width: "100%", marginBottom: 14, fontSize: 12.5, color: "var(--sw-text)" }} />
+                      <label style={{ display: "block", fontSize: 12, fontWeight: 400, color: "var(--sw-text-soft)", marginBottom: 6 }}>What does this SOP cover?</label>
+                      <textarea value={newDoc.excerpt} onChange={(e) => setNewDoc({ ...newDoc, excerpt: e.target.value })} placeholder="A couple of sentences — Sansi turns this into a version-history summary." style={{ width: "100%", height: 70, resize: "vertical", borderRadius: 10, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "10px 12px", fontSize: 13, fontFamily: "var(--font-sans)", color: "var(--sw-text)", outline: "none", marginBottom: 18 }} />
+                    </>
+                  ) : (
+                    <>
+                      <label style={{ display: "block", fontSize: 12, fontWeight: 400, color: "var(--sw-text-soft)", marginBottom: 6 }}>Category</label>
+                      <select className="sw-select" value={newDoc.category} onChange={(e) => setNewDoc({ ...newDoc, category: e.target.value })} style={{ width: "100%", height: 40, borderRadius: 10, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "0 12px", fontSize: 13, marginBottom: 14, color: "var(--sw-text)" }}>
+                        <option value="">Choose…</option>{departments.map((d) => <option key={d.id}>{d.name}</option>)}<option>Operations</option><option>Finance</option>
+                      </select>
+                      <label style={{ display: "block", fontSize: 12, fontWeight: 400, color: "var(--sw-text-soft)", marginBottom: 6 }}>File (Word, PPT, or PDF — this is the document itself)</label>
+                      <input type="file" accept=".doc,.docx,.ppt,.pptx,.pdf" onChange={(e) => setNewDocFile(e.target.files?.[0] || null)} style={{ width: "100%", marginBottom: 14, fontSize: 12.5, color: "var(--sw-text)" }} />
+                      <label style={{ display: "block", fontSize: 12, fontWeight: 400, color: "var(--sw-text-soft)", marginBottom: 6 }}>Summary</label>
+                      <textarea value={newDoc.excerpt} onChange={(e) => setNewDoc({ ...newDoc, excerpt: e.target.value })} placeholder="One or two lines about what this document covers." style={{ width: "100%", height: 70, resize: "vertical", borderRadius: 10, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "10px 12px", fontSize: 13, fontFamily: "var(--font-sans)", color: "var(--sw-text)", outline: "none", marginBottom: 18 }} />
+                    </>
+                  )}
+                  <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+                    <button onClick={() => setShowNewDoc(false)} style={{ padding: "9px 16px", borderRadius: 999, border: "1px solid var(--sw-hair)", background: "none", fontSize: 13, fontWeight: 400, cursor: "pointer", color: "var(--sw-text-soft)" }}>Cancel</button>
+                    <button
+                      disabled={creatingDoc}
+                      onClick={async () => {
+                        if (!newDoc.title.trim() || !me) return;
+                        if (isSop && (!newDoc.departmentId || !newDocFile || !newDoc.headReviewerId)) { pushToast("Choose a department, a reviewer, and attach the file to submit an SOP"); return; }
+                        setCreatingDoc(true);
+                        const { notify } = await import("@/lib/actions");
+                        if (isSop) {
+                          const deptName = departments.find((d) => d.id === newDoc.departmentId)?.name || null;
+                          const reviewDue = newDoc.reviewDue || defaultReviewDue();
+                          const { data: doc } = await supabase.from("docs").insert({
+                            title: newDoc.title.trim(), type: "SOP", category: deptName, excerpt: newDoc.excerpt || null,
+                            status: "Under review", owner_id: me.id, department_id: newDoc.departmentId, is_sop: true,
+                          }).select().single();
+                          if (doc && newDocFile) {
+                            const path = `${doc.id}/${Date.now()}-${newDocFile.name}`;
+                            await supabase.storage.from("sop-files").upload(path, newDocFile);
+                            let summary = newDoc.excerpt || "";
+                            try {
+                              const res = await fetch("/api/sansi/summarize-sop", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: newDoc.title.trim(), changeNote: newDoc.excerpt, isRevision: false }) });
+                              const j = await res.json();
+                              if (j.summary) summary = j.summary;
+                            } catch {}
+                            const { data: version } = await supabase.from("doc_versions").insert({
+                              doc_id: doc.id, version_number: 1, file_path: path, file_name: newDocFile.name,
+                              submitted_by: me.id, change_note: newDoc.excerpt || null, ai_summary: summary,
+                              review_due: reviewDue, head_reviewer_id: newDoc.headReviewerId,
+                            }).select().single();
+                            patch("docs", [...docs, doc as Doc]);
+                            if (version) patch("docVersions", [...docVersions, version]);
+                            // Both reviewers get told there's work waiting — a review no one knows about never happens.
+                            await notify(supabase, newDoc.headReviewerId, null, `${me.name} submitted "${newDoc.title.trim()}" for your SOP review — due ${fmtShort(reviewDue)}`, "SOP review");
+                            if (auditManager && auditManager.id !== newDoc.headReviewerId) {
+                              await notify(supabase, auditManager.id, null, `${me.name} submitted "${newDoc.title.trim()}" for Internal Audit review — due ${fmtShort(reviewDue)}`, "SOP review");
+                            }
+                          }
+                          pushToast("SOP submitted — reviewers have been notified");
+                        } else {
+                          const { data } = await supabase.from("docs").insert({ title: newDoc.title.trim(), type: newDoc.type, category: newDoc.category || null, excerpt: newDoc.excerpt || null, status: "Draft", owner_id: me.id }).select().single();
+                          if (data) {
+                            let createdDoc = data as Doc;
+                            if (newDocFile) {
+                              const path = `${createdDoc.id}/${Date.now()}-${newDocFile.name}`;
+                              await supabase.storage.from("sop-files").upload(path, newDocFile);
+                              const { data: version } = await supabase.from("doc_versions").insert({
+                                doc_id: createdDoc.id, version_number: 1, file_path: path, file_name: newDocFile.name,
+                                submitted_by: me.id, head_status: "approved", audit_status: "approved",
+                              }).select().single();
+                              if (version) {
+                                await supabase.from("docs").update({ current_version_id: version.id }).eq("id", createdDoc.id);
+                                createdDoc = { ...createdDoc, current_version_id: version.id };
+                                patch("docVersions", [...docVersions, version]);
+                              }
+                            }
+                            patch("docs", [...docs, createdDoc]);
+                          }
+                          pushToast("Document created as Draft");
+                        }
+                        setCreatingDoc(false);
+                        setShowNewDoc(false);
+                        setNewDoc({ title: "", type: "SOP", category: "", excerpt: "", departmentId: "", reviewDue: "", headReviewerId: "" });
+                        setNewDocFile(null);
+                      }}
+                      style={{ padding: "9px 18px", borderRadius: 999, border: "none", background: "var(--crimson)", color: "#fff", fontSize: 13, fontWeight: 400, cursor: creatingDoc ? "default" : "pointer", opacity: creatingDoc ? 0.6 : 1, boxShadow: "0 8px 20px rgba(122,13,32,.3)" }}
+                    >
+                      {creatingDoc ? "Submitting…" : isSop ? "Submit for review" : "Create document"}
+                    </button>
+                  </div>
+                </>
+              );
+            })()}
           </div>
         </div>
       )}
@@ -1002,6 +1295,12 @@ export function WorkspaceSection() {
               <option value="">Choose a list…</option>
               {lists.map((l) => <option key={l.id} value={l.id}>{listPath(l.id)}</option>)}
             </select>
+            <label style={{ display: "block", fontSize: 12, fontWeight: 400, color: "var(--sw-text-soft)", marginBottom: 6 }}>Notify &amp; assign submissions to</label>
+            <select className="sw-select" value={newForm.ownerId} onChange={(e) => setNewForm({ ...newForm, ownerId: e.target.value })} style={{ width: "100%", height: 40, borderRadius: 10, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "0 12px", fontSize: 13, marginBottom: 4, color: "var(--sw-text)" }}>
+              <option value="">Choose…</option>
+              {profiles.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+            <p style={{ margin: "0 0 14px", fontSize: 10.5, color: "var(--sw-muted)" }}>This person is notified on every new submission and is the default assignee when it's converted to a task.</p>
             <label style={{ display: "block", fontSize: 12, fontWeight: 400, color: "var(--sw-text-soft)", marginBottom: 6 }}>Questions</label>
             {newForm.fields.map((f, i) => (
               <div key={f.id} style={{ display: "flex", gap: 8, marginBottom: 8 }}>
@@ -1018,15 +1317,68 @@ export function WorkspaceSection() {
               <button
                 onClick={async () => {
                   if (!newForm.title.trim()) return;
-                  const { data } = await supabase.from("forms").insert({ title: newForm.title.trim(), list_id: newForm.listId || null, fields: newForm.fields.filter((f) => f.label.trim()), active: true }).select().single();
+                  if (!newForm.ownerId) { pushToast("Choose who submissions should notify and assign to"); return; }
+                  const { data } = await supabase.from("forms").insert({ title: newForm.title.trim(), list_id: newForm.listId || null, default_assignee_id: newForm.ownerId, fields: newForm.fields.filter((f) => f.label.trim()), active: true }).select().single();
                   if (data) patch("forms", [...forms, data]);
                   setShowNewForm(false);
-                  setNewForm({ title: "", listId: "", fields: [{ id: 1, label: "What do you need?", type: "Short answer" }] });
+                  setNewForm({ title: "", listId: "", ownerId: "", fields: [{ id: 1, label: "What do you need?", type: "Short answer" }] });
                   pushToast("Form is live");
                 }}
                 style={{ padding: "9px 18px", borderRadius: 999, border: "none", background: "var(--crimson)", color: "#fff", fontSize: 13, fontWeight: 400, cursor: "pointer", boxShadow: "0 8px 20px rgba(122,13,32,.3)" }}
               >
                 Create form
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== EDIT FORM MODAL (paused/unpublished forms only) ===== */}
+      {editingForm && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(23,18,15,0.45)", backdropFilter: "blur(2px)", zIndex: 40, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setEditingForm(null)}>
+          <div onClick={(e) => e.stopPropagation()} style={{ width: 460, maxWidth: "92vw", maxHeight: "86vh", overflowY: "auto", background: "var(--sw-card)", borderRadius: 18, boxShadow: "0 30px 90px rgba(23,18,15,0.35)", padding: "24px 26px" }}>
+            <div style={{ display: "flex", alignItems: "center", marginBottom: 16 }}>
+              <h3 style={{ margin: 0, fontSize: 17, fontWeight: 400, flex: 1 }}>Edit form</h3>
+              <button onClick={() => setEditingForm(null)} style={{ border: "none", background: "var(--sw-hover)", width: 26, height: 26, borderRadius: 99, cursor: "pointer", fontSize: 13, color: "var(--sw-text-soft)" }}><IconX /></button>
+            </div>
+            <label style={{ display: "block", fontSize: 12, fontWeight: 400, color: "var(--sw-text-soft)", marginBottom: 6 }}>Form title</label>
+            <input value={editingForm.title} onChange={(e) => setEditingForm({ ...editingForm, title: e.target.value })} style={{ width: "100%", height: 40, borderRadius: 10, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "0 12px", fontSize: 13.5, marginBottom: 14, outline: "none", color: "var(--sw-text)" }} />
+            <label style={{ display: "block", fontSize: 12, fontWeight: 400, color: "var(--sw-text-soft)", marginBottom: 6 }}>Submissions become tasks in</label>
+            <select className="sw-select" value={editingForm.listId} onChange={(e) => setEditingForm({ ...editingForm, listId: e.target.value })} style={{ width: "100%", height: 40, borderRadius: 10, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "0 12px", fontSize: 13, marginBottom: 14, color: "var(--sw-text)" }}>
+              <option value="">Choose a list…</option>
+              {lists.map((l) => <option key={l.id} value={l.id}>{listPath(l.id)}</option>)}
+            </select>
+            <label style={{ display: "block", fontSize: 12, fontWeight: 400, color: "var(--sw-text-soft)", marginBottom: 6 }}>Notify &amp; assign submissions to</label>
+            <select className="sw-select" value={editingForm.ownerId} onChange={(e) => setEditingForm({ ...editingForm, ownerId: e.target.value })} style={{ width: "100%", height: 40, borderRadius: 10, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "0 12px", fontSize: 13, marginBottom: 14, color: "var(--sw-text)" }}>
+              <option value="">Choose…</option>
+              {profiles.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+            <label style={{ display: "block", fontSize: 12, fontWeight: 400, color: "var(--sw-text-soft)", marginBottom: 6 }}>Questions</label>
+            {editingForm.fields.map((f, i) => (
+              <div key={f.id} style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                <input value={f.label} onChange={(e) => setEditingForm({ ...editingForm, fields: editingForm.fields.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)) })} style={{ flex: 1, height: 36, borderRadius: 9, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "0 12px", fontSize: 12.5, color: "var(--sw-text)", outline: "none" }} />
+                <select className="sw-select" value={f.type} onChange={(e) => setEditingForm({ ...editingForm, fields: editingForm.fields.map((x, j) => (j === i ? { ...x, type: e.target.value } : x)) })} style={{ height: 36, borderRadius: 9, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "0 10px", fontSize: 12, color: "var(--sw-text)", width: 130 }}>
+                  <option>Short answer</option><option>Paragraph</option><option>Dropdown</option>
+                </select>
+                <button onClick={() => setEditingForm({ ...editingForm, fields: editingForm.fields.filter((_, j) => j !== i) })} style={{ border: "none", background: "none", color: "var(--red)", cursor: "pointer" }}><IconX /></button>
+              </div>
+            ))}
+            <button onClick={() => setEditingForm({ ...editingForm, fields: [...editingForm.fields, { id: Date.now(), label: "", type: "Short answer" }] })} style={{ marginBottom: 18, padding: "7px 14px", borderRadius: 999, border: "1px dashed var(--sw-hair)", background: "none", color: "var(--sw-text-soft)", fontSize: 12, fontWeight: 400, cursor: "pointer" }}>+ Add question</button>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+              <button onClick={() => setEditingForm(null)} style={{ padding: "9px 16px", borderRadius: 999, border: "1px solid var(--sw-hair)", background: "none", fontSize: 13, fontWeight: 400, cursor: "pointer", color: "var(--sw-text-soft)" }}>Cancel</button>
+              <button
+                onClick={async () => {
+                  if (!editingForm.title.trim()) return;
+                  if (!editingForm.ownerId) { pushToast("Choose who submissions should notify and assign to"); return; }
+                  const fields = editingForm.fields.filter((f) => f.label.trim());
+                  await supabase.from("forms").update({ title: editingForm.title.trim(), list_id: editingForm.listId || null, default_assignee_id: editingForm.ownerId, fields }).eq("id", editingForm.id);
+                  patch("forms", forms.map((x) => (x.id === editingForm.id ? { ...x, title: editingForm.title.trim(), list_id: editingForm.listId || null, default_assignee_id: editingForm.ownerId, fields } : x)));
+                  setEditingForm(null);
+                  pushToast("Form updated");
+                }}
+                style={{ padding: "9px 18px", borderRadius: 999, border: "none", background: "var(--crimson)", color: "#fff", fontSize: 13, fontWeight: 400, cursor: "pointer", boxShadow: "0 8px 20px rgba(122,13,32,.3)" }}
+              >
+                Save changes
               </button>
             </div>
           </div>
@@ -1089,7 +1441,7 @@ export function WorkspaceSection() {
                 onClick={async () => {
                   if (!deptForm.name.trim() || !me) return;
                   if (deptModal === "create") {
-                    await supabase.from("departments").insert({ name: deptForm.name.trim(), color: "#22409E", mode: "Workspace visible" });
+                    await supabase.from("org_units").insert({ name: deptForm.name.trim(), color: "#22409E", mode: "Workspace visible" });
                     await refresh();
                     pushToast(`Department "${deptForm.name.trim()}" created`);
                   } else {

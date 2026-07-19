@@ -1,6 +1,34 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/server/admin";
 import { sendEmail, wrapEmailHtml } from "@/lib/server/email";
+import { atRiskTasks, workloadPct } from "@/lib/logic";
+import type { Task, Profile } from "@/lib/types";
+
+// One batched Gemini call covering everyone at risk today, not one call per
+// person — keeps free-tier quota use flat regardless of headcount. Failure
+// (missing key, quota, network) degrades silently to the existing plain digest.
+async function proactiveFlags(people: { profile: Profile; reasons: string[]; pct: number }[]): Promise<Map<string, string>> {
+  const key = process.env.GEMINI_API_KEY;
+  const flags = new Map<string, string>();
+  if (!key || !people.length) return flags;
+  const lines = people.map((p) => `${p.profile.name}: workload ${p.pct}% of capacity; ${p.reasons.join("; ")}`).join("\n");
+  const prompt = `You are Sansi, the AI assistant inside SansiWorks (Sansico Group). For each person below, write exactly one short, plain-English flag line (under 20 words, no markdown) describing why they're at risk today. Reply with one line per person, formatted exactly as "Name: flag text" — nothing else.\n\n${lines}`;
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`,
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) }
+    );
+    const data = await res.json();
+    const text: string = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    for (const line of text.split("\n")) {
+      const m = line.match(/^([^:]+):\s*(.+)$/);
+      if (m) flags.set(m[1].trim(), m[2].trim());
+    }
+  } catch {
+    // fall through to no flags — digest still sends with the plain summary
+  }
+  return flags;
+}
 
 // One cron endpoint, dispatched by kind: digest (daily), plan (Mon 08:00 WIB), wrap (Fri 15:00 WIB).
 // Guarded by CRON_SECRET. Requires SUPABASE_SERVICE_ROLE_KEY in production.
@@ -16,8 +44,8 @@ export async function GET(req: NextRequest) {
   const today = new Date().toISOString().slice(0, 10);
 
   const [{ data: profiles }, { data: tasks }, { data: prefs }] = await Promise.all([
-    supabase.from("profiles").select("id,name,email,digest_time"),
-    supabase.from("tasks").select("id,name,status,priority,due,list_id,assignee_id").neq("status", "Done"),
+    supabase.from("profiles").select("id,name,email,digest_time,capacity_points,level_id"),
+    supabase.from("tasks").select("id,name,status,priority,due,list_id,assignee_id,effort,completed_at").neq("status", "Done"),
     supabase.from("notification_prefs").select("profile_id,category,channel"),
   ]);
   if (!profiles || !tasks) return NextResponse.json({ error: "no data — is SUPABASE_SERVICE_ROLE_KEY set?" }, { status: 500 });
@@ -25,6 +53,18 @@ export async function GET(req: NextRequest) {
   const tasksOf = (pid: string) => tasks.filter((t) => t.assignee_id === pid);
   const digestOff = (pid: string) =>
     (prefs || []).filter((p) => p.profile_id === pid).every((p) => p.channel === "off" || p.channel === "inapp");
+
+  // Proactive risk flags — one batched Gemini call for everyone at risk, only for the daily digest.
+  const atRisk = kinds.includes("digest") ? atRiskTasks(tasks as unknown as Task[]) : [];
+  const atRiskProfileIds = new Set(atRisk.map((r) => r.task.assignee_id).filter(Boolean));
+  const riskInput = (profiles as unknown as Profile[])
+    .filter((p) => atRiskProfileIds.has(p.id))
+    .map((profile) => ({
+      profile,
+      reasons: atRisk.filter((r) => r.task.assignee_id === profile.id).slice(0, 3).map((r) => `${r.task.name} (${r.reason})`),
+      pct: workloadPct(tasks as unknown as Task[], profile),
+    }));
+  const flagOf = await proactiveFlags(riskInput);
 
   let sent = 0;
   for (kind of kinds)
@@ -42,11 +82,13 @@ export async function GET(req: NextRequest) {
     if (kind === "digest") {
       if (!overdue.length && !dueToday.length && mine.length === 0) continue;
       subject = `Your day at Sansico — ${new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}`;
+      const flag = flagOf.get(person.name);
       inner = `
         <h2 style="font-family:Georgia,serif;font-weight:400;font-size:22px;margin:0 0 14px;">Good morning, <em>${firstName}</em>.</h2>
         <div style="background:#F5F2EC;border:1px solid #E5DFD8;border-radius:11px;padding:12px 16px;font-size:12.5px;line-height:1.5;margin-bottom:20px;">
           ${overdue.length} overdue, ${dueToday.length} due today, ${mine.length} open in total.
         </div>
+        ${flag ? `<div style="display:flex;gap:8px;align-items:flex-start;background:rgba(122,13,32,0.06);border:1px solid #E5DFD8;border-radius:11px;padding:11px 14px;font-size:12px;line-height:1.5;margin-bottom:18px;color:#4A423D;"><span style="color:#7A0D20;">✦</span><span><b>Sansi flags:</b> ${flag}</span></div>` : ""}
         <h4 style="margin:0 0 8px;font-size:11px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#9A918A;">Needs your attention</h4>
         ${[...overdue, ...dueToday].slice(0, 5).map((t) => row(t.name, t.due! < today ? `overdue since ${t.due}` : "due today")).join("") || `<p style="font-size:12.5px;color:#9A918A;">Nothing urgent — clean slate.</p>`}`;
     } else if (kind === "plan") {

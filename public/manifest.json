@@ -1,0 +1,12 @@
+{
+  "name": "SansiWorks — Sansico Group",
+  "short_name": "SansiWorks",
+  "description": "Sansico Group's project management workspace",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FFFFFF",
+  "theme_color": "#7A0D20",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

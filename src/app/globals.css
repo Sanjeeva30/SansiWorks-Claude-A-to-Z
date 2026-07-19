@@ -133,6 +133,29 @@ a { color: inherit; text-decoration: none; }
   *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
 }
 
+/* ---- responsive sidebar: fixed off-canvas drawer below 768px ---- */
+.sw-hamburger { display: none; }
+.sw-sidebar-backdrop { display: none; }
+@media (max-width: 768px) {
+  .sw-hamburger { display: flex !important; }
+  .sw-sidebar {
+    position: fixed !important;
+    inset: 0 auto 0 0;
+    z-index: 95;
+    transform: translateX(-100%);
+    transition: transform 0.22s ease;
+    box-shadow: 24px 0 60px rgba(23,18,15,.25);
+  }
+  .sw-sidebar.open { transform: translateX(0); }
+  .sw-sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(23,18,15,0.4);
+    z-index: 94;
+  }
+}
+
 /* ---- app-level style block from SansiWorks.dc.html ---- */
 button, select, input, textarea { color: inherit; font: inherit; }
 @keyframes swModalIn { from { opacity: 0; transform: translateY(10px) scale(.98); } to { opacity: 1; transform: none; } }
