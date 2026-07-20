@@ -371,7 +371,7 @@ export function ListSection() {
         {/* CALENDAR VIEW */}
         {view === "calendar" && (
           <>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 18, marginBottom: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 18, marginBottom: 12, flexWrap: "wrap" }}>
               <button onClick={() => { const d = new Date(); setCalMonth(new Date(d.getFullYear(), d.getMonth(), 1)); }} style={{ padding: "7px 14px", borderRadius: 999, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", color: "var(--sw-text)", fontSize: 12, fontWeight: 400, cursor: "pointer" }}>Today</button>
               <div style={{ display: "flex", border: "1px solid var(--sw-hair)", borderRadius: 8, overflow: "hidden" }}>
                 <button onClick={() => setCalMonth(new Date(calMonth.getFullYear(), calMonth.getMonth() - 1, 1))} style={{ width: 30, height: 30, border: "none", borderRight: "1px solid var(--sw-hair)", background: "var(--sw-hover)", cursor: "pointer", color: "var(--sw-text-soft)", fontSize: 13 }}><IconChevLeft /></button>
@@ -386,7 +386,7 @@ export function ListSection() {
               </div>
             </div>
 
-            <div style={{ display: "flex", gap: 16 }}>
+            <div className="sw-cal-row" style={{ display: "flex", gap: 16 }}>
               <div className="sw-calendar-scroll" style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", border: "1px solid var(--sw-hair)", borderRadius: 12, overflow: "hidden", boxShadow: "var(--shadow-card)", boxSizing: "border-box", width: "100%" }}>
                   {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((dw) => (
@@ -422,7 +422,7 @@ export function ListSection() {
                 </div>
               </div>
 
-              <aside style={{ width: 240, flex: "none" }}>
+              <aside className="sw-cal-side" style={{ width: 240, flex: "none" }}>
                 <div style={{ background: "var(--sw-card)", border: "1px solid var(--sw-hair)", borderRadius: 12, padding: 14, boxShadow: "var(--shadow-card)", marginBottom: 12 }}>
                   <div style={{ display: "flex", gap: 10 }}>
                     <div style={{ flex: 1 }}><div style={{ fontSize: 18, fontWeight: 800, color: "var(--red)" }}>{overdueTasks.length}</div><div style={{ fontSize: 10.5, color: "var(--sw-muted)", fontWeight: 400 }}>Overdue</div></div>
@@ -447,8 +447,8 @@ export function ListSection() {
         {/* GANTT VIEW */}
         {view === "gantt" && (
           <>
-            <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 18, marginBottom: 12 }}>
-              <span style={{ fontSize: 11.5, color: "var(--sw-text-soft)", fontWeight: 400 }}>{ganttRangeLabel}</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 18, marginBottom: 12, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 11.5, color: "var(--sw-text-soft)", fontWeight: 400, whiteSpace: "nowrap" }}>{ganttRangeLabel}</span>
               <div style={{ display: "flex", gap: 3, background: "var(--sw-hover)", border: "1px solid var(--sw-hair)", borderRadius: 999, padding: 3 }}>
                 <button onClick={() => setGanttSpan(14)} style={{ padding: "4px 12px", borderRadius: 999, border: "none", cursor: "pointer", fontSize: 11, fontWeight: 400, background: !ganttWide ? "var(--crimson)" : "transparent", color: !ganttWide ? "#fff" : "var(--sw-text-soft)" }}>2 weeks</button>
                 <button onClick={() => setGanttSpan(90)} style={{ padding: "4px 12px", borderRadius: 999, border: "none", cursor: "pointer", fontSize: 11, fontWeight: 400, background: ganttWide ? "var(--crimson)" : "transparent", color: ganttWide ? "#fff" : "var(--sw-text-soft)" }}>3 months</button>
@@ -462,8 +462,8 @@ export function ListSection() {
             </div>
 
             <div className="sw-hscroll" style={{ border: "1px solid var(--sw-hair)", borderRadius: 14, overflowX: "auto", boxShadow: "var(--shadow-card)", background: "var(--sw-card)" }}>
-              <div style={{ display: "flex", borderBottom: "1px solid var(--sw-hair)", minWidth: ganttWide ? 240 + ganttSpan * 34 : "100%" }}>
-                <div style={{ width: 240, flex: "none", padding: "11px 16px", background: "var(--sw-sidebar)", position: "sticky", left: 0, zIndex: 4 }} />
+              <div style={{ display: "flex", borderBottom: "1px solid var(--sw-hair)", minWidth: ganttWide ? `calc(var(--sw-gantt-name) + ${ganttSpan * 34}px)` : "100%" }}>
+                <div style={{ width: "var(--sw-gantt-name)", flex: "none", padding: "11px 16px", background: "var(--sw-sidebar)", position: "sticky", left: 0, zIndex: 4 }} />
                 <div style={{ flex: 1, display: "flex", position: "relative", background: "var(--sw-sidebar)" }}>
                   {ganttDays.map((gd, i) => (
                     <div key={i} style={{ flex: 1, textAlign: "center", padding: "10px 2px", background: gd.weekendBg }}>
@@ -475,8 +475,8 @@ export function ListSection() {
               </div>
 
               {ganttLanes.map((gl) => (
-                <div key={gl.p.id} style={{ display: "flex", alignItems: "stretch", borderBottom: "1px solid var(--sw-hair)", position: "relative", minWidth: ganttWide ? 240 + ganttSpan * 34 : "100%" }}>
-                  <button onClick={() => openProfile(gl.p.id)} title="View profile" style={{ width: 240, flex: "none", textAlign: "left", padding: "10px 16px", border: "none", borderRight: "1px solid var(--sw-hair)", background: "var(--sw-card)", cursor: "pointer", display: "flex", alignItems: "center", gap: 9, position: "sticky", left: 0, zIndex: 3 }}>
+                <div key={gl.p.id} style={{ display: "flex", alignItems: "stretch", borderBottom: "1px solid var(--sw-hair)", position: "relative", minWidth: ganttWide ? `calc(var(--sw-gantt-name) + ${ganttSpan * 34}px)` : "100%" }}>
+                  <button onClick={() => openProfile(gl.p.id)} title="View profile" style={{ width: "var(--sw-gantt-name)", flex: "none", textAlign: "left", padding: "10px 16px", border: "none", borderRight: "1px solid var(--sw-hair)", background: "var(--sw-card)", cursor: "pointer", display: "flex", alignItems: "center", gap: 9, position: "sticky", left: 0, zIndex: 3 }}>
                     <span style={{ width: 24, height: 24, borderRadius: 99, background: gl.p.color, color: "#fff", fontSize: 9, fontWeight: 400, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>{initials(gl.p.name)}</span>
                     <span style={{ minWidth: 0 }}>
                       <span style={{ display: "block", fontSize: 12, fontWeight: 400, color: "var(--sw-text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{gl.p.name}</span>

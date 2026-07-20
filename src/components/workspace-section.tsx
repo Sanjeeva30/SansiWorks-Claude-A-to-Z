@@ -742,8 +742,8 @@ export function WorkspaceSection() {
                   <section style={{ ...card, marginBottom: 14 }}>
                     <div style={{ display: "flex", alignItems: "center", marginBottom: 4 }}>
                       <h3 style={{ margin: 0, fontSize: 13, fontWeight: 400, flex: 1 }}>Departments</h3>
-                      <button onClick={() => { setDeptModal("propose"); setDeptForm({ name: "", reason: "" }); }} style={{ padding: "6px 13px", borderRadius: 999, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", color: "var(--sw-text-soft)", fontSize: 11.5, fontWeight: 400, cursor: "pointer", marginRight: 8 }}>Propose a department</button>
-                      {isBoardish && <button onClick={() => { setDeptModal("create"); setDeptForm({ name: "", reason: "" }); }} style={{ padding: "6px 14px", borderRadius: 999, border: "none", background: "var(--crimson)", color: "#fff", fontSize: 11.5, fontWeight: 400, cursor: "pointer" }}>+ Create department</button>}
+                      <button onClick={() => { setDeptModal("propose"); setDeptForm({ name: "", reason: "" }); }} style={{ padding: "6px 13px", borderRadius: 999, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", color: "var(--sw-text-soft)", fontSize: 11.5, fontWeight: 400, cursor: "pointer", marginRight: 8, whiteSpace: "nowrap" }}>Propose a department</button>
+                      {isBoardish && <button onClick={() => { setDeptModal("create"); setDeptForm({ name: "", reason: "" }); }} style={{ padding: "6px 14px", borderRadius: 999, border: "none", background: "var(--crimson)", color: "#fff", fontSize: 11.5, fontWeight: 400, cursor: "pointer", whiteSpace: "nowrap" }}>+ Create department</button>}
                     </div>
                     <p style={{ margin: "0 0 12px", fontSize: 11.5, color: "var(--sw-muted)" }}>Board / Group Heads assign department heads. A department head manages their own members and can nominate an additional space admin, subject to Board approval.</p>
                     {departments.map((d) => {
@@ -828,7 +828,7 @@ export function WorkspaceSection() {
                                   <option value="">+ Add member…</option>
                                   {profiles.filter((p) => !members.some((m) => m!.id === p.id)).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                                 </select>
-                                <button onClick={() => { setNominateFor(d.id); setNominate({ name: "", reason: "" }); }} style={{ padding: "5px 11px", borderRadius: 999, border: "1px solid var(--crimson)", background: "none", color: "var(--crimson)", fontSize: 11, fontWeight: 400, cursor: "pointer" }}>Nominate space admin…</button>
+                                <button onClick={() => { setNominateFor(d.id); setNominate({ name: "", reason: "" }); }} style={{ padding: "5px 11px", borderRadius: 999, border: "1px solid var(--crimson)", background: "none", color: "var(--crimson)", fontSize: 11, fontWeight: 400, cursor: "pointer", whiteSpace: "nowrap", flex: "none" }}>Nominate space admin…</button>
                               </div>
                             </div>
                           </div>

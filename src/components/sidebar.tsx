@@ -170,13 +170,13 @@ export function Sidebar() {
 
       <div style={{ padding: "11px 14px", borderTop: "1px solid var(--sw-hair)", display: "flex", alignItems: "center", gap: 9 }}>
         <button
-          onClick={() => me && openProfile(me.id)}
+          onClick={() => { if (me) { openProfile(me.id); setMobileNavOpen(false); } }}
           title="View profile"
           style={{ width: 26, height: 26, borderRadius: 99, background: me?.color || "var(--crimson)", color: "#fff", fontSize: 10.5, fontWeight: 400, display: "flex", alignItems: "center", justifyContent: "center", flex: "none", border: "none", cursor: "pointer", padding: 0 }}
         >
           {me ? initials(me.name) : ""}
         </button>
-        <button onClick={() => me && openProfile(me.id)} style={{ flex: 1, minWidth: 0, border: "none", background: "none", textAlign: "left", cursor: "pointer", padding: 0 }}>
+        <button onClick={() => { if (me) { openProfile(me.id); setMobileNavOpen(false); } }} style={{ flex: 1, minWidth: 0, border: "none", background: "none", textAlign: "left", cursor: "pointer", padding: 0 }}>
           <div style={{ fontSize: 12, fontWeight: 400, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{me?.name || ""}</div>
           <div style={{ fontSize: 10.5, color: "var(--sw-muted)" }}>{deptOf(me?.department_id || null)?.name || me?.role_title || ""}</div>
         </button>

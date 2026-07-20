@@ -36,7 +36,7 @@ function AppShell() {
         className="sw-hamburger"
         aria-label="Open navigation"
         onClick={() => setMobileNavOpen(!mobileNavOpen)}
-        style={{ position: "fixed", top: 12, left: 12, zIndex: 90, width: 36, height: 36, borderRadius: 10, border: "1px solid var(--sw-hair)", background: "var(--sw-card)", boxShadow: "var(--shadow-card)", cursor: "pointer", alignItems: "center", justifyContent: "center", fontSize: 16 }}
+        style={{ position: "fixed", top: 12, left: 12, zIndex: 35, width: 36, height: 36, borderRadius: 10, border: "1px solid var(--sw-hair)", background: "var(--sw-card)", boxShadow: "var(--shadow-card)", cursor: "pointer", alignItems: "center", justifyContent: "center", fontSize: 16 }}
       >
         ☰
       </button>

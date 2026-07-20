@@ -118,7 +118,7 @@ export function SansiPopover({ onClose }: { onClose: () => void }) {
   return (
     <div
       onClick={(e) => e.stopPropagation()}
-      style={{ position: "absolute", top: 38, right: 0, width: 340, maxHeight: 480, display: "flex", flexDirection: "column", background: "var(--sw-card)", border: "1px solid var(--sw-hair)", borderRadius: 12, boxShadow: "0 20px 60px rgba(23,18,15,.2)", zIndex: 60, padding: 14 }}
+      className="sw-popover" style={{ position: "absolute", top: 38, right: 0, width: 340, maxWidth: "calc(100vw - 24px)", maxHeight: 480, display: "flex", flexDirection: "column", background: "var(--sw-card)", border: "1px solid var(--sw-hair)", borderRadius: 12, boxShadow: "0 20px 60px rgba(23,18,15,.2)", zIndex: 60, padding: 14 }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10, flex: "none" }}>
         <span style={{ display: "inline-flex", color: "var(--crimson)" }}><IconSparkle size={13} /></span>
@@ -208,7 +208,7 @@ export function NotifPopover({ onClose }: { onClose: () => void }) {
   return (
     <div
       onClick={(e) => e.stopPropagation()}
-      style={{ position: "absolute", top: 38, right: 0, width: 320, background: "var(--sw-card)", border: "1px solid var(--sw-hair)", borderRadius: 12, boxShadow: "0 20px 60px rgba(23,18,15,.2)", zIndex: 60, overflow: "hidden" }}
+      className="sw-popover" style={{ position: "absolute", top: 38, right: 0, width: 320, maxWidth: "calc(100vw - 24px)", background: "var(--sw-card)", border: "1px solid var(--sw-hair)", borderRadius: 12, boxShadow: "0 20px 60px rgba(23,18,15,.2)", zIndex: 60, overflow: "hidden" }}
     >
       <div style={{ padding: "11px 14px", borderBottom: "1px solid var(--sw-hair)", fontSize: 12.5, fontWeight: 400 }}>Notifications</div>
       {preview.map((n) => (

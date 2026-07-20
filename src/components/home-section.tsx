@@ -364,7 +364,7 @@ export function HomeSection() {
               </div>
 
               {/* company pulse */}
-              <section style={{ background: "var(--sw-card)", border: "1px solid var(--sw-hair)", borderRadius: 12, padding: "16px 18px", boxShadow: "var(--shadow-card)", display: "flex", gap: 26, alignItems: "center" }}>
+              <section style={{ background: "var(--sw-card)", border: "1px solid var(--sw-hair)", borderRadius: 12, padding: "16px 18px", boxShadow: "var(--shadow-card)", display: "flex", gap: 26, alignItems: "center", flexWrap: "wrap" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12, flex: "none" }}>
                   <div style={{ position: "relative", width: 52, height: 52, borderRadius: 99, background: `conic-gradient(var(--green) 0% ${health}%, var(--sw-hair) ${health}% 100%)`, display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <div style={{ width: 40, height: 40, borderRadius: 99, background: "var(--sw-card)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 400 }}>{health}</div>
@@ -374,10 +374,10 @@ export function HomeSection() {
                     <div style={{ fontSize: 10.5, color: "var(--sw-muted)" }}>{health >= 70 ? "Healthy" : "Needs attention"} — {onTrack} depts on track</div>
                   </div>
                 </div>
-                <div style={{ width: 1, alignSelf: "stretch", background: "var(--sw-hair)" }} />
-                <div style={{ flex: 1, display: "flex", gap: 20 }}>
+                <div className="sw-hide-mobile" style={{ width: 1, alignSelf: "stretch", background: "var(--sw-hair)" }} />
+                <div style={{ flex: "1 1 260px", display: "flex", gap: 20, flexWrap: "wrap" }}>
                   {workloadPeople.map(({ p, pct }) => (
-                    <div key={p.id} style={{ flex: 1 }}>
+                    <div key={p.id} style={{ flex: "1 1 150px", minWidth: 0 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 5 }}>
                         <Avatar person={p} size={19} fontSize={8.5} ring={isHeadRank(p, levels)} onClick={(e) => { e.stopPropagation(); openProfile(p.id); }} />
                         <span style={{ fontSize: 11.5, fontWeight: 400 }}>{p.name}</span>

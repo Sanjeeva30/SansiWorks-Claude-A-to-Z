@@ -191,6 +191,7 @@ button:active { transform: scale(0.97); }
    property isn't also set inline — so these classes carry the
    grid-template-columns instead of inline style objects).
    ============================================================ */
+:root { --sw-gantt-name: 240px; }
 .sw-grid-2 { display: grid; grid-template-columns: 1fr 1fr; }
 .sw-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); }
 .sw-grid-5 { display: grid; grid-template-columns: repeat(5, 1fr); }
@@ -202,6 +203,13 @@ button:active { transform: scale(0.97); }
 @media (max-width: 768px) {
   main, .sw-main { padding-top: 56px !important; }
   .sw-topbar { padding-left: 56px !important; }
+  /* nothing inside the content column may widen the page itself —
+     wide surfaces scroll in their own containers */
+  main { overflow-x: clip; }
+  /* calendar: the "Next deadlines" sidebar stacks below the grid
+     instead of overlapping it */
+  .sw-cal-row { flex-direction: column !important; }
+  .sw-cal-side { width: 100% !important; }
 }
 
 /* tablets: trim the widest grids down before they get cramped */
@@ -211,6 +219,12 @@ button:active { transform: scale(0.97); }
 
 /* small phones: table-like rows collapse to stacked cards */
 @media (max-width: 640px) {
+  .sw-hide-mobile { display: none !important; }
+  /* gantt: person column narrows so the timeline gets the room */
+  :root { --sw-gantt-name: 130px; }
+  /* quick-add: the Sansi Assist side panel is a nice-to-have —
+     on phones the form itself gets the whole modal */
+  .sw-modal-split-side { display: none !important; }
   .sw-grid-3, .sw-grid-5 { grid-template-columns: 1fr 1fr !important; }
   .sw-table-row5 {
     grid-template-columns: 1fr !important;
@@ -230,6 +244,16 @@ button:active { transform: scale(0.97); }
   .sw-topbar > button, .sw-topbar > select, .sw-topbar > a {
     white-space: nowrap;
     flex-shrink: 0;
+  }
+  /* the topbar is a scroll container on phones, which would clip
+     its absolutely-positioned dropdowns — pin them to the viewport
+     instead so Sansi/notifications always open fully visible */
+  .sw-popover {
+    position: fixed !important;
+    top: 64px !important;
+    right: 12px !important;
+    left: 12px !important;
+    width: auto !important;
   }
 }
 @media (max-width: 480px) {

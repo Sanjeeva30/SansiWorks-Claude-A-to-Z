@@ -8,7 +8,7 @@ import { logAudit } from "@/lib/actions";
 import { IconX } from "./icons";
 
 const card: React.CSSProperties = { background: "var(--sw-card)", border: "1px solid var(--sw-hair)", borderRadius: 12, boxShadow: "var(--shadow-card)", padding: "16px 18px" };
-const pillBtn = (color: string): React.CSSProperties => ({ padding: "6px 12px", borderRadius: 999, border: `1px solid ${color === "var(--green)" ? "var(--green)" : "var(--sw-hair)"}`, background: "none", color, fontSize: 11.5, fontWeight: 400, cursor: "pointer" });
+const pillBtn = (color: string): React.CSSProperties => ({ padding: "6px 12px", borderRadius: 999, border: `1px solid ${color === "var(--green)" ? "var(--green)" : "var(--sw-hair)"}`, background: "none", color, fontSize: 11.5, fontWeight: 400, cursor: "pointer", whiteSpace: "nowrap", flex: "none" });
 const label: React.CSSProperties = { fontSize: 10.5, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--sw-muted)", marginBottom: 6 };
 const selectSt: React.CSSProperties = { height: 30, borderRadius: 7, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", fontSize: 11.5, color: "var(--sw-text-soft)", padding: "0 6px" };
 const inputSt: React.CSSProperties = { height: 30, borderRadius: 7, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", fontSize: 11.5, color: "var(--sw-text)", padding: "0 8px" };
@@ -235,7 +235,7 @@ export function OrgAdmin({ tab }: { tab: "organisation" | "permissions" }) {
         <p style={{ margin: "0 0 12px", fontSize: 11.5, color: "var(--sw-muted)" }}>Each unit's colour below is the hue every member of that department renders in — set a unit's colour, then recompute to cascade it. Rank lightens the shade; heads render at full strength.</p>
         {roots.map((d) => (
           <div key={d.id} style={{ padding: "10px 0", borderBottom: "1px solid var(--sw-hair)" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
               <input
                 type="color"
                 value={d.color}
@@ -250,8 +250,8 @@ export function OrgAdmin({ tab }: { tab: "organisation" | "permissions" }) {
               <button onClick={() => openDetail("department", d.id)} style={{ flex: 1, fontSize: 12.5, textAlign: "left", border: "none", background: "none", color: "var(--sw-text)", cursor: "pointer", padding: 0 }}>{d.name}</button>
               <span style={{ fontSize: 10.5, color: "var(--sw-muted)", border: "1px solid var(--sw-hair)", borderRadius: 999, padding: "2px 8px" }}>{ORG_UNIT_TYPES.find((t) => t.value === d.type)?.label || d.type}</span>
               {d.parent_id && <span style={{ fontSize: 10.5, color: "var(--sw-muted)" }}>under {unitName(d.parent_id)}</span>}
-              <button onClick={() => toggleDormant(d.id, !d.dormant)} style={pillBtn(d.dormant ? "var(--crimson)" : "var(--sw-muted)")}>
-                {d.dormant ? "Dormant — hidden unless overseas on" : "Mark dormant (overseas-only unit)"}
+              <button onClick={() => toggleDormant(d.id, !d.dormant)} title={d.dormant ? "Hidden unless the overseas-teams toggle is on" : "Hide this overseas-only unit until the toggle is on"} style={pillBtn(d.dormant ? "var(--crimson)" : "var(--sw-muted)")}>
+                {d.dormant ? "Dormant — hidden" : "Mark dormant"}
               </button>
               <button onClick={() => archiveUnit(d.id, true)} style={pillBtn("var(--sw-muted)")}>Archive</button>
             </div>
