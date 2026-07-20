@@ -190,7 +190,7 @@ export function ListSection() {
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, height: "100%" }}>
       <header style={{ flex: "none", borderBottom: "1px solid var(--sw-hair)", background: "var(--sw-page)" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 22px 10px" }}>
+        <div className="sw-topbar" style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 22px 10px" }}>
           <span style={{ width: 7, height: 7, borderRadius: 99, background: space?.color || "var(--navy)", flex: "none" }} />
           <span style={{ fontSize: 12.5, color: "var(--sw-muted)", fontWeight: 400 }}>{space?.name} /</span>
           <h1 style={{ fontSize: 16, fontWeight: 400, margin: 0 }}>{list?.name}</h1>
@@ -202,7 +202,7 @@ export function ListSection() {
         </div>
 
         {/* VIEW SWITCHER */}
-        <div style={{ display: "flex", alignItems: "center", gap: 2, padding: "0 22px" }}>
+        <div className="sw-hscroll" style={{ display: "flex", alignItems: "center", gap: 2, padding: "0 22px", overflowX: "auto" }}>
           {(["table", "board", "calendar", "gantt"] as const).map((v) => (
             <button key={v} onClick={() => setView(v)} style={{ padding: "9px 14px", border: "none", background: "none", borderBottom: `2px solid ${view === v ? "var(--crimson)" : "transparent"}`, color: view === v ? "var(--crimson)" : "var(--sw-text-soft)", fontSize: 12.5, fontWeight: 400, cursor: "pointer", marginBottom: -1 }}>
               {v[0].toUpperCase() + v.slice(1)}
@@ -233,7 +233,7 @@ export function ListSection() {
         </div>
         {showSaveView && (
           <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 22px 9px" }}>
-            <input value={saveViewName} onChange={(e) => setSaveViewName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") saveCurrentView(); }} placeholder="Name this view (filters, search & layout are saved)…" style={{ width: 300, height: 30, borderRadius: 8, border: "1px solid var(--crimson)", background: "var(--sw-hover)", padding: "0 12px", fontSize: 12, color: "var(--sw-text)", outline: "none" }} />
+            <input value={saveViewName} onChange={(e) => setSaveViewName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") saveCurrentView(); }} placeholder="Name this view (filters, search & layout are saved)…" style={{ width: 300, maxWidth: "60vw", height: 30, borderRadius: 8, border: "1px solid var(--crimson)", background: "var(--sw-hover)", padding: "0 12px", fontSize: 12, color: "var(--sw-text)", outline: "none" }} />
             <button onClick={saveCurrentView} style={{ padding: "6px 14px", borderRadius: 999, border: "none", background: "var(--crimson)", color: "#fff", fontSize: 11.5, fontWeight: 400, cursor: "pointer" }}>Save</button>
             <button onClick={() => setShowSaveView(false)} style={{ padding: "6px 12px", borderRadius: 999, border: "1px solid var(--sw-hair)", background: "none", color: "var(--sw-text-soft)", fontSize: 11.5, fontWeight: 400, cursor: "pointer" }}>Cancel</button>
           </div>
@@ -302,7 +302,7 @@ export function ListSection() {
 
         {/* KANBAN VIEW */}
         {view === "board" && (
-          <div style={{ display: "flex", gap: 14, marginTop: 18, paddingBottom: 20, overflowX: "auto" }}>
+          <div className="sw-hscroll" style={{ display: "flex", gap: 14, marginTop: 18, paddingBottom: 20, overflowX: "auto" }}>
             {STATUSES.map((s) => {
               const rows = filtered.filter((t) => t.status === s);
               return (
@@ -387,7 +387,7 @@ export function ListSection() {
             </div>
 
             <div style={{ display: "flex", gap: 16 }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="sw-calendar-scroll" style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", border: "1px solid var(--sw-hair)", borderRadius: 12, overflow: "hidden", boxShadow: "var(--shadow-card)", boxSizing: "border-box", width: "100%" }}>
                   {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((dw) => (
                     <div key={dw} style={{ boxSizing: "border-box", background: "var(--sw-sidebar)", padding: "8px 0", textAlign: "center", fontSize: 10, fontWeight: 800, letterSpacing: "0.07em", color: "var(--sw-muted)", borderBottom: "1px solid var(--sw-hair)" }}>{dw}</div>
@@ -461,7 +461,7 @@ export function ListSection() {
               </div>
             </div>
 
-            <div style={{ border: "1px solid var(--sw-hair)", borderRadius: 14, overflowX: "auto", boxShadow: "var(--shadow-card)", background: "var(--sw-card)" }}>
+            <div className="sw-hscroll" style={{ border: "1px solid var(--sw-hair)", borderRadius: 14, overflowX: "auto", boxShadow: "var(--shadow-card)", background: "var(--sw-card)" }}>
               <div style={{ display: "flex", borderBottom: "1px solid var(--sw-hair)", minWidth: ganttWide ? 240 + ganttSpan * 34 : "100%" }}>
                 <div style={{ width: 240, flex: "none", padding: "11px 16px", background: "var(--sw-sidebar)", position: "sticky", left: 0, zIndex: 4 }} />
                 <div style={{ flex: 1, display: "flex", position: "relative", background: "var(--sw-sidebar)" }}>
@@ -656,7 +656,7 @@ export function ListSection() {
       {/* CREATE TEMPLATE MODAL */}
       {showCreateTemplate && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(23,18,15,0.45)", backdropFilter: "blur(2px)", zIndex: 46, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setShowCreateTemplate(false)}>
-          <div onClick={(e) => e.stopPropagation()} style={{ width: 460, maxWidth: "92vw", maxHeight: "86vh", overflowY: "auto", background: "var(--sw-card)", borderRadius: 18, boxShadow: "0 30px 90px rgba(23,18,15,0.35)", padding: "24px 26px" }}>
+          <div onClick={(e) => e.stopPropagation()} className="sw-modal-card" style={{ width: 460, maxWidth: "92vw", maxHeight: "86vh", overflowY: "auto", background: "var(--sw-card)", borderRadius: 18, boxShadow: "0 30px 90px rgba(23,18,15,0.35)", padding: "24px 26px" }}>
             <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
               <h3 style={{ margin: 0, fontSize: 17, fontWeight: 400, flex: 1 }}>New template</h3>
               <button onClick={() => setShowCreateTemplate(false)} style={{ border: "none", background: "var(--sw-hover)", width: 26, height: 26, borderRadius: 99, cursor: "pointer", fontSize: 13, color: "var(--sw-text-soft)" }}><IconX /></button>
@@ -666,7 +666,7 @@ export function ListSection() {
             <input value={tpl.name} onChange={(e) => setTpl({ ...tpl, name: e.target.value })} placeholder="e.g. Vendor onboarding checklist" style={{ width: "100%", height: 40, borderRadius: 10, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "0 12px", fontSize: 13.5, marginBottom: 14, outline: "none", color: "var(--sw-text)" }} />
             <label style={{ display: "block", fontSize: 12, fontWeight: 400, color: "var(--sw-text-soft)", marginBottom: 6 }}>Description</label>
             <input value={tpl.desc} onChange={(e) => setTpl({ ...tpl, desc: e.target.value })} placeholder="Shown under the template name" style={{ width: "100%", height: 40, borderRadius: 10, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "0 12px", fontSize: 13, marginBottom: 14, outline: "none", color: "var(--sw-text)" }} />
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
+            <div className="sw-grid-2" style={{ gap: 12, marginBottom: 14 }}>
               <div>
                 <label style={{ display: "block", fontSize: 12, fontWeight: 400, color: "var(--sw-text-soft)", marginBottom: 6 }}>Starting status</label>
                 <select className="sw-select" value={tpl.status} onChange={(e) => setTpl({ ...tpl, status: e.target.value })} style={{ width: "100%", height: 38, borderRadius: 9, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "0 10px", fontSize: 12.5, color: "var(--sw-text)" }}>

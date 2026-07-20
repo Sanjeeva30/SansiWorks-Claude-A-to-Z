@@ -40,7 +40,7 @@ export function EntityDetailModal() {
     title = "Audit entry";
     body = (
       <>
-        <div style={{ display: "grid", gridTemplateColumns: "90px 1fr", gap: "10px 10px", marginBottom: 14 }}>
+        <div className="sw-grid-label" style={{ gap: "10px 10px", marginBottom: 14 }}>
           {row("Actor", who ? <button onClick={() => { closeDetail(); openProfile(who.id); }} style={{ border: "none", background: "none", color: "var(--crimson)", cursor: "pointer", padding: 0, fontSize: 12.5 }}>{who.name}</button> : "System")}
           {row("Action", a.action)}
           {row("Target", a.target || "—")}
@@ -62,7 +62,7 @@ export function EntityDetailModal() {
     const level = levels.find((l) => l.id === i.level_id);
     title = "Invite";
     body = (
-      <div style={{ display: "grid", gridTemplateColumns: "90px 1fr", gap: "10px 10px" }}>
+      <div className="sw-grid-label" style={{ gap: "10px 10px" }}>
         {row("Email", i.email)}
         {row("Department", dept?.name || "—")}
         {row("Level", level?.name || "—")}
@@ -122,7 +122,7 @@ export function EntityDetailModal() {
     title = f.title;
     body = (
       <>
-        <div style={{ display: "grid", gridTemplateColumns: "90px 1fr", gap: "10px 10px", marginBottom: 16 }}>
+        <div className="sw-grid-label" style={{ gap: "10px 10px", marginBottom: 16 }}>
           {row("Status", f.active ? "Live" : "Paused")}
           {row("Destination", list ? `${space?.name || ""} / ${list.name}` : "Unassigned")}
           {row("Questions", String(f.fields.length))}
@@ -143,7 +143,7 @@ export function EntityDetailModal() {
 
   return (
     <div style={overlay} onClick={closeDetail}>
-      <div ref={trapRef} role="dialog" aria-modal="true" aria-label={title} onClick={(e) => e.stopPropagation()} style={panel}>
+      <div ref={trapRef} role="dialog" aria-modal="true" aria-label={title} onClick={(e) => e.stopPropagation()} className="sw-modal-card" style={panel}>
         <div style={{ display: "flex", alignItems: "center", marginBottom: 14 }}>
           <h3 style={{ margin: 0, fontSize: 16, fontWeight: 400, flex: 1 }}>{title}</h3>
           <button onClick={closeDetail} aria-label="Close" style={closeBtn}><IconX /></button>
@@ -302,7 +302,7 @@ export function DocDetailModal() {
 
   return (
     <div style={overlay} onClick={() => setDocDetailId(null)}>
-      <div ref={trapRef} role="dialog" aria-modal="true" aria-label={d.title} onClick={(e) => e.stopPropagation()} style={{ ...panel, width: 560 }}>
+      <div ref={trapRef} role="dialog" aria-modal="true" aria-label={d.title} onClick={(e) => e.stopPropagation()} className="sw-modal-card" style={{ ...panel, width: 560 }}>
         <div style={{ display: "flex", alignItems: "center", marginBottom: 10 }}>
           <span style={{ display: "inline-block", fontSize: 10, fontWeight: 800, letterSpacing: "0.04em", color: (STATUS_TINT[d.status] || STATUS_TINT.Draft)[0], background: (STATUS_TINT[d.status] || STATUS_TINT.Draft)[1], padding: "3px 10px", borderRadius: 999 }}>{d.status}</span>
           {d.is_sop && <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 800, color: "var(--crimson)" }}>SOP</span>}

@@ -347,7 +347,7 @@ export function ProfileModal() {
       style={{ position: "fixed", inset: 0, background: "rgba(23,18,15,0.45)", backdropFilter: "blur(2px)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center" }}
       onClick={() => openProfile(null)}
     >
-      <div ref={trapRef} role="dialog" aria-modal="true" aria-label={p.name} onClick={(e) => e.stopPropagation()} style={{ width: 420, maxWidth: "92vw", maxHeight: "88vh", overflowY: "auto", background: "var(--sw-card)", borderRadius: 18, boxShadow: "0 30px 90px rgba(23,18,15,0.35)", padding: 0, animation: "swModalIn .22s var(--ease-brand)" }}>
+      <div ref={trapRef} role="dialog" aria-modal="true" aria-label={p.name} onClick={(e) => e.stopPropagation()} className="sw-modal-card" style={{ width: 420, maxWidth: "92vw", maxHeight: "88vh", overflowY: "auto", background: "var(--sw-card)", borderRadius: 18, boxShadow: "0 30px 90px rgba(23,18,15,0.35)", padding: 0, animation: "swModalIn .22s var(--ease-brand)" }}>
         <div style={{ position: "relative", background: "var(--sw-sidebar)", padding: "24px 24px 18px", borderBottom: "1px solid var(--sw-hair)" }}>
           <button onClick={() => openProfile(null)} aria-label="Close" style={{ position: "absolute", top: 14, right: 14, border: "none", background: "var(--sw-hover)", width: 26, height: 26, borderRadius: 99, cursor: "pointer", fontSize: 13, color: "var(--sw-text-soft)" }}><IconX /></button>
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
@@ -380,7 +380,7 @@ export function ProfileModal() {
               </button>
             ))}
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "100px 1fr", gap: "11px 10px", marginBottom: 6 }}>
+          <div className="sw-grid-label" style={{ gap: "11px 10px", marginBottom: 6 }}>
             {row("Email", p.email)}
             {row("Phone", p.phone || "—")}
             <span style={{ fontSize: 12, fontWeight: 400, color: "var(--sw-muted)" }} />
@@ -410,7 +410,7 @@ export function ProfileModal() {
               <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--sw-muted)", marginBottom: 10 }}>
                 Visible to Space Admins & Super Admin only
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
+              <div className="sw-grid-2" style={{ gap: 10, marginBottom: 12 }}>
                 <div style={{ background: "var(--sw-hover)", border: "1px solid var(--sw-hair)", borderRadius: 10, padding: "10px 12px" }}>
                   <div style={{ fontSize: 17, fontWeight: 400 }}>{open.length}</div>
                   <div style={{ fontSize: 11, color: "var(--sw-muted)", fontWeight: 400 }}>Open tasks</div>
@@ -420,7 +420,7 @@ export function ProfileModal() {
                   <div style={{ fontSize: 11, color: "var(--sw-muted)", fontWeight: 400 }}>On-time completion</div>
                 </div>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "100px 1fr", gap: "11px 10px" }}>
+              <div className="sw-grid-label" style={{ gap: "11px 10px" }}>
                 {row("Overdue rate", `${open.length ? Math.round((overdue.length / open.length) * 100) : 0}%`)}
                 <span style={{ fontSize: 12, fontWeight: 400, color: "var(--sw-muted)" }}>Account status</span>
                 <span style={{ fontSize: 12.5, fontWeight: 400, color: "var(--green)" }}>● Active</span>
@@ -508,7 +508,7 @@ export function MetricModal() {
       style={{ position: "fixed", inset: 0, background: "rgba(23,18,15,0.45)", backdropFilter: "blur(2px)", zIndex: 58, display: "flex", alignItems: "center", justifyContent: "center" }}
       onClick={() => setMetricModal(null)}
     >
-      <div ref={trapRef} role="dialog" aria-modal="true" aria-label={metricModal.title} onClick={(e) => e.stopPropagation()} style={{ width: 460, maxWidth: "92vw", maxHeight: "80vh", overflowY: "auto", background: "var(--sw-card)", borderRadius: 16, boxShadow: "0 30px 90px rgba(23,18,15,0.35)", padding: "22px 24px", animation: "swModalIn .18s ease" }}>
+      <div ref={trapRef} role="dialog" aria-modal="true" aria-label={metricModal.title} onClick={(e) => e.stopPropagation()} className="sw-modal-card" style={{ width: 460, maxWidth: "92vw", maxHeight: "80vh", overflowY: "auto", background: "var(--sw-card)", borderRadius: 16, boxShadow: "0 30px 90px rgba(23,18,15,0.35)", padding: "22px 24px", animation: "swModalIn .18s ease" }}>
         <div style={{ display: "flex", alignItems: "center", marginBottom: 14 }}>
           <h3 style={{ margin: 0, fontSize: 15.5, fontWeight: 400, flex: 1 }}>{metricModal.title}</h3>
           <button onClick={() => setMetricModal(null)} aria-label="Close" style={{ border: "none", background: "var(--sw-hover)", width: 26, height: 26, borderRadius: 99, cursor: "pointer", fontSize: 13, color: "var(--sw-text-soft)" }}><IconX /></button>

@@ -190,7 +190,7 @@ export function HomeSection() {
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, height: "100%" }}>
       {/* TOPBAR */}
-      <header style={{ height: 52, flex: "none", display: "flex", alignItems: "center", gap: 10, padding: "0 18px", borderBottom: "1px solid var(--sw-hair)", background: "var(--sw-page)" }}>
+      <header className="sw-topbar" style={{ height: 52, flex: "none", display: "flex", alignItems: "center", gap: 10, padding: "0 18px", borderBottom: "1px solid var(--sw-hair)", background: "var(--sw-page)" }}>
         <h1 style={{ fontSize: 14, fontWeight: 400, margin: 0, letterSpacing: "-0.01em" }}>My Work</h1>
         <div style={{ marginLeft: 6 }}>
           <GlobalSearch />
@@ -284,7 +284,7 @@ export function HomeSection() {
           {homePage === "today" && (
             <>
               {/* metric tiles */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 12, marginBottom: 18 }}>
+              <div className="sw-grid-5" style={{ gap: 12, marginBottom: 18 }}>
                 {metrics.map((m) => (
                   <button key={m.label} className="sw-card-h" onClick={m.nav} style={{ background: "var(--sw-card)", border: "1px solid var(--sw-hair)", borderRadius: 12, padding: "12px 14px", boxShadow: "var(--shadow-card)", cursor: "pointer", textAlign: "left", display: "block", width: "100%" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
@@ -326,7 +326,7 @@ export function HomeSection() {
               </section>
 
               {/* deadlines + at risk */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+              <div className="sw-grid-2" style={{ gap: 12, marginBottom: 12 }}>
                 <section style={{ background: "var(--sw-card)", border: "1px solid var(--sw-hair)", borderRadius: 12, padding: "16px 18px", boxShadow: "var(--shadow-card)" }}>
                   <h3 style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 400 }}>Upcoming deadlines</h3>
                   {deadlines.map((t) => {

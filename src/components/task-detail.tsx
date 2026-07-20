@@ -177,7 +177,7 @@ export function TaskDetailSlideOver() {
   return (
     <>
       <div style={{ position: "fixed", inset: 0, background: "rgba(23,18,15,0.4)", zIndex: 40 }} onClick={() => setActiveTaskId(null)} />
-      <div ref={trapRef} role="dialog" aria-modal="true" aria-label={t.name} onClick={(e) => e.stopPropagation()} style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: 560, maxWidth: "94vw", background: "var(--sw-card)", boxShadow: "-24px 0 60px rgba(23,18,15,.25)", zIndex: 41, display: "flex", flexDirection: "column" }}>
+      <div ref={trapRef} role="dialog" aria-modal="true" aria-label={t.name} onClick={(e) => e.stopPropagation()} className="sw-slideover-card" style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: 560, maxWidth: "94vw", background: "var(--sw-card)", boxShadow: "-24px 0 60px rgba(23,18,15,.25)", zIndex: 41, display: "flex", flexDirection: "column" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "16px 20px", borderBottom: "1px solid var(--sw-hair)", flex: "none" }}>
           <span style={{ width: 8, height: 8, borderRadius: 99, background: STATUS_COLORS[t.status], flex: "none" }} />
           <span style={{ fontSize: 11, fontWeight: 400, color: "var(--sw-muted)" }}>SW-{t.task_number}</span>
@@ -214,7 +214,7 @@ export function TaskDetailSlideOver() {
           {tab === "details" && (
             <>
               <h2 style={{ margin: "0 0 16px", fontSize: 19, fontWeight: 800, lineHeight: 1.3 }}>{t.name}</h2>
-              <div style={{ display: "grid", gridTemplateColumns: "96px 1fr", gap: "12px 10px", alignItems: "center", marginBottom: 6 }}>
+              <div className="sw-grid-label" style={{ gap: "12px 10px", alignItems: "center", marginBottom: 6 }}>
                 <span style={label}>Status</span>
                 <select
                   className="sw-select"

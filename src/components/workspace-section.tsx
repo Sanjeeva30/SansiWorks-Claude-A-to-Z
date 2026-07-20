@@ -242,7 +242,7 @@ export function WorkspaceSection() {
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, height: "100%" }}>
-      <header style={{ height: 52, flex: "none", display: "flex", alignItems: "center", gap: 10, padding: "0 22px", borderBottom: "1px solid var(--sw-hair)", background: "var(--sw-page)" }}>
+      <header className="sw-topbar" style={{ height: 52, flex: "none", display: "flex", alignItems: "center", gap: 10, padding: "0 22px", borderBottom: "1px solid var(--sw-hair)", background: "var(--sw-page)" }}>
         <h1 style={{ fontSize: 14, fontWeight: 400, margin: 0 }}>{pageTitle}</h1>
         <div style={{ flex: 1 }} />
         {workspacePage === "inbox" && (
@@ -325,7 +325,7 @@ export function WorkspaceSection() {
             <>
               <h2 style={{ fontFamily: "var(--font-serif)", fontWeight: 400, fontSize: 24, margin: "0 0 3px", fontStyle: "italic" }}>SOPs & Docs</h2>
               <p style={{ margin: "0 0 16px", fontSize: 12.5, color: "var(--sw-text-soft)" }}>Company SOPs go through department-head and Internal Audit review before they're official. Plain docs (handovers, briefs, notes) don&apos;t.</p>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 12, marginBottom: 16 }}>
+              <div className="sw-grid-5" style={{ gap: 12, marginBottom: 16 }}>
                 {docStats.map((s) => (
                   <button key={s.label} onClick={s.onClick} style={{ background: "var(--sw-card)", border: "1px solid var(--sw-hair)", borderRadius: 12, padding: "12px 14px", boxShadow: "var(--shadow-card)", cursor: "pointer", textAlign: "left" }}>
                     <div style={{ fontSize: 19, fontWeight: 800, color: s.color }}>{s.value}</div>
@@ -345,7 +345,7 @@ export function WorkspaceSection() {
                   </select>
                 ))}
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14 }}>
+              <div className="sw-grid-3" style={{ gap: 14 }}>
                 {filteredDocs.map((d) => {
                   const [sc, st] = STATUS_TINT[d.status] || STATUS_TINT.Draft;
                   return (
@@ -516,34 +516,36 @@ export function WorkspaceSection() {
               <h2 style={{ fontFamily: "var(--font-serif)", fontWeight: 400, fontSize: 24, margin: "0 0 3px", fontStyle: "italic" }}>Notification settings</h2>
               <p style={{ margin: "0 0 16px", fontSize: 12.5, color: "var(--sw-text-soft)" }}>Choose how each kind of update reaches you. Time-sensitive alerts arrive instantly; everything else waits for your daily digest.</p>
 
-              <section style={{ background: "var(--sw-card)", border: "1px solid var(--sw-hair)", borderRadius: 12, boxShadow: "var(--shadow-card)", overflow: "hidden", marginBottom: 14 }}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr repeat(4, 108px)", gap: 0, padding: "11px 18px", borderBottom: "1px solid var(--sw-hair)", background: "var(--sw-hover)" }}>
-                  <span style={{ fontSize: 11, fontWeight: 400, color: "var(--sw-muted)" }}>Notification type</span>
-                  {PREF_CHANNELS.map(([, l]) => (
-                    <span key={l} style={{ fontSize: 11, fontWeight: 400, color: "var(--sw-muted)", textAlign: "center" }}>{l}</span>
+              <section className="sw-table-scroll" style={{ background: "var(--sw-card)", border: "1px solid var(--sw-hair)", borderRadius: 12, boxShadow: "var(--shadow-card)", overflow: "hidden", marginBottom: 14 }}>
+                <div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr repeat(4, 108px)", gap: 0, padding: "11px 18px", borderBottom: "1px solid var(--sw-hair)", background: "var(--sw-hover)" }}>
+                    <span style={{ fontSize: 11, fontWeight: 400, color: "var(--sw-muted)" }}>Notification type</span>
+                    {PREF_CHANNELS.map(([, l]) => (
+                      <span key={l} style={{ fontSize: 11, fontWeight: 400, color: "var(--sw-muted)", textAlign: "center" }}>{l}</span>
+                    ))}
+                  </div>
+                  {PREF_CATS.map(([key, label, hint]) => (
+                    <div key={key} style={{ display: "grid", gridTemplateColumns: "1fr repeat(4, 108px)", alignItems: "center", padding: "11px 18px", borderBottom: "1px solid var(--sw-hair)" }}>
+                      <span>
+                        <div style={{ fontSize: 12.5, color: "var(--sw-text)" }}>{label}</div>
+                        {hint && <div style={{ fontSize: 10.5, color: "var(--sw-muted)", marginTop: 1 }}>{hint}</div>}
+                      </span>
+                      {PREF_CHANNELS.map(([val]) => {
+                        const selected = prefs[key] === val;
+                        return (
+                          <button key={val} onClick={() => setPref(key, val)} style={{ border: "none", background: "none", cursor: "pointer", display: "flex", justifyContent: "center", padding: "4px 0" }}>
+                            <span style={{ width: 15, height: 15, borderRadius: 99, border: `1.5px solid ${selected ? "var(--crimson)" : "var(--sw-hair)"}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                              <span style={{ width: 7, height: 7, borderRadius: 99, background: selected ? "var(--crimson)" : "transparent" }} />
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
                   ))}
                 </div>
-                {PREF_CATS.map(([key, label, hint]) => (
-                  <div key={key} style={{ display: "grid", gridTemplateColumns: "1fr repeat(4, 108px)", alignItems: "center", padding: "11px 18px", borderBottom: "1px solid var(--sw-hair)" }}>
-                    <span>
-                      <div style={{ fontSize: 12.5, color: "var(--sw-text)" }}>{label}</div>
-                      {hint && <div style={{ fontSize: 10.5, color: "var(--sw-muted)", marginTop: 1 }}>{hint}</div>}
-                    </span>
-                    {PREF_CHANNELS.map(([val]) => {
-                      const selected = prefs[key] === val;
-                      return (
-                        <button key={val} onClick={() => setPref(key, val)} style={{ border: "none", background: "none", cursor: "pointer", display: "flex", justifyContent: "center", padding: "4px 0" }}>
-                          <span style={{ width: 15, height: 15, borderRadius: 99, border: `1.5px solid ${selected ? "var(--crimson)" : "var(--sw-hair)"}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                            <span style={{ width: 7, height: 7, borderRadius: 99, background: selected ? "var(--crimson)" : "transparent" }} />
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                ))}
               </section>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+              <div className="sw-grid-2" style={{ gap: 14 }}>
                 <section style={{ ...card, padding: "18px 20px" }}>
                   <h3 style={{ margin: "0 0 4px", fontSize: 13.5, fontWeight: 400 }}>Daily digest</h3>
                   <p style={{ margin: "0 0 14px", fontSize: 11.5, color: "var(--sw-muted)" }}>One email each morning: what&apos;s due, what&apos;s new, and how your team is trending.</p>
@@ -755,7 +757,7 @@ export function WorkspaceSection() {
                             <span style={{ fontSize: 11, fontWeight: 400, color: "var(--sw-text-soft)", background: "var(--sw-hover)", border: "1px solid var(--sw-hair)", borderRadius: 999, padding: "4px 11px", marginRight: 6 }}>{d.mode}</span>
                             <button onClick={() => pushToast("Archiving departments needs Board sign-off (demo)")} style={{ padding: "6px 12px", borderRadius: 999, border: "1px solid var(--sw-hair)", background: "none", color: "var(--sw-muted)", fontSize: 11, fontWeight: 400, cursor: "pointer" }}>Archive</button>
                           </div>
-                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, paddingLeft: 18 }}>
+                          <div className="sw-grid-2" style={{ gap: 16, paddingLeft: 18 }}>
                             <div>
                               <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--sw-muted)", marginBottom: 6 }}>Department heads</div>
                               <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 6 }}>

@@ -159,6 +159,7 @@ export function QuickAddModal() {
     >
       <div
         onClick={(e) => { e.stopPropagation(); if (openDropdown) setOpenDropdown(null); }}
+        className="sw-modal-card"
         style={{ width: 900, maxWidth: "94vw", maxHeight: "90vh", background: "var(--sw-card)", borderRadius: 18, boxShadow: "0 30px 90px rgba(23,18,15,0.35)", animation: "swModalIn .22s var(--ease-brand)", display: "flex", flexDirection: "column", overflow: "hidden" }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "22px 26px", borderBottom: "1px solid var(--sw-hair)", flex: "none" }}>
@@ -169,7 +170,7 @@ export function QuickAddModal() {
           <button onClick={close} style={{ border: "none", background: "var(--sw-hover)", width: 30, height: 30, borderRadius: 99, cursor: "pointer", fontSize: 14, color: "var(--sw-text-soft)" }}><IconX /></button>
         </div>
 
-        <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
+        <div className="sw-modal-split" style={{ display: "flex", flex: 1, minHeight: 0 }}>
           <div style={{ flex: 1, minWidth: 0, overflowY: "auto", padding: "22px 26px 20px" }}>
             {label(<>Task title <span style={{ color: "var(--crimson)" }}>*</span></>)}
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Send Bank Mandiri trade documents"
@@ -189,7 +190,7 @@ export function QuickAddModal() {
               <AssigneePicker personal={personal} me={me} value={assigneeId} onChange={setAssigneeId} deptScoped={deptScoped} allProfiles={profiles} deptLabel={deptLabel} />
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 18 }}>
+            <div className="sw-grid-2" style={{ gap: 14, marginBottom: 18 }}>
               <div>
                 {label("Due date")}
                 <div style={{ position: "relative" }}>
@@ -220,7 +221,7 @@ export function QuickAddModal() {
               </div>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 18 }}>
+            <div className="sw-grid-2" style={{ gap: 14, marginBottom: 18 }}>
               <div>
                 {label("Reminder (optional)")}
                 <input type="datetime-local" value={reminder} onChange={(e) => setReminder(e.target.value)}
@@ -294,7 +295,7 @@ export function QuickAddModal() {
           </div>
 
           {/* RIGHT: SANSI ASSIST */}
-          <div style={{ width: 300, flex: "none", overflowY: "auto", background: "var(--sw-sidebar)", borderLeft: "1px solid var(--sw-hair)", padding: "22px 20px" }}>
+          <div className="sw-modal-split-side" style={{ width: 300, flex: "none", overflowY: "auto", background: "var(--sw-sidebar)", borderLeft: "1px solid var(--sw-hair)", padding: "22px 20px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
               <span style={{ display: "inline-flex", color: "var(--crimson)" }}><IconSparkle size={15} /></span>
               <span style={{ fontSize: 14, fontWeight: 400, flex: 1 }}>Sansi Assist</span>

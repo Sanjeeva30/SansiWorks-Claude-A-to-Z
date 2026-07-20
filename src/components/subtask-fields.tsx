@@ -56,7 +56,7 @@ export function SubtaskFields({
         <button onClick={onRemove} title="Remove subtask" style={{ border: "none", background: "none", color: "var(--sw-muted)", cursor: "pointer", padding: 2, display: "flex", flex: "none" }}><IconX /></button>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+      <div className="sw-grid-2" style={{ gap: 10, marginBottom: 10 }}>
         <div>
           <div style={{ fontSize: 10.5, color: "var(--sw-muted)", marginBottom: 5 }}>Assignee (R)</div>
           <AssigneePicker
@@ -90,7 +90,7 @@ export function SubtaskFields({
         />
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 10 }}>
+      <div className="sw-grid-2" style={{ gap: 10, marginTop: 10 }}>
         <div>
           <div style={{ fontSize: 10.5, color: "var(--sw-muted)", marginBottom: 5 }}>Reminder</div>
           <input type="datetime-local" value={draft.reminder} onChange={(e) => onChange({ ...draft, reminder: e.target.value })}

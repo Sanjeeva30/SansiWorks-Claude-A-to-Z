@@ -161,7 +161,7 @@ export function OrgAdmin({ tab }: { tab: "organisation" | "permissions" }) {
                 <button onClick={() => deleteTemplate(t.id)} style={pillBtn("var(--red)")}>Delete</button>
               </div>
               {editingTemplate?.id === t.id && (
-                <div style={{ paddingLeft: 12, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                <div className="sw-grid-2" style={{ paddingLeft: 12, gap: 16 }}>
                   <div>
                     <div style={label}>Screens</div>
                     {SCREENS.map(([key, lbl]) => (

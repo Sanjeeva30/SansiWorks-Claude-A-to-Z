@@ -124,7 +124,7 @@ export function OnboardingChecklist() {
       )}
 
       {stage === "checklist" && allDone && (
-        <div style={{ position: "fixed", bottom: 24, right: 24, width: 300, background: "#17120F", color: "#fff", borderRadius: 14, padding: "16px 18px", boxShadow: "0 20px 60px rgba(23,18,15,0.4)", display: "flex", alignItems: "center", gap: 10, animation: "swToastIn .25s ease", zIndex: 88 }}>
+        <div style={{ position: "fixed", bottom: 24, right: 24, left: 24, width: 300, maxWidth: "calc(100vw - 48px)", marginLeft: "auto", background: "#17120F", color: "#fff", borderRadius: 14, padding: "16px 18px", boxShadow: "0 20px 60px rgba(23,18,15,0.4)", display: "flex", alignItems: "center", gap: 10, animation: "swToastIn .25s ease", zIndex: 88 }}>
           <span style={{ color: "#BDDA5F", fontSize: 18 }}>✓</span>
           <span style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.4 }}>You&apos;re all set — welcome to SansiWorks.</span>
         </div>

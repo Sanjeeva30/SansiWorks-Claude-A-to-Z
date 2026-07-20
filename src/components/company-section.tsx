@@ -149,7 +149,7 @@ export function CompanySection() {
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, height: "100%" }}>
-      <header style={{ height: 52, flex: "none", display: "flex", alignItems: "center", gap: 10, padding: "0 22px", borderBottom: "1px solid var(--sw-hair)", background: "var(--sw-page)" }}>
+      <header className="sw-topbar" style={{ height: 52, flex: "none", display: "flex", alignItems: "center", gap: 10, padding: "0 22px", borderBottom: "1px solid var(--sw-hair)", background: "var(--sw-page)" }}>
         <h1 style={{ fontSize: 14, fontWeight: 400, margin: 0 }}>{companyPage === "executive" ? "Overview" : "People"}</h1>
         <div style={{ flex: 1 }} />
         {companyPage === "executive" && (
@@ -198,7 +198,7 @@ export function CompanySection() {
                 ))}
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
+              <div className="sw-grid-2" style={{ gap: 14, marginBottom: 14 }}>
                 <section style={{ background: "var(--sw-card)", border: "1px solid var(--sw-hair)", borderRadius: 12, padding: "16px 18px", boxShadow: "var(--shadow-card)" }}>
                   <h3 style={{ margin: "0 0 3px", fontSize: 13, fontWeight: 400 }}>Predicted late</h3>
                   <p style={{ margin: "0 0 10px", fontSize: 10.5, color: "var(--sw-muted)" }}>Due date proximity × assignee load × on-time history — flagged before they slip.</p>
@@ -243,7 +243,7 @@ export function CompanySection() {
                 </section>
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>
+              <div className="sw-grid-3" style={{ gap: 14 }}>
                 <section style={{ background: "var(--sw-card)", border: "1px solid var(--sw-hair)", borderRadius: 12, padding: "16px 18px", boxShadow: "var(--shadow-card)" }}>
                   <h3 style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 400 }}>Department risk</h3>
                   {filteredDeptStats.map((x) => (
@@ -319,7 +319,7 @@ export function CompanySection() {
                     </div>
                     <button onClick={() => setShowWidgetPicker(true)} style={{ padding: "7px 14px", borderRadius: 999, border: "none", background: "var(--crimson)", color: "#fff", fontSize: 12, fontWeight: 400, cursor: "pointer" }}>+ Add widget</button>
                   </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14 }}>
+                  <div className="sw-grid-3" style={{ gap: 14 }}>
                     {dashWidgets.map((w) => (
                       <div key={w.id} className="sw-card-h" onClick={w.drill} style={{ background: "var(--sw-card)", border: "1px solid var(--sw-hair)", borderRadius: 12, boxShadow: "var(--shadow-card)", padding: "16px 18px", position: "relative", cursor: "pointer" }}>
                         <button
