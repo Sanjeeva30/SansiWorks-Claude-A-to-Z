@@ -193,11 +193,11 @@ export function ListSection() {
         <div className="sw-topbar" style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 22px 10px" }}>
           <span style={{ width: 7, height: 7, borderRadius: 99, background: space?.color || "var(--navy)", flex: "none" }} />
           <span style={{ fontSize: 12.5, color: "var(--sw-muted)", fontWeight: 400 }}>{space?.name} /</span>
-          <h1 style={{ fontSize: 16, fontWeight: 400, margin: 0 }}>{list?.name}</h1>
+          <h1 className="sw-topbar-title" style={{ fontSize: 16, fontWeight: 400, margin: 0 }}>{list?.name}</h1>
           <div style={{ flex: 1 }} />
           <TopIcons />
           <button onClick={() => openQuickAdd()} style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--crimson)", color: "#fff", border: "none", borderRadius: 999, padding: "7px 15px", fontSize: 12.5, fontWeight: 400, cursor: "pointer", boxShadow: "0 8px 20px rgba(122,13,32,.25)" }}>
-            <span style={{ fontSize: 13, lineHeight: 1 }}>+</span> New task
+            <span style={{ fontSize: 13, lineHeight: 1 }}>+</span> <span className="sw-topbar-label">New task</span>
           </button>
         </div>
 
@@ -766,7 +766,7 @@ function EverythingView() {
       <header style={{ flex: "none", borderBottom: "1px solid var(--sw-hair)", background: "var(--sw-page)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 22px" }}>
           <span style={{ width: 7, height: 7, borderRadius: 99, background: "var(--navy)", flex: "none" }} />
-          <h1 style={{ fontSize: 16, fontWeight: 400, margin: 0 }}>Everything</h1>
+          <h1 className="sw-topbar-title" style={{ fontSize: 16, fontWeight: 400, margin: 0 }}>Everything</h1>
           <span style={{ fontSize: 11.5, color: "var(--sw-muted)", fontWeight: 400 }}>Every task across every space and list</span>
           <div style={{ flex: 1 }} />
           <TopIcons />

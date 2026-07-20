@@ -191,13 +191,13 @@ export function HomeSection() {
     <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, height: "100%" }}>
       {/* TOPBAR */}
       <header className="sw-topbar" style={{ height: 52, flex: "none", display: "flex", alignItems: "center", gap: 10, padding: "0 18px", borderBottom: "1px solid var(--sw-hair)", background: "var(--sw-page)" }}>
-        <h1 style={{ fontSize: 14, fontWeight: 400, margin: 0, letterSpacing: "-0.01em" }}>My Work</h1>
-        <div style={{ marginLeft: 6 }}>
+        <h1 className="sw-topbar-title" style={{ fontSize: 14, fontWeight: 400, margin: 0, letterSpacing: "-0.01em" }}>My Work</h1>
+        <div className="sw-topbar-search" style={{ marginLeft: 6 }}>
           <GlobalSearch />
         </div>
         <div style={{ flex: 1 }} />
         <button onClick={() => setShowQuickAdd(true)} style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--crimson)", color: "#fff", border: "none", borderRadius: 999, padding: "7px 15px", fontSize: 12.5, fontWeight: 400, cursor: "pointer", boxShadow: "0 8px 20px rgba(122,13,32,.25)" }}>
-          <span style={{ fontSize: 13, lineHeight: 1 }}>+</span> New task
+          <span style={{ fontSize: 13, lineHeight: 1 }}>+</span> <span className="sw-topbar-label">New task</span>
         </button>
         <TopIcons />
       </header>
@@ -214,7 +214,7 @@ export function HomeSection() {
             </div>
           )}
 
-          <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 18 }}>
+          <div className="sw-greeting-row" style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 18, flexWrap: "wrap", gap: 12 }}>
             <div>
               <h2 style={{ fontFamily: "var(--font-serif)", fontWeight: 400, fontSize: 26, margin: "0 0 3px", letterSpacing: "-0.01em" }}>
                 {greeting}, <em style={{ fontStyle: "italic" }}>{firstName}</em>.

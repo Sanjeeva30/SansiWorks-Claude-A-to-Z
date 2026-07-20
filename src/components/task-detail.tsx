@@ -178,7 +178,7 @@ export function TaskDetailSlideOver() {
     <>
       <div style={{ position: "fixed", inset: 0, background: "rgba(23,18,15,0.4)", zIndex: 40 }} onClick={() => setActiveTaskId(null)} />
       <div ref={trapRef} role="dialog" aria-modal="true" aria-label={t.name} onClick={(e) => e.stopPropagation()} className="sw-slideover-card" style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: 560, maxWidth: "94vw", background: "var(--sw-card)", boxShadow: "-24px 0 60px rgba(23,18,15,.25)", zIndex: 41, display: "flex", flexDirection: "column" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "16px 20px", borderBottom: "1px solid var(--sw-hair)", flex: "none" }}>
+        <div className="sw-topbar" style={{ display: "flex", alignItems: "center", gap: 10, padding: "16px 20px", borderBottom: "1px solid var(--sw-hair)", flex: "none" }}>
           <span style={{ width: 8, height: 8, borderRadius: 99, background: STATUS_COLORS[t.status], flex: "none" }} />
           <span style={{ fontSize: 11, fontWeight: 400, color: "var(--sw-muted)" }}>SW-{t.task_number}</span>
           {t.milestone && <span style={{ fontSize: 10, fontWeight: 400, color: "var(--crimson)", border: "1px solid var(--crimson)", borderRadius: 99, padding: "1px 8px" }}>◆ Milestone</span>}

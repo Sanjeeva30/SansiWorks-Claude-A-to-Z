@@ -243,7 +243,7 @@ export function WorkspaceSection() {
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, height: "100%" }}>
       <header className="sw-topbar" style={{ height: 52, flex: "none", display: "flex", alignItems: "center", gap: 10, padding: "0 22px", borderBottom: "1px solid var(--sw-hair)", background: "var(--sw-page)" }}>
-        <h1 style={{ fontSize: 14, fontWeight: 400, margin: 0 }}>{pageTitle}</h1>
+        <h1 className="sw-topbar-title" style={{ fontSize: 14, fontWeight: 400, margin: 0 }}>{pageTitle}</h1>
         <div style={{ flex: 1 }} />
         {workspacePage === "inbox" && (
           <button
@@ -623,9 +623,9 @@ export function WorkspaceSection() {
                 <section style={card}>
                   <h3 style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 400 }}>Active users</h3>
                   {sansicoUsers.map((u) => (
-                    <div key={u.id} style={{ display: "flex", alignItems: "center", gap: 11, padding: "9px 0", borderBottom: "1px solid var(--sw-hair)" }}>
+                    <div key={u.id} style={{ display: "flex", alignItems: "center", gap: 11, padding: "9px 0", borderBottom: "1px solid var(--sw-hair)", flexWrap: "wrap" }}>
                       <button onClick={() => openProfile(u.id)} title="View profile" style={{ width: 28, height: 28, borderRadius: 99, background: u.color, color: "#fff", fontSize: 10.5, fontWeight: 400, display: "flex", alignItems: "center", justifyContent: "center", flex: "none", border: "none", cursor: "pointer", padding: 0 }}>{initials(u.name)}</button>
-                      <button onClick={() => openProfile(u.id)} style={{ flex: 1, minWidth: 0, textAlign: "left", border: "none", background: "none", cursor: "pointer", padding: 0 }}>
+                      <button onClick={() => openProfile(u.id)} style={{ flex: "1 1 160px", minWidth: 0, textAlign: "left", border: "none", background: "none", cursor: "pointer", padding: 0 }}>
                         <div style={{ fontSize: 12.5, fontWeight: 400, display: "flex", alignItems: "center", gap: 6, color: "var(--sw-text)" }}>
                           {u.name}
                           {u.is_super && <span style={{ fontSize: 9.5, fontWeight: 400, color: "var(--crimson)", background: "rgba(122,13,32,0.08)", padding: "1px 7px", borderRadius: 999 }}>Super admin</span>}
@@ -695,15 +695,15 @@ export function WorkspaceSection() {
 
                   <section style={card}>
                     <h3 style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 400 }}>Assign people to levels</h3>
-                    <div style={{ display: "flex", alignItems: "center", gap: 11, padding: "0 0 7px" }}>
+                    <div className="sw-topbar-label" style={{ display: "flex", alignItems: "center", gap: 11, padding: "0 0 7px" }}>
                       <span style={{ flex: 1 }} />
                       <span style={{ width: 150, fontSize: 10.5, fontWeight: 400, color: "var(--sw-muted)", letterSpacing: "0.05em", textTransform: "uppercase", paddingLeft: 11 }}>Level</span>
                       <span style={{ width: 150, fontSize: 10.5, fontWeight: 400, color: "var(--sw-muted)", letterSpacing: "0.05em", textTransform: "uppercase", paddingLeft: 11 }}>Reports to</span>
                     </div>
                     {sansicoUsers.map((u) => (
-                      <div key={u.id} style={{ display: "flex", alignItems: "center", gap: 11, padding: "9px 0", borderBottom: "1px solid var(--sw-hair)" }}>
+                      <div key={u.id} style={{ display: "flex", alignItems: "center", gap: 11, padding: "9px 0", borderBottom: "1px solid var(--sw-hair)", flexWrap: "wrap" }}>
                         <span style={{ width: 26, height: 26, borderRadius: 99, background: u.color, color: "#fff", fontSize: 10, fontWeight: 400, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>{initials(u.name)}</span>
-                        <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 400 }}>{u.name}</span>
+                        <span style={{ flex: "1 1 100px", minWidth: 0, fontSize: 12.5, fontWeight: 400 }}>{u.name}</span>
                         <select
                           className="sw-select"
                           value={u.level_id}

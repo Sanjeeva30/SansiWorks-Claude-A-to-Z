@@ -250,7 +250,7 @@ export function TopIcons() {
           onClick={() => { setShowSansi((v) => !v); setShowNotif(false); }}
           style={{ display: "flex", alignItems: "center", gap: 5, background: "var(--sw-hover)", color: "var(--sw-text-soft)", border: "1px solid var(--sw-hair)", borderRadius: 999, padding: "6px 12px", fontSize: 12, fontWeight: 400, cursor: "pointer" }}
         >
-          <IconSparkle /> Sansi
+          <IconSparkle /> <span className="sw-topbar-label">Sansi</span>
         </button>
         {showSansi && <SansiPopover onClose={() => setShowSansi(false)} />}
       </div>

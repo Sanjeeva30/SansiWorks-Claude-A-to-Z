@@ -217,6 +217,13 @@ button:active { transform: scale(0.97); }
     gap: 4px !important;
     padding: 10px 14px !important;
   }
+  /* topbars: drop the least-essential items so the important
+     buttons (New task, Sansi, notifications) never get pushed
+     off-screen; anything left still overflowing scrolls rather
+     than silently clipping */
+  .sw-topbar-title, .sw-topbar-search { display: none !important; }
+  .sw-topbar { overflow-x: auto !important; }
+  .sw-topbar-label { display: none !important; }
 }
 @media (max-width: 480px) {
   .sw-grid-2, .sw-grid-3, .sw-grid-5 { grid-template-columns: 1fr !important; }
