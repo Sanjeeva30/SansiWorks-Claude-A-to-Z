@@ -159,7 +159,7 @@ export function HomeSection() {
           <div style={{ background: "var(--sw-card)", border: "1px solid var(--sw-hair)", borderRadius: 12, boxShadow: "var(--shadow-card)", overflow: "hidden" }}>
             {grp.rows.map((t) => (
               <button key={t.id} className="sw-row" onClick={() => setActiveTaskId(t.id)} style={{ display: "flex", alignItems: "center", gap: 11, width: "100%", textAlign: "left", padding: density === "compact" ? "7px 16px" : "11px 16px", border: "none", borderBottom: "1px solid var(--sw-hair)", background: "none", cursor: "pointer" }}>
-                <span style={{ fontSize: 10, color: "var(--sw-muted)", fontWeight: 400, width: 48, flex: "none" }}>SW-{t.task_number}</span>
+                <span className="sw-ticket-no" style={{ fontSize: 10, color: "var(--sw-muted)", fontWeight: 400, width: 48, flex: "none" }}>SW-{t.task_number}</span>
                 <span style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 12.5, fontWeight: 400, color: "var(--sw-text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.name}</div>
                   <div style={{ fontSize: 10.5, color: "var(--sw-muted)", marginTop: 1 }}>{listPathOf(t)}</div>

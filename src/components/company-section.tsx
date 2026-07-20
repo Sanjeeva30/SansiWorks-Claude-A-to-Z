@@ -162,12 +162,12 @@ export function CompanySection() {
         <div style={{ maxWidth: 1180, margin: "0 auto" }}>
           {companyPage === "executive" && (
             <>
-              <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 16 }}>
+              <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
                 <div>
                   <h2 style={{ fontFamily: "var(--font-serif)", fontWeight: 400, fontSize: 24, margin: "0 0 3px", fontStyle: "italic" }}>Overview</h2>
                   <p style={{ margin: 0, fontSize: 12.5, color: "var(--sw-text-soft)" }}>Company-wide performance across all departments.</p>
                 </div>
-                <div style={{ display: "flex", gap: 8 }}>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   <select className="sw-select" value={deptFilter} onChange={(e) => setDeptFilter(e.target.value)} style={{ height: 32, borderRadius: 8, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "0 10px", fontSize: 12, color: "var(--sw-text)" }}>
                     <option>All departments</option>
                     {departments.map((d) => <option key={d.id}>{d.name}</option>)}
@@ -178,7 +178,7 @@ export function CompanySection() {
                 </div>
               </div>
 
-              <div style={{ display: "flex", gap: 20, alignItems: "center", background: "var(--sw-card)", border: "1px solid var(--sw-hair)", borderRadius: 12, padding: "16px 20px", boxShadow: "var(--shadow-card)", marginBottom: 14 }}>
+              <div style={{ display: "flex", gap: 20, alignItems: "center", background: "var(--sw-card)", border: "1px solid var(--sw-hair)", borderRadius: 12, padding: "16px 20px", boxShadow: "var(--shadow-card)", marginBottom: 14, flexWrap: "wrap" }}>
                 <div style={{ position: "relative", width: 66, height: 66, borderRadius: 99, background: `conic-gradient(var(--green) 0% ${health}%, var(--sw-hair) ${health}% 100%)`, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
                   <div style={{ width: 50, height: 50, borderRadius: 99, background: "var(--sw-card)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 400 }}>{health}</div>
                 </div>
@@ -186,9 +186,9 @@ export function CompanySection() {
                   <div style={{ fontSize: 13, fontWeight: 400 }}>Company health</div>
                   <div style={{ fontSize: 11.5, color: "var(--sw-muted)" }}>{health >= 70 ? "Healthy" : "Needs attention"} — {onTrack} depts on track</div>
                 </div>
-                <div style={{ width: 1, alignSelf: "stretch", background: "var(--sw-hair)" }} />
+                <div className="sw-topbar-label" style={{ width: 1, alignSelf: "stretch", background: "var(--sw-hair)" }} />
                 {execMetrics.map((m, i) => (
-                  <button key={m.label} onClick={m.nav} style={{ flex: 1, border: "none", background: "none", padding: 0, textAlign: "left", cursor: "pointer" }}>
+                  <button key={m.label} onClick={m.nav} style={{ flex: "1 1 90px", minWidth: 90, border: "none", background: "none", padding: 0, textAlign: "left", cursor: "pointer" }}>
                     <div style={{ fontSize: 20, fontWeight: 800, lineHeight: 1, color: m.color, fontVariantNumeric: "tabular-nums" }}>{m.value}</div>
                     <div style={{ fontSize: 11, color: "var(--sw-text-soft)", marginTop: 5, fontWeight: 400 }}>{m.label}</div>
                     <svg width="100%" height="16" viewBox="0 0 120 18" preserveAspectRatio="none" style={{ display: "block", marginTop: 6, opacity: 0.85 }}>

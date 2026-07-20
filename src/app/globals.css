@@ -224,8 +224,18 @@ button:active { transform: scale(0.97); }
   .sw-topbar-title, .sw-topbar-search { display: none !important; }
   .sw-topbar { overflow-x: auto !important; }
   .sw-topbar-label { display: none !important; }
+  /* any button/select in a topbar keeps its text on one line and
+     never shrinks below that — the row scrolls instead of the
+     text wrapping into a garbled multi-line pill */
+  .sw-topbar > button, .sw-topbar > select, .sw-topbar > a {
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
 }
 @media (max-width: 480px) {
+  /* ticket numbers (SW-123) are the least useful column on a task
+     row on a phone — drop them so the task name gets the room */
+  .sw-ticket-no { display: none !important; }
   .sw-grid-2, .sw-grid-3, .sw-grid-5 { grid-template-columns: 1fr !important; }
   .sw-grid-label { grid-template-columns: 1fr !important; gap: 3px !important; }
   .sw-modal-split { flex-direction: column !important; }

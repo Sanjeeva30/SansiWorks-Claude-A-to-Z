@@ -162,7 +162,7 @@ export function QuickAddModal() {
         className="sw-modal-card"
         style={{ width: 900, maxWidth: "94vw", maxHeight: "90vh", background: "var(--sw-card)", borderRadius: 18, boxShadow: "0 30px 90px rgba(23,18,15,0.35)", animation: "swModalIn .22s var(--ease-brand)", display: "flex", flexDirection: "column", overflow: "hidden" }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "22px 26px", borderBottom: "1px solid var(--sw-hair)", flex: "none" }}>
+        <div className="sw-topbar" style={{ display: "flex", alignItems: "center", gap: 12, padding: "22px 26px", borderBottom: "1px solid var(--sw-hair)", flex: "none" }}>
           <span style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(122,13,32,0.1)", color: "var(--crimson)", display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
             <IconTaskPlus />
           </span>

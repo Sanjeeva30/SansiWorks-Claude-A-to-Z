@@ -53,7 +53,7 @@ const FEATURE_HELP: Record<string, string> = {
 };
 
 const card: React.CSSProperties = { background: "var(--sw-card)", border: "1px solid var(--sw-hair)", borderRadius: 12, boxShadow: "var(--shadow-card)", padding: "16px 18px" };
-const pillBtn = (color: string): React.CSSProperties => ({ padding: "6px 12px", borderRadius: 999, border: `1px solid ${color === "var(--green)" ? "var(--green)" : "var(--sw-hair)"}`, background: "none", color, fontSize: 11.5, fontWeight: 400, cursor: "pointer" });
+const pillBtn = (color: string): React.CSSProperties => ({ padding: "6px 12px", borderRadius: 999, border: `1px solid ${color === "var(--green)" ? "var(--green)" : "var(--sw-hair)"}`, background: "none", color, fontSize: 11.5, fontWeight: 400, cursor: "pointer", whiteSpace: "nowrap", flex: "none" });
 
 export function WorkspaceSection() {
   const store = useStore();
@@ -251,18 +251,18 @@ export function WorkspaceSection() {
               patch("notifications", notifications.map((n) => ({ ...n, read: true })));
               if (me) await supabase.from("notifications").update({ read: true }).eq("profile_id", me.id);
             }}
-            style={{ padding: "7px 14px", borderRadius: 999, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", color: "var(--sw-text-soft)", fontSize: 12, fontWeight: 400, cursor: "pointer" }}
+            style={{ padding: "7px 14px", borderRadius: 999, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", color: "var(--sw-text-soft)", fontSize: 12, fontWeight: 400, cursor: "pointer", whiteSpace: "nowrap", flex: "none" }}
           >
             Mark all read
           </button>
         )}
         {workspacePage === "docs" && (
-          <button onClick={() => setShowNewDoc(true)} style={{ padding: "7px 15px", borderRadius: 999, border: "none", background: "var(--crimson)", color: "#fff", fontSize: 12.5, fontWeight: 400, cursor: "pointer" }}>+ New SOP</button>
+          <button onClick={() => setShowNewDoc(true)} style={{ padding: "7px 15px", borderRadius: 999, border: "none", background: "var(--crimson)", color: "#fff", fontSize: 12.5, fontWeight: 400, cursor: "pointer", whiteSpace: "nowrap", flex: "none" }}>+ New SOP</button>
         )}
         {workspacePage === "forms" && (
           <>
-            <button onClick={() => setShowPortal(true)} style={{ padding: "7px 15px", borderRadius: 999, border: "1px solid var(--crimson)", background: "none", color: "var(--crimson)", fontSize: 12, fontWeight: 400, cursor: "pointer" }}>View public portal</button>
-            <button onClick={() => { setNewForm((f) => ({ ...f, ownerId: f.ownerId || me?.id || "" })); setShowNewForm(true); }} style={{ padding: "7px 15px", borderRadius: 999, border: "none", background: "var(--crimson)", color: "#fff", fontSize: 12.5, fontWeight: 400, cursor: "pointer" }}>+ New form</button>
+            <button onClick={() => setShowPortal(true)} style={{ padding: "7px 15px", borderRadius: 999, border: "1px solid var(--crimson)", background: "none", color: "var(--crimson)", fontSize: 12, fontWeight: 400, cursor: "pointer", whiteSpace: "nowrap", flex: "none" }}>View public portal</button>
+            <button onClick={() => { setNewForm((f) => ({ ...f, ownerId: f.ownerId || me?.id || "" })); setShowNewForm(true); }} style={{ padding: "7px 15px", borderRadius: 999, border: "none", background: "var(--crimson)", color: "#fff", fontSize: 12.5, fontWeight: 400, cursor: "pointer", whiteSpace: "nowrap", flex: "none" }}>+ New form</button>
           </>
         )}
         <TopIcons />
@@ -423,7 +423,7 @@ export function WorkspaceSection() {
                       {profiles.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                     </select>
                   </div>
-                  <div style={{ display: "flex", gap: 8, marginBottom: subs.length && showSubs ? 12 : 0 }}>
+                  <div style={{ display: "flex", gap: 8, marginBottom: subs.length && showSubs ? 12 : 0, flexWrap: "wrap" }}>
                     <button
                       onClick={() => {
                         try { navigator.clipboard.writeText(`${window.location.origin}/portal?form=${f.id}`); } catch {}

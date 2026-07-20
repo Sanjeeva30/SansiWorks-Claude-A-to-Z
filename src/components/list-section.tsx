@@ -271,7 +271,7 @@ export function ListSection() {
                 {grp.rows.map((t) => (
                   <div key={t.id} onClick={() => setActiveTaskId(t.id)} role="button" tabIndex={0} className="sw-row" style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left", padding: rowPad, borderBottom: "1px solid var(--sw-hair)", background: "none", cursor: "pointer" }}>
                     <span style={{ width: 7, height: 7, borderRadius: 99, background: STATUS_COLORS[t.status], flex: "none" }} />
-                    <span style={{ fontSize: 10, color: "var(--sw-muted)", width: 46, flex: "none" }}>SW-{t.task_number}</span>
+                    <span className="sw-ticket-no" style={{ fontSize: 10, color: "var(--sw-muted)", width: 46, flex: "none" }}>SW-{t.task_number}</span>
                     <span style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 8 }}>
                       {t.milestone && <span title="Milestone" style={{ color: "var(--crimson)", fontSize: 10, flex: "none" }}>◆</span>}
                       <span style={{ fontSize: 12.5, fontWeight: 400, color: "var(--sw-text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.name}</span>
@@ -790,7 +790,7 @@ function EverythingView() {
                     style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left", padding: "11px 16px", border: "1px solid var(--sw-hair)", borderRadius: 10, background: "var(--sw-card)", cursor: "pointer", boxShadow: "var(--shadow-card)", marginBottom: 6 }}
                   >
                     <span style={{ width: 8, height: 8, borderRadius: 99, background: STATUS_COLORS[item.task.status], flex: "none" }} />
-                    <span style={{ fontSize: 10, color: "var(--sw-muted)", width: 46, flex: "none" }}>SW-{item.task.task_number}</span>
+                    <span className="sw-ticket-no" style={{ fontSize: 10, color: "var(--sw-muted)", width: 46, flex: "none" }}>SW-{item.task.task_number}</span>
                     <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 400, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.task.name}</span>
                     <span style={{ fontSize: 11, fontWeight: 400, color: PRIORITY_COLORS[item.task.priority], flex: "none" }}>{item.task.priority}</span>
                     <span style={{ fontSize: 12, color: dueColorFor(item.task), width: 60, textAlign: "right", flex: "none", fontWeight: 400 }}>{item.task.due ? fmtShort(item.task.due) : ""}</span>
