@@ -390,13 +390,13 @@ export function CompanySection() {
                   <div key={st.p.id} style={{ background: "var(--sw-card)", border: "1px solid var(--sw-hair)", borderRadius: 12, boxShadow: "var(--shadow-card)", marginBottom: 10, overflow: "hidden" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: peoplePad }}>
                       <button onClick={() => openProfile(st.p.id)} title="View profile" style={{ width: 34, height: 34, borderRadius: 99, background: st.p.color, color: "#fff", fontSize: 12, fontWeight: 400, display: "flex", alignItems: "center", justifyContent: "center", flex: "none", border: "none", cursor: "pointer", padding: 0 }}>{initials(st.p.name)}</button>
-                      <button onClick={() => openProfile(st.p.id)} style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, textAlign: "left", padding: 0, border: "none", background: "none", cursor: "pointer" }} title="View full profile">
+                      <button onClick={() => openProfile(st.p.id)} className="sw-person-meta" style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 0, textAlign: "left", padding: 0, border: "none", background: "none", cursor: "pointer" }} title="View full profile">
                         <span style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontSize: 13, fontWeight: 400 }}>{st.p.name}</div>
                           <div style={{ fontSize: 11, color: "var(--sw-muted)" }}>{dept?.name || st.p.role_title}</div>
                         </span>
                         <span style={{ fontSize: 11.5, fontWeight: 400, color: "var(--sw-text-soft)", width: 70, textAlign: "right" }}>{st.open.length} open</span>
-                        <div style={{ width: 80, height: 5, borderRadius: 99, background: "var(--sw-hover)", overflow: "hidden", margin: "0 4px" }}>
+                        <div className="sw-people-bar" style={{ width: 80, height: 5, borderRadius: 99, background: "var(--sw-hover)", overflow: "hidden", margin: "0 4px" }}>
                           <div style={{ height: "100%", borderRadius: 99, background: effColor(st.eff), width: `${st.eff}%` }} />
                         </div>
                         <span style={{ fontSize: 11, fontWeight: 400, color: effColor(st.eff), width: 76, textAlign: "right" }}>{st.eff}% eff.</span>

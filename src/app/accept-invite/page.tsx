@@ -79,7 +79,7 @@ function AcceptInviteInner() {
   const cardShadow = "0 1px 2px rgba(23,18,15,.04), 0 8px 20px rgba(23,18,15,.06), 0 24px 64px rgba(23,18,15,.08)";
 
   return (
-    <div style={{ minHeight: "100vh", width: "100%", fontFamily: "var(--font-sans)", color: "#17120F", display: "flex", flexDirection: "column", background: "#FAF8F4" }}>
+    <div className="sw-vh-min" style={{ width: "100%", fontFamily: "var(--font-sans)", color: "#17120F", display: "flex", flexDirection: "column", background: "#FAF8F4" }}>
       <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "40px 20px" }}>
         <div style={{ width: 440, maxWidth: "100%" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 28 }}>

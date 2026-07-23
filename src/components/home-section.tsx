@@ -221,8 +221,8 @@ export function HomeSection() {
               </h2>
               <p style={{ margin: 0, fontSize: 12.5, color: "var(--sw-text-soft)" }}>Here&apos;s what&apos;s happening with your work today.</p>
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ display: "flex", gap: 3, background: "var(--sw-hover)", border: "1px solid var(--sw-hair)", borderRadius: 999, padding: 3 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", gap: 3, background: "var(--sw-hover)", border: "1px solid var(--sw-hair)", borderRadius: 999, padding: 3, flexWrap: "wrap" }}>
                 {TABS.map((tb) => (
                   <button key={tb.key} onClick={() => setHomePage(tb.key)} style={{ padding: "4px 13px", borderRadius: 999, border: "none", cursor: "pointer", fontSize: 11, fontWeight: 400, background: homePage === tb.key ? "var(--crimson)" : "transparent", color: homePage === tb.key ? "#fff" : "var(--sw-text-soft)" }}>
                     {tb.label}
@@ -234,7 +234,7 @@ export function HomeSection() {
                   {density === "compact" ? "Comfortable" : "Compact"}
                 </button>
               )}
-              <span style={{ fontSize: 11.5, color: "var(--sw-muted)", fontWeight: 400 }}>{fmtFull(today)}</span>
+              <span className="sw-hide-mobile" style={{ fontSize: 11.5, color: "var(--sw-muted)", fontWeight: 400 }}>{fmtFull(today)}</span>
             </div>
           </div>
 

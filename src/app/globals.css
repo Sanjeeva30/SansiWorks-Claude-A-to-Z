@@ -192,20 +192,43 @@ button:active { transform: scale(0.97); }
    grid-template-columns instead of inline style objects).
    ============================================================ */
 :root { --sw-gantt-name: 240px; }
+
+/* ---- viewport-height units ----
+   iOS Safari reports 100vh as the height WITH the URL bar hidden, which
+   is taller than the actually-visible area. Any full-height container
+   using 100vh therefore hangs off the bottom of the screen, and with
+   overflow:hidden that content becomes permanently unreachable. `dvh`
+   tracks the real visible height. vh first as the fallback for old
+   browsers that don't support dvh. */
+.sw-vh-full { height: 100vh; height: 100dvh; }
+.sw-vh-min { min-height: 100vh; min-height: 100dvh; }
+
+/* Nothing may make the page itself scroll sideways. This is a guard
+   rail, not a fix — every real overflow is fixed at its source so
+   content fits or scrolls inside its own container. */
+html, body { max-width: 100%; overflow-x: hidden; }
+
 .sw-grid-2 { display: grid; grid-template-columns: 1fr 1fr; }
 .sw-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); }
 .sw-grid-5 { display: grid; grid-template-columns: repeat(5, 1fr); }
 .sw-grid-label { display: grid; grid-template-columns: 96px 1fr; }
 .sw-table-row5 { display: grid; grid-template-columns: 1fr repeat(4, 108px); }
 
+/* Grid and flex items default to min-width:auto — they refuse to shrink
+   below their content's intrinsic width. That is the single most common
+   reason a layout blows past a phone's screen: a 1fr column measuring
+   wider than the container it sits in. Letting these shrink is what
+   makes long text ellipsize instead of pushing the page sideways. */
+.sw-grid-2 > *, .sw-grid-3 > *, .sw-grid-5 > *,
+.sw-grid-label > *, .sw-table-row5 > * { min-width: 0; }
+
 /* main content column next to the sidebar needs room for the
    fixed hamburger button below 768px */
 @media (max-width: 768px) {
   main, .sw-main { padding-top: 56px !important; }
   .sw-topbar { padding-left: 56px !important; }
-  /* nothing inside the content column may widen the page itself —
-     wide surfaces scroll in their own containers */
-  main { overflow-x: clip; }
+  /* main content gets tighter side padding so cards have real room */
+  main { padding-left: 14px !important; padding-right: 14px !important; }
   /* calendar: the "Next deadlines" sidebar stacks below the grid
      instead of overlapping it */
   .sw-cal-row { flex-direction: column !important; }
@@ -267,23 +290,34 @@ button:active { transform: scale(0.97); }
 
   /* modals go edge-to-edge full screen on small phones */
   .sw-modal-card {
-    width: 100vw !important;
-    max-width: 100vw !important;
-    height: 100vh !important;
-    max-height: 100vh !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
     border-radius: 0 !important;
   }
   .sw-slideover-card {
-    width: 100vw !important;
-    max-width: 100vw !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: 100dvh !important;
   }
 }
 
 /* fixed-column tables (radio/checkbox matrices) keep their shape
    but scroll horizontally on narrow screens instead of squeezing */
 @media (max-width: 640px) {
-  .sw-table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  .sw-table-scroll > * { min-width: 560px; }
+  /* !important because these sections carry an inline `overflow:hidden`
+     for their rounded corners — without it the inline style wins and
+     the table is clipped (unreachable) instead of scrollable. */
+  .sw-table-scroll { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
+  .sw-table-scroll > * { min-width: 520px; }
+
+  /* People rows: name takes its own line so the open-count and
+     efficiency badge sit on a second row instead of being shoved
+     off the right edge. The bar duplicates the % number — drop it. */
+  .sw-person-meta { flex-wrap: wrap; }
+  .sw-person-meta > span:first-child { flex: 1 1 100% !important; }
+  .sw-people-bar { display: none !important; }
   .sw-calendar-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .sw-calendar-scroll > * { min-width: 640px; }
 }

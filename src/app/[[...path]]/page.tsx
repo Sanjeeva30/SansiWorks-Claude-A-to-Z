@@ -21,7 +21,7 @@ function AppShell() {
 
   if (loading || !me) {
     return (
-      <div style={{ display: "flex", height: "100vh", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 14, background: "var(--sw-page)" }}>
+      <div className="sw-vh-full" style={{ display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 14, background: "var(--sw-page)" }}>
         <div style={{ display: "flex", width: 38, height: 5, borderRadius: 99, overflow: "hidden" }}>
           <span style={{ flex: 1, background: "#7A0D20" }} /><span style={{ flex: 1, background: "#22409E" }} /><span style={{ flex: 1, background: "#0D4F31" }} /><span style={{ flex: 1, background: "#F3263E" }} /><span style={{ flex: 1, background: "#BDDA5F" }} />
         </div>
@@ -31,7 +31,7 @@ function AppShell() {
   }
 
   return (
-    <div style={{ display: "flex", height: "100vh", width: "100%", background: "var(--sw-page)", fontFamily: "var(--font-sans)", color: "var(--sw-text)", overflow: "hidden" }}>
+    <div className="sw-vh-full sw-app-shell" style={{ display: "flex", width: "100%", background: "var(--sw-page)", fontFamily: "var(--font-sans)", color: "var(--sw-text)", overflow: "hidden" }}>
       <button
         className="sw-hamburger"
         aria-label="Open navigation"

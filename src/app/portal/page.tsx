@@ -56,7 +56,7 @@ function PortalInner() {
   };
 
   return (
-    <div style={{ minHeight: "100vh", background: "#FFFFFF", fontFamily: "var(--font-sans)", color: "#17120F" }}>
+    <div className="sw-vh-min" style={{ background: "#FFFFFF", fontFamily: "var(--font-sans)", color: "#17120F" }}>
       <div style={{ display: "flex", height: 4 }}>
         <span style={{ flex: 1, background: "#7A0D20" }} /><span style={{ flex: 1, background: "#22409E" }} /><span style={{ flex: 1, background: "#0D4F31" }} /><span style={{ flex: 1, background: "#F3263E" }} /><span style={{ flex: 1, background: "#BDDA5F" }} />
       </div>

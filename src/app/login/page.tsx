@@ -29,7 +29,7 @@ export default function LoginPage() {
   const input: React.CSSProperties = { width: "100%", height: 44, borderRadius: 10, border: "1.5px solid #E5DFD8", background: "#FAF8F4", padding: "0 14px", fontSize: 14, outline: "none" };
 
   return (
-    <div style={{ minHeight: "100vh", width: "100%", background: "#FFFFFF", fontFamily: "var(--font-sans)", color: "#17120F", display: "flex", flexDirection: "column" }}>
+    <div className="sw-vh-min" style={{ width: "100%", background: "#FFFFFF", fontFamily: "var(--font-sans)", color: "#17120F", display: "flex", flexDirection: "column" }}>
       <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "40px 20px" }}>
         <div style={{ width: 400, maxWidth: "100%" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 36 }}>
