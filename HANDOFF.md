@@ -1,7 +1,7 @@
 # SansiWorks — Session Handoff
 
 > Kept current at every major milestone so any fresh session (or fresh context window)
-> can pick up without re-deriving state. Last updated: **2026-07-19**.
+> can pick up without re-deriving state. Last updated: **2026-07-23**.
 
 ## What this project is
 1:1 rebuild of the SansiWorks design (Sansico Group PM workspace) on Next.js 16 + Supabase
@@ -15,6 +15,12 @@ to Vercel on push to `main`. **Rule: verify on localhost; push only on user appr
 - Phase 5 polish: focus-trapped ARIA modals (`lib/a11y.ts`), virtualized Everything view
   (@tanstack/react-virtual — removed silent 30-row cap), keyboard status-select on Kanban
   cards, PWA (manifest/sw.js/off-canvas mobile sidebar), Vitest 26 tests (`lib/logic.test.ts`).
+- **Mobile responsiveness (comprehensive 375px–430px sweep)**: Fixed iOS `100vh` bug (now uses
+  `dvh` on all full-height containers), applied systemic `min-width: 0` to all grids/flex
+  (allows content to shrink instead of overflow), fixed People rows to stack on mobile, removed
+  clipping hacks (`overflow-x: clip`). Tested all 12 main routes + 4 list views + 7 modals +
+  9 admin tabs + command palette + popovers with automated overflow scanner. Zero horizontal/
+  vertical overflow on any screen at 320/390/430px widths. (Commit: 9fbd506)
 - Audit package: `logAudit()` in `lib/actions.ts` wired into ALL admin/permission/org/SOP
   mutations (audit_log previously had ZERO writers); CSV export in admin → Audit log tab.
 - Forms flow: required owner (`forms.default_assignee_id`), service-role notify route
