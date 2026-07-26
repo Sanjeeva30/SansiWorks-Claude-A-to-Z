@@ -85,7 +85,7 @@ export async function POST(req: NextRequest) {
     supabase.from("org_units").select("id,name,type,parent_id"),
     supabase.from("assignments").select("profile_id,function_name,scope_unit_id,reports_to_unit_id"),
     supabase.from("org_unit_heads").select("unit_id,profile_id"),
-    supabase.from("levels").select("id,name,sort"),
+    supabase.from("levels").select("id,name,sort,exec_visibility"),
     supabase.from("org_unit_members").select("department_id,profile_id"),
   ]);
   const me = meRes.data;
@@ -109,7 +109,17 @@ export async function POST(req: NextRequest) {
     return short.length > 3 && q.includes(short);
   });
 
-  const [myTasksRes, mentionedTasksRes, approvalsRes, remindersRes] = await Promise.all([
+  /* Company-scope questions ("what is at risk this week?", "how are we doing?")
+     used to be answered from the asker's own task list alone, because that was the
+     only task data in the grounding context. The result was Sansi naming one
+     personal item while the Overview page showed three company criticals — the
+     same question, two different answers. Company-wide rows are fetched for anyone
+     whose level carries exec_visibility (or a super admin), matching how the
+     Overview and Reports screens already gate company data. */
+  const myLevel = levels.find((l) => l.id === me?.level_id);
+  const seesCompany = !!me?.is_super || !!myLevel?.exec_visibility;
+
+  const [myTasksRes, mentionedTasksRes, approvalsRes, remindersRes, companyRes] = await Promise.all([
     supabase.from("tasks").select("id,name,status,priority,due,assignee_id,accountable_id")
       .or(`assignee_id.eq.${auth.user.id},accountable_id.eq.${auth.user.id}`).neq("status", "Done").order("due").limit(25),
     mentionedPeople.length
@@ -118,6 +128,9 @@ export async function POST(req: NextRequest) {
       : Promise.resolve({ data: [] }),
     supabase.from("approvals").select("task_id,requester_id,kind,requested_due,status").eq("status", "pending").limit(10),
     supabase.from("reminders").select("title,remind_at").eq("profile_id", auth.user.id).eq("status", "pending").order("remind_at").limit(5),
+    seesCompany
+      ? supabase.from("tasks").select("id,name,status,priority,due,assignee_id").neq("status", "Done").order("due").limit(400)
+      : Promise.resolve({ data: [] }),
   ]);
 
   const fmtTask = (t: { name: string; status: string; priority: string; due: string | null; assignee_id?: string | null }) =>
@@ -165,6 +178,47 @@ export async function POST(req: NextRequest) {
   const myReminders = remindersRes.data || [];
   if (myReminders.length) sections.push(`Your upcoming reminders:\n${myReminders.map((r) => `- ${r.title} at ${r.remind_at}`).join("\n")}`);
 
+  /* Company-wide risk, using the same rule as the Overview's "Predicted late":
+     overdue, or marked stuck, or due within 4 days while the assignee is loaded.
+     Kept in sync deliberately — Sansi and the dashboard answering the same
+     question differently is worse than either being wrong alone. */
+  const companyTasks = companyRes.data || [];
+  if (seesCompany && companyTasks.length) {
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const in4 = new Date(); in4.setDate(in4.getDate() + 4);
+    const soonIso = in4.toISOString().slice(0, 10);
+    const loadOf = new Map<string, number>();
+    for (const t of companyTasks) if (t.assignee_id) loadOf.set(t.assignee_id, (loadOf.get(t.assignee_id) || 0) + 1);
+
+    const risky = companyTasks
+      .filter((t) => t.due || t.status === "Stuck")
+      .map((t) => {
+        const load = t.assignee_id ? loadOf.get(t.assignee_id) || 0 : 0;
+        if (t.status === "Stuck") return { t, why: "marked stuck", rank: 0 };
+        if (t.due && t.due < todayIso) return { t, why: `overdue since ${t.due}`, rank: 1 };
+        if (t.due && t.due <= soonIso && load >= 5)
+          return { t, why: `due ${t.due}, ${nameOf.get(t.assignee_id!) || "assignee"} carrying ${load} open`, rank: 2 };
+        return null;
+      })
+      .filter(Boolean)
+      .sort((a, b) => a!.rank - b!.rank || (a!.t.due || "").localeCompare(b!.t.due || ""))
+      .slice(0, 12);
+
+    const criticals = companyTasks.filter((t) => t.priority === "Critical");
+    sections.push(
+      `COMPANY-WIDE (you have company visibility — use this, not just the personal list above, when the question is about the company/team/"we"):
+` +
+      `Open company-wide: ${companyTasks.length}. Critical priority: ${criticals.length}.
+` +
+      `At risk right now:
+${risky.map((r) => `- ${r!.t.name} [${r!.t.priority}] — ${r!.why}${r!.t.assignee_id ? ` (${nameOf.get(r!.t.assignee_id) || "unassigned"})` : ""}`).join("\n") || "(nothing at risk)"}`
+    );
+  } else if (!seesCompany) {
+    sections.push(
+      `SCOPE NOTE: ${me?.name || "this user"} does not have company-wide visibility, so only their own work and anyone they explicitly named is available. If asked about company-wide status, say plainly that you can only see their own work and suggest they ask a department head.`
+    );
+  }
+
   const context = sections.join("\n\n");
   const priorTurns: { role: string; text: string }[] = Array.isArray(history) ? history.slice(-6) : [];
 
@@ -174,6 +228,8 @@ Relevant workspace context for this question:
 ${context}
 
 Answer concisely (2-5 sentences, plain text, no markdown headers), using only the context above and the conversation so far. If you don't have enough information, say so plainly rather than guessing.
+
+Scope matters. If the question is about the company, the team, "we", or is otherwise not specifically about the user's own tasks, answer from the COMPANY-WIDE section when one is present — do not answer a company question from the user's personal task list. Name the scope you are answering in ("across the company", "on your own list") so the answer is never ambiguous. If both are relevant, lead with the company picture and then note the user's own exposure.
 
 If — and only if — the user is clearly asking you to CREATE A NEW TASK, call the propose_create_task tool instead of replying with text. Never call it for anything else (don't call it to check on, edit, or discuss existing tasks). If the user names who's accountable for the task, pass accountable_name — otherwise omit it and the person will be asked to pick one before the task can be created (Accountable is never auto-filled).`;
 
