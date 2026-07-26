@@ -1,7 +1,7 @@
 # SansiWorks — Session Handoff
 
 > Kept current at every major milestone so any fresh session (or fresh context window)
-> can pick up without re-deriving state. Last updated: **2026-07-23**.
+> can pick up without re-deriving state. Last updated: **2026-07-26**.
 
 ## What this project is
 1:1 rebuild of the SansiWorks design (Sansico Group PM workspace) on Next.js 16 + Supabase
@@ -27,6 +27,45 @@ to Vercel on push to `main`. **Rule: verify on localhost; push only on user appr
   (`api/forms/notify-submission`), conversion assigns to owner. Vendor Onboarding owner: Dewi Santoso.
 - Legacy SOP migration done honestly — unattributed records marked "—", never fabricated reviewers.
 - SOP visibility: owning dept + Board/Group/Regional heads + Internal Audit (rank-based, never name-based).
+
+## Improvement roadmap (from the 2026-07-26 QA audit)
+Audit artifact: private Claude artifact "SansiWorks — Full QA & Improvement Audit".
+- [x] **1. Seed dedup + recurrence guard.** Removed 34 rows where the seed put the
+      same name+due twice in ONE list under two assignees. Unique index
+      `tasks_no_dupe_per_list` prevents recurrence. Restore script in `db-backups/`.
+      *Audit correction: this was never "5x everything" — grouping by (name,due)
+      across lists inflated the count. Headline metrics barely moved.*
+- [x] **2. Real RLS.** 51 always-true policies → 6 (each deliberate, documented in
+      `supabase/migrations/README.md`). Helper fns `app_is_super/app_rank/
+      app_can_write_task/...` mirror `lib/actions.ts`. Verified adversarially by
+      impersonating a rank-4 non-admin: task hijack, delete, activity forgery,
+      approval impersonation and **self-approval** all blocked; legitimate flows
+      still work. *Audit corrections: RLS was already ON for all 36 tables;
+      `audit_log` was already append-only; the 10 org/admin tables were already
+      locked to super/l1-l3.*
+- [x] **3. Security quick wins.** Cron secret now header-only + timingSafeEqual;
+      form-notify replay killed via `notifications.dedupe_key` unique index;
+      Sansi rate-limited 15/min/user (429). avatars bucket had **anonymous
+      uploads with no check** — now authenticated, own-folder only; anon
+      task-attachments narrowed to the `form-submissions/` prefix.
+      **Still needs you:** enable Leaked Password Protection in the Supabase
+      dashboard (Auth → Policies) — it is a toggle Claude cannot set.
+- [ ] **4. Dark-mode contrast pass** — priority chips, "View all tasks" link and
+      People efficiency figures fail WCAG AA on dark. ~½ day.
+- [x] **5. Honest efficiency.** `efficiencyScore()` returns `hasData`; no-data
+      people render "— no data" instead of a fake 100%. `EFFICIENCY_EXPLAINER`
+      surfaced on the profile modal. Company health excludes unscored depts →
+      moved 97 to an honest **79**.
+- [ ] **6. Sansi company-scope grounding** — asked "what is at risk this week?"
+      it answers from a personal lens only, missing the 3 company criticals. ~1 day.
+- [ ] **7. Scoped queries + row-level realtime.** Client still loads all 35 tables
+      in full and refetches everything on any change. Hard scale ceiling before
+      the 30-user seed. (`notifications`/`audit_log` reads are now RLS-scoped,
+      which already trims the two worst leaks.) ~1-2 wks.
+- [ ] **8. UX pass.** People list now sorts by workload (done). Remaining: tablet
+      ~800px density, empty states, recurring tasks, scroll affordances.
+- [ ] **9. Comments/@mentions + mention emails** — biggest missing collaboration
+      loop; schema/table already exist.
 
 ## Status: open
 - **Mention-digest-email gap** — @mention notifications don't reach the email digest. Approved to build.
