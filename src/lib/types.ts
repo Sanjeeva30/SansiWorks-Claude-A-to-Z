@@ -4,17 +4,21 @@ export type Priority = "Low" | "Medium" | "High" | "Critical";
 export const STATUSES: Status[] = ["Not Started", "Working on it", "Stuck", "Done"];
 export const PRIORITIES: Priority[] = ["Low", "Medium", "High", "Critical"];
 
+/* These render as chip TEXT and as small status dots, both of which must be seen
+   against the page — so they use the theme-aware foreground tokens rather than the
+   raw brand hex. The literals were mixed for white paper: "High" (#7A0D20) on a
+   dark card measured 1.6:1, effectively invisible. */
 export const STATUS_COLORS: Record<string, string> = {
-  "Not Started": "#8C837C",
-  "Working on it": "#22409E",
-  Stuck: "#F3263E",
-  Done: "#0D4F31",
+  "Not Started": "var(--sw-muted)",
+  "Working on it": "var(--sw-on-navy)",
+  Stuck: "var(--sw-on-red)",
+  Done: "var(--sw-on-green)",
 };
 export const PRIORITY_COLORS: Record<string, string> = {
-  Low: "#0D4F31",
-  Medium: "#22409E",
-  High: "#7A0D20",
-  Critical: "#F3263E",
+  Low: "var(--sw-on-green)",
+  Medium: "var(--sw-on-navy)",
+  High: "var(--sw-on-crimson)",
+  Critical: "var(--sw-on-red)",
 };
 
 export interface Level {

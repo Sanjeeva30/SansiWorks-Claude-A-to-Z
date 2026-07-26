@@ -3,7 +3,7 @@ import React from "react";
 import { DIFFICULTY_LEVELS } from "@/lib/types";
 
 const DOT_COLOR: Record<number, string> = {
-  1: "var(--sw-muted)", 2: "var(--green)", 3: "var(--navy)", 4: "#B7791F", 5: "var(--crimson)",
+  1: "var(--sw-muted)", 2: "var(--sw-on-green)", 3: "var(--sw-on-navy)", 4: "var(--sw-on-amber)", 5: "var(--sw-on-crimson)",
 };
 
 /* 5-step difficulty picker — Trivial..Complex. Used identically at task and

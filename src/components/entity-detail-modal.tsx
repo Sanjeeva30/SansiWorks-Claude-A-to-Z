@@ -9,6 +9,7 @@ import { notify, logAudit } from "@/lib/actions";
 import { IconX } from "./icons";
 import { Avatar } from "./shared";
 import { useFocusTrap } from "@/lib/a11y";
+import { readableTextOn } from "@/lib/colors";
 
 const overlay: React.CSSProperties = { position: "fixed", inset: 0, background: "rgba(23,18,15,0.45)", backdropFilter: "blur(2px)", zIndex: 70, display: "flex", alignItems: "center", justifyContent: "center" };
 const panel: React.CSSProperties = { width: 460, maxWidth: "92vw", maxHeight: "86vh", overflowY: "auto", background: "var(--sw-card)", borderRadius: 18, boxShadow: "0 30px 90px rgba(23,18,15,0.35)", padding: "24px 26px" };
@@ -41,7 +42,7 @@ export function EntityDetailModal() {
     body = (
       <>
         <div className="sw-grid-label" style={{ gap: "10px 10px", marginBottom: 14 }}>
-          {row("Actor", who ? <button onClick={() => { closeDetail(); openProfile(who.id); }} style={{ border: "none", background: "none", color: "var(--crimson)", cursor: "pointer", padding: 0, fontSize: 12.5 }}>{who.name}</button> : "System")}
+          {row("Actor", who ? <button onClick={() => { closeDetail(); openProfile(who.id); }} style={{ border: "none", background: "none", color: "var(--sw-on-crimson)", cursor: "pointer", padding: 0, fontSize: 12.5 }}>{who.name}</button> : "System")}
           {row("Action", a.action)}
           {row("Target", a.target || "—")}
           {row("When", `${relTime(a.created_at)} · ${new Date(a.created_at).toLocaleString()}`)}
@@ -155,13 +156,13 @@ export function EntityDetailModal() {
 }
 
 const STATUS_TINT: Record<string, [string, string]> = {
-  Active: ["var(--green)", "rgba(13,79,49,0.09)"],
-  "Under review": ["#B7791F", "rgba(183,121,31,0.12)"],
-  "Revisions requested": ["var(--red)", "rgba(243,38,62,0.09)"],
+  Active: ["var(--sw-on-green)", "rgba(13,79,49,0.09)"],
+  "Under review": ["var(--sw-on-amber)", "rgba(183,121,31,0.12)"],
+  "Revisions requested": ["var(--sw-on-red)", "rgba(243,38,62,0.09)"],
   Draft: ["var(--sw-muted)", "var(--sw-hover)"],
 };
 const REVIEW_LABEL: Record<string, string> = { pending: "Pending", approved: "Approved", revisions_requested: "Revisions requested" };
-const REVIEW_COLOR: Record<string, string> = { pending: "var(--sw-muted)", approved: "var(--green)", revisions_requested: "var(--red)" };
+const REVIEW_COLOR: Record<string, string> = { pending: "var(--sw-muted)", approved: "var(--sw-on-green)", revisions_requested: "var(--sw-on-red)" };
 
 /* Doc detail — mounted globally so any screen (Docs page, Overview's recent-
    docs widget, global search) can open it without navigating there first.
@@ -184,7 +185,7 @@ export function DocDetailModal() {
   const today = new Date().toISOString().slice(0, 10);
   const reviewState = !d.review_date ? "none" : d.review_date < today ? "overdue" : new Date(d.review_date).getTime() - Date.now() < 21 * 86400000 ? "soon" : "ok";
   const review = !d.review_date ? "No review date" : reviewState === "overdue" ? "Review overdue" : `Review ${fmtShort(d.review_date)}`;
-  const reviewColor = reviewState === "overdue" ? "var(--red)" : reviewState === "soon" ? "#B7791F" : "var(--sw-muted)";
+  const reviewColor = reviewState === "overdue" ? "var(--sw-on-red)" : reviewState === "soon" ? "var(--sw-on-amber)" : "var(--sw-muted)";
 
   const versions = docVersions.filter((v) => v.doc_id === d.id).sort((a, b) => b.version_number - a.version_number);
   const latest = versions[0] as DocVersion | undefined;
@@ -305,7 +306,7 @@ export function DocDetailModal() {
       <div ref={trapRef} role="dialog" aria-modal="true" aria-label={d.title} onClick={(e) => e.stopPropagation()} className="sw-modal-card" style={{ ...panel, width: 560 }}>
         <div style={{ display: "flex", alignItems: "center", marginBottom: 10 }}>
           <span style={{ display: "inline-block", fontSize: 10, fontWeight: 800, letterSpacing: "0.04em", color: (STATUS_TINT[d.status] || STATUS_TINT.Draft)[0], background: (STATUS_TINT[d.status] || STATUS_TINT.Draft)[1], padding: "3px 10px", borderRadius: 999 }}>{d.status}</span>
-          {d.is_sop && <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 800, color: "var(--crimson)" }}>SOP</span>}
+          {d.is_sop && <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 800, color: "var(--sw-on-crimson)" }}>SOP</span>}
           <div style={{ flex: 1 }} />
           <button onClick={() => setDocDetailId(null)} aria-label="Close" style={closeBtn}><IconX /></button>
         </div>
@@ -326,7 +327,7 @@ export function DocDetailModal() {
         )}
         {!openVersion && <p style={{ margin: "0 0 12px", fontSize: 12, color: "var(--sw-muted)" }}>No file attached to this document.</p>}
         <button onClick={() => { if (owner) { setDocDetailId(null); openProfile(owner.id); } }} style={{ display: "flex", alignItems: "center", gap: 9, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", borderRadius: 999, padding: "6px 14px 6px 6px", cursor: "pointer", marginBottom: 12 }}>
-          <span style={{ width: 24, height: 24, borderRadius: 99, background: owner?.color || "#9A918A", color: "#fff", fontSize: 9.5, fontWeight: 400, display: "flex", alignItems: "center", justifyContent: "center" }}>{owner ? initials(owner.name) : "?"}</span>
+          <span style={{ width: 24, height: 24, borderRadius: 99, background: owner?.color || "#9A918A", color: readableTextOn(owner?.color || "#9A918A"), fontSize: 9.5, fontWeight: 400, display: "flex", alignItems: "center", justifyContent: "center" }}>{owner ? initials(owner.name) : "?"}</span>
           <span style={{ fontSize: 12.5, fontWeight: 400 }}>{owner?.name || "—"}</span>
         </button>
 
@@ -363,23 +364,23 @@ export function DocDetailModal() {
                     <span style={{ color: REVIEW_COLOR[v.audit_status] }}>Internal Audit: {REVIEW_LABEL[v.audit_status]}{auditBy ? ` (${auditBy.name})` : ""}</span>
                   </div>
                   {v.review_due && (v.head_status === "pending" || v.audit_status === "pending") && isLatest && (
-                    <div style={{ fontSize: 11, marginBottom: 8, color: v.review_due < today ? "var(--red)" : "var(--sw-muted)" }}>
+                    <div style={{ fontSize: 11, marginBottom: 8, color: v.review_due < today ? "var(--sw-on-red)" : "var(--sw-muted)" }}>
                       Review due {fmtShort(v.review_due)}{v.review_due < today ? " — overdue" : ""}
                     </div>
                   )}
-                  {isLatest && v.head_note_path && <button onClick={() => downloadFile(v.head_note_path!)} style={{ border: "none", background: "none", color: "var(--crimson)", cursor: "pointer", fontSize: 11, padding: 0, marginRight: 12 }}>Head's annotated file →</button>}
-                  {isLatest && v.audit_note_path && <button onClick={() => downloadFile(v.audit_note_path!)} style={{ border: "none", background: "none", color: "var(--crimson)", cursor: "pointer", fontSize: 11, padding: 0 }}>Audit's annotated file →</button>}
+                  {isLatest && v.head_note_path && <button onClick={() => downloadFile(v.head_note_path!)} style={{ border: "none", background: "none", color: "var(--sw-on-crimson)", cursor: "pointer", fontSize: 11, padding: 0, marginRight: 12 }}>Head's annotated file →</button>}
+                  {isLatest && v.audit_note_path && <button onClick={() => downloadFile(v.audit_note_path!)} style={{ border: "none", background: "none", color: "var(--sw-on-crimson)", cursor: "pointer", fontSize: 11, padding: 0 }}>Audit's annotated file →</button>}
 
                   {isLatest && iAmHead && v.head_status === "pending" && (
                     <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
                       <button disabled={busy} onClick={() => setReview("head", "approved", null)} style={{ padding: "5px 12px", borderRadius: 999, border: "none", background: "var(--green)", color: "#fff", fontSize: 11, cursor: "pointer" }}>Approve (Head)</button>
-                      <button disabled={busy} onClick={() => setRequestingRevisions(requestingRevisions === "head" ? null : "head")} style={{ padding: "5px 12px", borderRadius: 999, border: "1px solid var(--red)", background: "none", color: "var(--red)", fontSize: 11, cursor: "pointer" }}>Request revisions</button>
+                      <button disabled={busy} onClick={() => setRequestingRevisions(requestingRevisions === "head" ? null : "head")} style={{ padding: "5px 12px", borderRadius: 999, border: "1px solid var(--red)", background: "none", color: "var(--sw-on-red)", fontSize: 11, cursor: "pointer" }}>Request revisions</button>
                     </div>
                   )}
                   {isLatest && iAmAuditManager && v.audit_status === "pending" && (
                     <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
                       <button disabled={busy} onClick={() => setReview("audit", "approved", null)} style={{ padding: "5px 12px", borderRadius: 999, border: "none", background: "var(--green)", color: "#fff", fontSize: 11, cursor: "pointer" }}>Approve (Audit)</button>
-                      <button disabled={busy} onClick={() => setRequestingRevisions(requestingRevisions === "audit" ? null : "audit")} style={{ padding: "5px 12px", borderRadius: 999, border: "1px solid var(--red)", background: "none", color: "var(--red)", fontSize: 11, cursor: "pointer" }}>Request revisions</button>
+                      <button disabled={busy} onClick={() => setRequestingRevisions(requestingRevisions === "audit" ? null : "audit")} style={{ padding: "5px 12px", borderRadius: 999, border: "1px solid var(--red)", background: "none", color: "var(--sw-on-red)", fontSize: 11, cursor: "pointer" }}>Request revisions</button>
                     </div>
                   )}
                   {isLatest && requestingRevisions === "head" && iAmHead && (

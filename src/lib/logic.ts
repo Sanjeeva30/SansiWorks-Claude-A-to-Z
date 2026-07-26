@@ -139,7 +139,7 @@ export function efficiencyScore(tasks: Task[]): { score: number; color: string; 
   const score = Math.round(historyPct * 0.75 + healthPct * 0.25);
   return {
     score,
-    color: score >= 80 ? "var(--green)" : score >= 60 ? "#B7791F" : "var(--red)",
+    color: score >= 80 ? "var(--sw-on-green)" : score >= 60 ? "var(--sw-on-amber)" : "var(--sw-on-red)",
     hasData: total > 0 || open.length > 0,
   };
 }

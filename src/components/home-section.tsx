@@ -174,7 +174,7 @@ export function HomeSection() {
                   ))}
                 </span>
                 <span style={{ fontSize: 10, fontWeight: 400, letterSpacing: "0.04em", color: PRIORITY_COLORS[t.priority], width: 52, textAlign: "right", flex: "none" }}>{t.priority}</span>
-                <span style={{ fontSize: 11, color: t.due && t.due < today && t.status !== "Done" ? "var(--red)" : "var(--sw-text-soft)", width: 54, textAlign: "right", flex: "none" }}>{t.due ? fmtShort(t.due) : ""}</span>
+                <span style={{ fontSize: 11, color: t.due && t.due < today && t.status !== "Done" ? "var(--sw-on-red)" : "var(--sw-text-soft)", width: 54, textAlign: "right", flex: "none" }}>{t.due ? fmtShort(t.due) : ""}</span>
               </button>
             ))}
           </div>
@@ -248,13 +248,13 @@ export function HomeSection() {
             <>
               {weekOverdue.length > 0 && (
                 <section style={{ background: "var(--sw-card)", border: "1px solid var(--sw-hair)", borderRadius: 12, padding: "14px 18px", boxShadow: "var(--shadow-card)", marginBottom: 14 }}>
-                  <h3 style={{ margin: "0 0 9px", fontSize: 13, fontWeight: 400, color: "var(--red)" }}>Overdue</h3>
+                  <h3 style={{ margin: "0 0 9px", fontSize: 13, fontWeight: 400, color: "var(--sw-on-red)" }}>Overdue</h3>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                     {weekOverdue.map((t) => (
                       <button key={t.id} onClick={() => setActiveTaskId(t.id)} className="sw-row" style={{ display: "flex", alignItems: "center", gap: 8, border: "1px solid var(--sw-hair)", borderRadius: 999, background: "none", padding: "6px 13px", cursor: "pointer" }}>
                         <span style={{ width: 7, height: 7, borderRadius: 99, background: "var(--red)", flex: "none" }} />
                         <span style={{ fontSize: 12, color: "var(--sw-text)" }}>{t.name}</span>
-                        <span style={{ fontSize: 11, color: "var(--red)" }}>{t.due ? fmtShort(t.due) : ""}</span>
+                        <span style={{ fontSize: 11, color: "var(--sw-on-red)" }}>{t.due ? fmtShort(t.due) : ""}</span>
                       </button>
                     ))}
                   </div>
@@ -326,7 +326,7 @@ export function HomeSection() {
                   </button>
                 ))}
                 {!tabRows.length && <p style={{ margin: "12px 0 0", fontSize: 11.5, color: "var(--sw-muted)" }}>Nothing in this status.</p>}
-                <button onClick={goAll} style={{ marginTop: 10, border: "none", background: "none", color: "var(--crimson)", fontSize: 11.5, fontWeight: 400, cursor: "pointer", padding: 0 }}>View all tasks →</button>
+                <button onClick={goAll} style={{ marginTop: 10, border: "none", background: "none", color: "var(--sw-on-crimson)", fontSize: 11.5, fontWeight: 400, cursor: "pointer", padding: 0 }}>View all tasks →</button>
               </section>
 
               {/* deadlines + at risk */}
@@ -338,7 +338,7 @@ export function HomeSection() {
                     const d = new Date(t.due! + "T00:00:00");
                     return (
                       <div key={t.id} onClick={() => setActiveTaskId(t.id)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderBottom: "1px solid var(--sw-hair)", cursor: "pointer" }}>
-                        <span style={{ width: 32, height: 32, borderRadius: 8, background: overdue ? "rgba(243,38,62,0.12)" : "var(--sw-hover)", color: overdue ? "var(--red)" : "var(--sw-text)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flex: "none" }}>
+                        <span style={{ width: 32, height: 32, borderRadius: 8, background: overdue ? "rgba(243,38,62,0.12)" : "var(--sw-hover)", color: overdue ? "var(--sw-on-red)" : "var(--sw-text)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flex: "none" }}>
                           <b style={{ fontSize: 11.5, fontWeight: 400, lineHeight: 1 }}>{String(d.getDate()).padStart(2, "0")}</b>
                           <span style={{ fontSize: 7.5, fontWeight: 400, textTransform: "uppercase" }}>{d.toLocaleDateString("en-GB", { month: "short" })}</span>
                         </span>
@@ -396,7 +396,7 @@ export function HomeSection() {
                 <a
                   href="/overview"
                   onClick={(e) => { e.preventDefault(); setCompanyPage("executive"); }}
-                  style={{ flex: "none", textDecoration: "none", color: "var(--crimson)", fontSize: 11.5, fontWeight: 400, cursor: "pointer" }}
+                  style={{ flex: "none", textDecoration: "none", color: "var(--sw-on-crimson)", fontSize: 11.5, fontWeight: 400, cursor: "pointer" }}
                 >
                   View executive report →
                 </a>
@@ -411,7 +411,7 @@ export function HomeSection() {
                         <Avatar person={p} size={28} ring={isHeadRank(p, levels)} />
                         <div>
                           <div style={{ fontSize: 12, fontWeight: 400 }}>{p.name}</div>
-                          <div style={{ fontSize: 10.5, fontWeight: daysAway <= 1 ? 500 : 400, color: daysAway === 0 ? "var(--crimson)" : daysAway === 1 ? "#B7791F" : "var(--sw-muted)" }}>
+                          <div style={{ fontSize: 10.5, fontWeight: daysAway <= 1 ? 500 : 400, color: daysAway === 0 ? "var(--sw-on-crimson)" : daysAway === 1 ? "var(--sw-on-amber)" : "var(--sw-muted)" }}>
                             {daysAway === 0 ? "Today!" : daysAway === 1 ? "Tomorrow" : `In ${daysAway} days`}
                           </div>
                         </div>

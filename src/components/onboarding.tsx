@@ -65,7 +65,7 @@ export function OnboardingChecklist() {
       {stage === "checklist" && !allDone && (
         <div style={{ position: "fixed", bottom: 24, right: 24, width: 340, maxWidth: "88vw", background: "var(--sw-card)", borderRadius: 16, boxShadow: "0 30px 90px rgba(23,18,15,0.28)", border: "1px solid var(--sw-hair)", overflow: "hidden", animation: "swFadeUp .25s ease", zIndex: 88 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "16px 18px", borderBottom: "1px solid var(--sw-hair)" }}>
-            <span style={{ color: "var(--crimson)", fontSize: 15 }}>✦</span>
+            <span style={{ color: "var(--sw-on-crimson)", fontSize: 15 }}>✦</span>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 13.5, fontWeight: 800 }}>Getting started</div>
               <div style={{ fontSize: 11, color: "var(--sw-muted)", fontWeight: 600 }}>{doneCount} of {items.length} complete</div>

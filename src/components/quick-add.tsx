@@ -12,6 +12,7 @@ import { DifficultyPicker } from "./difficulty";
 import { FileDropZone } from "./dropzone";
 import { Subtask } from "@/lib/types";
 import { IconSparkle, IconTaskPlus, IconX } from "./icons";
+import { readableTextOn } from "@/lib/colors";
 
 export function QuickAddModal() {
   const { showQuickAdd, setShowQuickAdd, quickAddStatus, pushToast, activeList } = useUI();
@@ -105,10 +106,10 @@ export function QuickAddModal() {
 
   const dueChips = ["Today", "Tomorrow", "Next week", "End of month"];
   const priorityRows = [
-    { label: "Low", dot: "var(--green)" },
+    { label: "Low", dot: "var(--sw-on-green)" },
     { label: "Medium", dot: "var(--navy)" },
-    { label: "High", dot: "var(--crimson)" },
-    { label: "Critical", dot: "var(--red)" },
+    { label: "High", dot: "var(--sw-on-crimson)" },
+    { label: "Critical", dot: "var(--sw-on-red)" },
   ];
   const recurRows = [
     { value: "none", label: "Doesn't repeat" },
@@ -141,7 +142,7 @@ export function QuickAddModal() {
             >
               {row.dot && <span style={{ width: 7, height: 7, borderRadius: 99, background: row.dot, flex: "none" }} />}
               <span style={{ flex: 1 }}>{row.label}</span>
-              {(row.value ?? row.label) === current && <span style={{ color: "var(--crimson)", fontWeight: 400 }}>✓</span>}
+              {(row.value ?? row.label) === current && <span style={{ color: "var(--sw-on-crimson)", fontWeight: 400 }}>✓</span>}
             </button>
           ))}
         </div>
@@ -163,7 +164,7 @@ export function QuickAddModal() {
         style={{ width: 900, maxWidth: "94vw", maxHeight: "90vh", background: "var(--sw-card)", borderRadius: 18, boxShadow: "0 30px 90px rgba(23,18,15,0.35)", animation: "swModalIn .22s var(--ease-brand)", display: "flex", flexDirection: "column", overflow: "hidden" }}
       >
         <div className="sw-topbar" style={{ display: "flex", alignItems: "center", gap: 12, padding: "22px 26px", borderBottom: "1px solid var(--sw-hair)", flex: "none" }}>
-          <span style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(122,13,32,0.1)", color: "var(--crimson)", display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
+          <span style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(122,13,32,0.1)", color: "var(--sw-on-crimson)", display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
             <IconTaskPlus />
           </span>
           <h3 style={{ margin: 0, fontSize: 19, fontWeight: 800, flex: 1 }}>Create new task</h3>
@@ -172,7 +173,7 @@ export function QuickAddModal() {
 
         <div className="sw-modal-split" style={{ display: "flex", flex: 1, minHeight: 0 }}>
           <div style={{ flex: 1, minWidth: 0, overflowY: "auto", padding: "22px 26px 20px" }}>
-            {label(<>Task title <span style={{ color: "var(--crimson)" }}>*</span></>)}
+            {label(<>Task title <span style={{ color: "var(--sw-on-crimson)" }}>*</span></>)}
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Send Bank Mandiri trade documents"
               style={{ width: "100%", height: "var(--sw-field-h)", borderRadius: 10, border: "1.5px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "0 14px", fontSize: 14.5, marginBottom: 18, outline: "none", color: "var(--sw-text)" }} />
 
@@ -185,7 +186,7 @@ export function QuickAddModal() {
             })}</div>
             <div style={{ marginBottom: 18 }} />
 
-            {label(<>Responsible (R) <span style={{ color: "var(--crimson)" }}>*</span></>)}
+            {label(<>Responsible (R) <span style={{ color: "var(--sw-on-crimson)" }}>*</span></>)}
             <div style={{ marginBottom: 18 }}>
               <AssigneePicker personal={personal} me={me} value={assigneeId} onChange={setAssigneeId} deptScoped={deptScoped} allProfiles={profiles} deptLabel={deptLabel} />
             </div>
@@ -204,7 +205,7 @@ export function QuickAddModal() {
                     placeholder="Type: fri, tomorrow, 25/07…"
                     style={{ width: "100%", height: "var(--sw-field-h)", borderRadius: 10, border: "1.5px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "0 100px 0 12px", fontSize: 13, color: "var(--sw-text)", outline: "none", boxSizing: "border-box" }}
                   />
-                  {dueLabel && <span style={{ position: "absolute", right: 11, top: "50%", transform: "translateY(-50%)", fontSize: 11, color: "var(--green)" }}>→ {dueLabel}</span>}
+                  {dueLabel && <span style={{ position: "absolute", right: 11, top: "50%", transform: "translateY(-50%)", fontSize: 11, color: "var(--sw-on-green)" }}>→ {dueLabel}</span>}
                 </div>
                 <div style={{ display: "flex", gap: 5, marginTop: 6, flexWrap: "wrap" }}>
                   {dueChips.map((c) => (
@@ -280,7 +281,7 @@ export function QuickAddModal() {
               <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 10 }}>
                 {attachments.map((f) => (
                   <div key={f.id} style={{ display: "flex", alignItems: "center", gap: 9, padding: "8px 10px", border: "1px solid var(--sw-hair)", borderRadius: 9, background: "var(--sw-card)" }}>
-                    <span style={{ width: 28, height: 28, borderRadius: 7, background: "rgba(122,13,32,0.08)", color: "var(--crimson)", fontSize: 11, fontWeight: 400, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
+                    <span style={{ width: 28, height: 28, borderRadius: 7, background: "rgba(122,13,32,0.08)", color: "var(--sw-on-crimson)", fontSize: 11, fontWeight: 400, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
                       {(f.name.split(".").pop() || "").toUpperCase().slice(0, 3)}
                     </span>
                     <span style={{ flex: 1, minWidth: 0 }}>
@@ -297,9 +298,9 @@ export function QuickAddModal() {
           {/* RIGHT: SANSI ASSIST */}
           <div className="sw-modal-split-side" style={{ width: 300, flex: "none", overflowY: "auto", background: "var(--sw-sidebar)", borderLeft: "1px solid var(--sw-hair)", padding: "22px 20px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-              <span style={{ display: "inline-flex", color: "var(--crimson)" }}><IconSparkle size={15} /></span>
+              <span style={{ display: "inline-flex", color: "var(--sw-on-crimson)" }}><IconSparkle size={15} /></span>
               <span style={{ fontSize: 14, fontWeight: 400, flex: 1 }}>Sansi Assist</span>
-              <span style={{ background: "rgba(122,13,32,0.1)", color: "var(--crimson)", fontSize: 10, fontWeight: 800, letterSpacing: "0.06em", padding: "2px 8px", borderRadius: 999 }}>BETA</span>
+              <span style={{ background: "rgba(122,13,32,0.1)", color: "var(--sw-on-crimson)", fontSize: 10, fontWeight: 800, letterSpacing: "0.06em", padding: "2px 8px", borderRadius: 999 }}>BETA</span>
             </div>
 
             <div style={{ background: "var(--sw-card)", border: "1px solid var(--sw-hair)", borderRadius: 12, padding: 14, marginBottom: 14 }}>
@@ -321,10 +322,10 @@ export function QuickAddModal() {
                 {suggestAssignees(store, name, listVal === "my" ? null : listVal, []).map(({ p: sa, reason }) => (
                   <button key={sa.id} onClick={() => setAssigneeId(sa.id)}
                     style={{ display: "flex", alignItems: "flex-start", gap: 9, width: "100%", textAlign: "left", border: "none", background: "none", cursor: "pointer", padding: "7px 0" }}>
-                    <span style={{ width: 26, height: 26, borderRadius: 99, background: sa.color, color: "#fff", fontSize: 9.5, fontWeight: 400, display: "flex", alignItems: "center", justifyContent: "center", flex: "none", marginTop: 1 }}>{initials(sa.name)}</span>
+                    <span style={{ width: 26, height: 26, borderRadius: 99, background: sa.color, color: readableTextOn(sa.color), fontSize: 9.5, fontWeight: 400, display: "flex", alignItems: "center", justifyContent: "center", flex: "none", marginTop: 1 }}>{initials(sa.name)}</span>
                     <span style={{ flex: 1, minWidth: 0 }}>
                       <span style={{ fontSize: 12.5, fontWeight: 400 }}>{sa.name}</span>
-                      <span style={{ display: "block", fontSize: 11, color: "var(--navy)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{reason}</span>
+                      <span style={{ display: "block", fontSize: 11, color: "var(--sw-on-navy)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{reason}</span>
                     </span>
                   </button>
                 ))}

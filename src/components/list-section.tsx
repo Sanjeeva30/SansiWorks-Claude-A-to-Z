@@ -10,6 +10,7 @@ import { FilterState, EMPTY_FILTERS, applyFilters } from "@/lib/search";
 import { TopIcons } from "./shared";
 import { FilterBar } from "./filter-bar";
 import { IconChevLeft, IconChevRight, IconX } from "./icons";
+import { readableTextOn } from "@/lib/colors";
 
 const TYPE_LABELS: Record<string, string> = { text: "Text", number: "Number", select: "Dropdown", date: "Date" };
 const TYPE_ABBR: Record<string, string> = { text: "Tx", number: "#", select: "Dd", date: "Dt" };
@@ -66,7 +67,7 @@ export function ListSection() {
   };
 
   const rowPad = density === "compact" ? "7px 16px" : "12px 16px";
-  const dueColor = (t: Task) => (t.due && t.due < today && t.status !== "Done" ? "var(--red)" : "var(--sw-text-soft)");
+  const dueColor = (t: Task) => (t.due && t.due < today && t.status !== "Done" ? "var(--sw-on-red)" : "var(--sw-text-soft)");
   const avatarsOf = (t: Task) => [t.assignee_id].map((id) => profiles.find((p) => p.id === id)).filter(Boolean) as typeof profiles;
 
   const openQuickAdd = (status?: string) => { setQuickAddStatus(status || "Not Started"); setShowQuickAdd(true); };
@@ -112,8 +113,8 @@ export function ListSection() {
     return {
       day: d.getDate(),
       dow: monthMark ? d.toLocaleDateString("en-GB", { month: "short" }) : d.toLocaleDateString("en-GB", { weekday: "short" }).slice(0, 2),
-      color: isToday ? "var(--crimson)" : "var(--sw-text)",
-      dowColor: isToday || monthMark ? "var(--crimson)" : "var(--sw-muted)",
+      color: isToday ? "var(--sw-on-crimson)" : "var(--sw-text)",
+      dowColor: isToday || monthMark ? "var(--sw-on-crimson)" : "var(--sw-muted)",
       weekendBg: isWeekend ? "var(--sw-hover)" : "transparent",
     };
   });
@@ -143,7 +144,7 @@ export function ListSection() {
         b.row = r;
       });
       const active = laneTasks.filter((t) => t.status !== "Done").length;
-      const load: [string, string] = active >= 3 ? ["heavy", "var(--red)"] : active <= 1 ? ["light", "var(--green)"] : ["steady", "var(--sw-muted)"];
+      const load: [string, string] = active >= 3 ? ["heavy", "var(--sw-on-red)"] : active <= 1 ? ["light", "var(--sw-on-green)"] : ["steady", "var(--sw-muted)"];
       return { p, bars, laneHeight: Math.max(44, 10 + rowEnds.length * 20 + 8), loadLabel: `${active} active · ${load[0]}`, loadColor: load[1] };
     })
     .filter(Boolean) as { p: (typeof profiles)[number]; bars: { t: Task; off: number; sp: number; row: number }[]; laneHeight: number; loadLabel: string; loadColor: string }[];
@@ -204,7 +205,7 @@ export function ListSection() {
         {/* VIEW SWITCHER */}
         <div className="sw-hscroll" style={{ display: "flex", alignItems: "center", gap: 2, padding: "0 22px", overflowX: "auto" }}>
           {(["table", "board", "calendar", "gantt"] as const).map((v) => (
-            <button key={v} onClick={() => setView(v)} style={{ padding: "9px 14px", border: "none", background: "none", borderBottom: `2px solid ${view === v ? "var(--crimson)" : "transparent"}`, color: view === v ? "var(--crimson)" : "var(--sw-text-soft)", fontSize: 12.5, fontWeight: 400, cursor: "pointer", marginBottom: -1 }}>
+            <button key={v} onClick={() => setView(v)} style={{ padding: "9px 14px", border: "none", background: "none", borderBottom: `2px solid ${view === v ? "var(--crimson)" : "transparent"}`, color: view === v ? "var(--sw-on-crimson)" : "var(--sw-text-soft)", fontSize: 12.5, fontWeight: 400, cursor: "pointer", marginBottom: -1 }}>
               {v[0].toUpperCase() + v.slice(1)}
             </button>
           ))}
@@ -226,7 +227,7 @@ export function ListSection() {
                 <button onClick={() => setDensity(density === "comfortable" ? "compact" : "comfortable")} style={{ padding: "6px 12px", borderRadius: 999, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", color: "var(--sw-text-soft)", fontSize: 11.5, fontWeight: 400, cursor: "pointer" }}>
                   {density === "comfortable" ? "Comfortable" : "Compact"}
                 </button>
-                <button onClick={() => { setShowSaveView(!showSaveView); setSaveViewName(""); }} style={{ padding: "6px 12px", borderRadius: 999, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", color: "var(--crimson)", fontSize: 11.5, fontWeight: 400, cursor: "pointer" }}>+ Save view</button>
+                <button onClick={() => { setShowSaveView(!showSaveView); setSaveViewName(""); }} style={{ padding: "6px 12px", borderRadius: 999, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", color: "var(--sw-on-crimson)", fontSize: 11.5, fontWeight: 400, cursor: "pointer" }}>+ Save view</button>
               </>
             }
           />
@@ -273,7 +274,7 @@ export function ListSection() {
                     <span style={{ width: 7, height: 7, borderRadius: 99, background: STATUS_COLORS[t.status], flex: "none" }} />
                     <span className="sw-ticket-no" style={{ fontSize: 10, color: "var(--sw-muted)", width: 46, flex: "none" }}>SW-{t.task_number}</span>
                     <span style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 8 }}>
-                      {t.milestone && <span title="Milestone" style={{ color: "var(--crimson)", fontSize: 10, flex: "none" }}>◆</span>}
+                      {t.milestone && <span title="Milestone" style={{ color: "var(--sw-on-crimson)", fontSize: 10, flex: "none" }}>◆</span>}
                       <span style={{ fontSize: 12.5, fontWeight: 400, color: "var(--sw-text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.name}</span>
                       {(() => {
                         const st = subtasks.filter((x) => x.task_id === t.id);
@@ -281,7 +282,7 @@ export function ListSection() {
                       })()}
                       {(() => {
                         const openBlockers = deps.filter((d) => d.task_id === t.id).map((d) => tasks.find((x) => x.id === d.depends_on)).filter((x) => x && x.status !== "Done");
-                        return openBlockers.length ? <span title="Blocked by open tasks" style={{ fontSize: 9.5, fontWeight: 400, color: "var(--red)", background: "rgba(243,38,62,0.1)", padding: "1px 6px", borderRadius: 999, flex: "none" }}>BLOCKED ·{openBlockers.length}</span> : null;
+                        return openBlockers.length ? <span title="Blocked by open tasks" style={{ fontSize: 9.5, fontWeight: 400, color: "var(--sw-on-red)", background: "rgba(243,38,62,0.1)", padding: "1px 6px", borderRadius: 999, flex: "none" }}>BLOCKED ·{openBlockers.length}</span> : null;
                       })()}
                     </span>
                     <span style={{ display: "flex", marginRight: 2 }}>
@@ -380,7 +381,7 @@ export function ListSection() {
               <h3 style={{ margin: 0, fontSize: 15, fontWeight: 400, fontFamily: "var(--font-serif)", fontStyle: "italic" }}>{calMonth.toLocaleDateString("en-GB", { month: "long", year: "numeric" })}</h3>
               <div style={{ flex: 1 }} />
               <div style={{ display: "flex", alignItems: "center", gap: 14, fontSize: 11.5, color: "var(--sw-text-soft)", fontWeight: 400 }}>
-                {[["var(--red)", "Critical"], ["var(--crimson)", "High"], ["var(--navy)", "Medium"], ["var(--green)", "Low"]].map(([c, l]) => (
+                {[["var(--sw-on-red)", "Critical"], ["var(--sw-on-crimson)", "High"], ["var(--sw-on-navy)", "Medium"], ["var(--sw-on-green)", "Low"]].map(([c, l]) => (
                   <span key={l} style={{ display: "flex", alignItems: "center", gap: 5 }}><span style={{ width: 7, height: 7, borderRadius: 99, background: c }} />{l}</span>
                 ))}
               </div>
@@ -409,8 +410,8 @@ export function ListSection() {
                             <button key={t.id} onClick={() => setActiveTaskId(t.id)} style={{ boxSizing: "border-box", display: "block", width: "100%", textAlign: "left", border: "none", borderLeft: `3px solid ${STATUS_COLORS[t.status]}`, borderRadius: 5, padding: "4px 6px", background: overdue ? "rgba(243,38,62,0.06)" : "var(--sw-hover)", cursor: "pointer", overflow: "hidden" }}>
                               <span style={{ display: "block", fontSize: 10.5, fontWeight: 400, color: "var(--sw-text)", lineHeight: 1.3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.name}</span>
                               <span style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 2 }}>
-                                <span style={{ width: 13, height: 13, borderRadius: 99, background: a?.color || "#9A918A", color: "#fff", fontSize: 7, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>{a ? initials(a.name) : "?"}</span>
-                                <span style={{ fontSize: 9, color: overdue ? "var(--red)" : t.priority === "Critical" || t.priority === "High" ? PRIORITY_COLORS[t.priority] : "var(--sw-muted)" }}>{overdue ? "Overdue" : t.priority}</span>
+                                <span style={{ width: 13, height: 13, borderRadius: 99, background: a?.color || "#9A918A", color: readableTextOn(a?.color || "#9A918A"), fontSize: 7, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>{a ? initials(a.name) : "?"}</span>
+                                <span style={{ fontSize: 9, color: overdue ? "var(--sw-on-red)" : t.priority === "Critical" || t.priority === "High" ? PRIORITY_COLORS[t.priority] : "var(--sw-muted)" }}>{overdue ? "Overdue" : t.priority}</span>
                               </span>
                             </button>
                           );
@@ -425,7 +426,7 @@ export function ListSection() {
               <aside className="sw-cal-side" style={{ width: 240, flex: "none" }}>
                 <div style={{ background: "var(--sw-card)", border: "1px solid var(--sw-hair)", borderRadius: 12, padding: 14, boxShadow: "var(--shadow-card)", marginBottom: 12 }}>
                   <div style={{ display: "flex", gap: 10 }}>
-                    <div style={{ flex: 1 }}><div style={{ fontSize: 18, fontWeight: 800, color: "var(--red)" }}>{overdueTasks.length}</div><div style={{ fontSize: 10.5, color: "var(--sw-muted)", fontWeight: 400 }}>Overdue</div></div>
+                    <div style={{ flex: 1 }}><div style={{ fontSize: 18, fontWeight: 800, color: "var(--sw-on-red)" }}>{overdueTasks.length}</div><div style={{ fontSize: 10.5, color: "var(--sw-muted)", fontWeight: 400 }}>Overdue</div></div>
                     <div style={{ flex: 1 }}><div style={{ fontSize: 18, fontWeight: 800 }}>{monthTasks.length}</div><div style={{ fontSize: 10.5, color: "var(--sw-muted)", fontWeight: 400 }}>This month</div></div>
                   </div>
                 </div>
@@ -455,7 +456,7 @@ export function ListSection() {
               </div>
               <div style={{ flex: 1 }} />
               <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 11, color: "var(--sw-text-soft)", fontWeight: 400 }}>
-                {[["var(--red)", "Critical"], ["var(--crimson)", "High"], ["var(--navy)", "Medium"], ["var(--green)", "Low"]].map(([c, l]) => (
+                {[["var(--sw-on-red)", "Critical"], ["var(--sw-on-crimson)", "High"], ["var(--sw-on-navy)", "Medium"], ["var(--sw-on-green)", "Low"]].map(([c, l]) => (
                   <span key={l} style={{ display: "flex", alignItems: "center", gap: 5 }}><span style={{ width: 7, height: 7, borderRadius: 99, background: c }} />{l}</span>
                 ))}
               </div>
@@ -477,7 +478,7 @@ export function ListSection() {
               {ganttLanes.map((gl) => (
                 <div key={gl.p.id} style={{ display: "flex", alignItems: "stretch", borderBottom: "1px solid var(--sw-hair)", position: "relative", minWidth: ganttWide ? `calc(var(--sw-gantt-name) + ${ganttSpan * 34}px)` : "100%" }}>
                   <button onClick={() => openProfile(gl.p.id)} title="View profile" style={{ width: "var(--sw-gantt-name)", flex: "none", textAlign: "left", padding: "10px 16px", border: "none", borderRight: "1px solid var(--sw-hair)", background: "var(--sw-card)", cursor: "pointer", display: "flex", alignItems: "center", gap: 9, position: "sticky", left: 0, zIndex: 3 }}>
-                    <span style={{ width: 24, height: 24, borderRadius: 99, background: gl.p.color, color: "#fff", fontSize: 9, fontWeight: 400, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>{initials(gl.p.name)}</span>
+                    <span style={{ width: 24, height: 24, borderRadius: 99, background: gl.p.color, color: readableTextOn(gl.p.color), fontSize: 9, fontWeight: 400, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>{initials(gl.p.name)}</span>
                     <span style={{ minWidth: 0 }}>
                       <span style={{ display: "block", fontSize: 12, fontWeight: 400, color: "var(--sw-text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{gl.p.name}</span>
                       <span style={{ display: "block", fontSize: 9.5, color: gl.loadColor }}>{gl.loadLabel}</span>
@@ -519,7 +520,7 @@ export function ListSection() {
                 </span>
                 <button
                   onClick={async () => { await supabase.from("custom_fields").delete().eq("id", f.id); patch("customFields", customFields.filter((x) => x.id !== f.id)); }}
-                  style={{ border: "none", background: "none", color: "var(--red)", fontSize: 11.5, fontWeight: 400, cursor: "pointer" }}
+                  style={{ border: "none", background: "none", color: "var(--sw-on-red)", fontSize: 11.5, fontWeight: 400, cursor: "pointer" }}
                 >
                   Remove
                 </button>
@@ -558,7 +559,7 @@ export function ListSection() {
             {listAuto.map((a) => (
               <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 11, padding: "11px 0", borderBottom: "1px solid var(--sw-hair)" }}>
                 <span style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 400 }}>When <em style={{ fontStyle: "italic", color: "var(--crimson)" }}>{a.trigger}</em></div>
+                  <div style={{ fontSize: 13, fontWeight: 400 }}>When <em style={{ fontStyle: "italic", color: "var(--sw-on-crimson)" }}>{a.trigger}</em></div>
                   <div style={{ fontSize: 11.5, color: "var(--sw-muted)", marginTop: 2 }}>→ {a.action}</div>
                 </span>
                 <span
@@ -684,7 +685,7 @@ export function ListSection() {
             {tpl.checklist.map((ci, i) => (
               <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 7 }}>
                 <span style={{ flex: 1, fontSize: 12.5, padding: "8px 10px", background: "var(--sw-hover)", border: "1px solid var(--sw-hair)", borderRadius: 8 }}>{ci}</span>
-                <button onClick={() => setTpl({ ...tpl, checklist: tpl.checklist.filter((_, j) => j !== i) })} style={{ border: "none", background: "none", color: "var(--red)", fontSize: 13, cursor: "pointer" }}><IconX /></button>
+                <button onClick={() => setTpl({ ...tpl, checklist: tpl.checklist.filter((_, j) => j !== i) })} style={{ border: "none", background: "none", color: "var(--sw-on-red)", fontSize: 13, cursor: "pointer" }}><IconX /></button>
               </div>
             ))}
             <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
@@ -758,7 +759,7 @@ function EverythingView() {
   });
   const dueColorFor = (t: Task) => {
     if (!t.due) return "var(--sw-muted)";
-    return t.due < today && t.status !== "Done" ? "var(--red)" : "var(--sw-text-soft)";
+    return t.due < today && t.status !== "Done" ? "var(--sw-on-red)" : "var(--sw-text-soft)";
   };
 
   return (

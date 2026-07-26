@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Profile, STATUSES, PRIORITIES, STATUS_COLORS, PRIORITY_COLORS, initials } from "@/lib/types";
 import { FilterState, EMPTY_FILTERS, countActiveFilters, DUE_LABELS, EFFORT_LABELS } from "@/lib/search";
 import { IconChevDown, IconX } from "./icons";
+import { readableTextOn } from "@/lib/colors";
 
 /* One popover-chip. Children render the popover body. */
 function Chip({
@@ -29,7 +30,7 @@ function Chip({
     <div ref={ref} style={{ position: "relative" }}>
       <button
         onClick={() => setOpen(!open)}
-        style={{ display: "flex", alignItems: "center", gap: 5, padding: "6px 11px", borderRadius: 999, border: `1px solid ${active ? "var(--crimson)" : "var(--sw-hair)"}`, background: active ? "rgba(122,13,32,0.07)" : "var(--sw-hover)", color: active ? "var(--crimson)" : "var(--sw-text-soft)", fontSize: 11.5, fontWeight: 400, cursor: "pointer", whiteSpace: "nowrap" }}
+        style={{ display: "flex", alignItems: "center", gap: 5, padding: "6px 11px", borderRadius: 999, border: `1px solid ${active ? "var(--crimson)" : "var(--sw-hair)"}`, background: active ? "rgba(122,13,32,0.07)" : "var(--sw-hover)", color: active ? "var(--sw-on-crimson)" : "var(--sw-text-soft)", fontSize: 11.5, fontWeight: 400, cursor: "pointer", whiteSpace: "nowrap" }}
       >
         {active && activeLabel ? activeLabel : label}
         {active && onClear ? (
@@ -102,7 +103,7 @@ export function FilterBar({
       >
         {people.map((p) => (
           <CheckRow key={p.id} checked={f.assignees.includes(p.id)} onToggle={() => toggle("assignees", p.id)}>
-            <span style={{ width: 18, height: 18, borderRadius: 99, background: p.color, color: "#fff", fontSize: 7.5, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>{initials(p.name)}</span>
+            <span style={{ width: 18, height: 18, borderRadius: 99, background: p.color, color: readableTextOn(p.color), fontSize: 7.5, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>{initials(p.name)}</span>
             {p.name}
           </CheckRow>
         ))}

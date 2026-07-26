@@ -97,11 +97,39 @@
   --sw-hair: #E5DFD8;
   --sw-text: #17120F;
   --sw-text-soft: #4A423D;
-  --sw-muted: #9A918A;
+  /* #9A918A measured 2.77:1 on --sw-hover — every piece of secondary text in the
+     app ("Search…", timestamps, counts, sidebar section labels) failed AA. #756B63
+     is the least-dark warm grey that clears 4.5:1 on all three light surfaces
+     (4.65 on --sw-hover, 4.90 on --sw-sidebar, 5.20 on white). */
+  --sw-muted: #756B63;
   --sw-field-h: 40px;
+
+  /* ---- accents as FOREGROUND ----
+     The brand hues are mixed for white paper. Used as text on a dark surface they
+     collapse: #7A0D20 on #241E1A measures 1.49:1 against a 4.5:1 requirement, which
+     is what made priority chips, "View all tasks", the SANSICO wordmark and the
+     admin badges near-invisible in dark mode.
+     These tokens are the text-safe form of each hue. The plain --crimson/--green/
+     --red/--navy tokens stay untouched as FILL colours, so a crimson button with
+     white text is unaffected. Anything that paints TEXT (or a small dot that must
+     be seen against the page) uses these instead. */
+  --sw-on-crimson: #7A0D20;
+  --sw-on-green:   #0D4F31;
+  --sw-on-navy:    #22409E;
+  --sw-on-red:     #C41E33;
+  --sw-on-amber:   #8A5A12;
 }
 
 [data-sw-theme="dark"] {
+  /* Lightened accents, chosen to clear WCAG AA (4.5:1) against the LIGHTEST dark
+     surface (--sw-hover #241E1A) so they hold up on every dark background, not
+     just the page. Verified with a contrast auditor, not by eye. */
+  --sw-on-crimson: #E8828F;
+  --sw-on-green:   #7FBF9E;
+  --sw-on-navy:    #9DAFEC;
+  --sw-on-red:     #FF8A96;
+  --sw-on-amber:   #E0A94E;
+
   --sw-page: #15120F;
   --sw-card: #1D1815;
   --sw-sidebar: #191512;
@@ -109,7 +137,9 @@
   --sw-hair: #332B25;
   --sw-text: rgba(255, 255, 255, 0.92);
   --sw-text-soft: rgba(255, 255, 255, 0.68);
-  --sw-muted: rgba(255, 255, 255, 0.45);
+  /* 0.45 blended to 4.39:1 on --sw-hover — a near miss that the first audit hid by
+     ignoring alpha. 0.50 clears it at 5.09:1. */
+  --sw-muted: rgba(255, 255, 255, 0.50);
 }
 
 /* ---- base reset (design system base.css) ---- */

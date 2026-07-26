@@ -51,7 +51,7 @@ export function Sidebar() {
     <button
       key={label}
       onClick={onClick}
-      style={{ display: "flex", alignItems: "center", width: "100%", textAlign: "left", padding: "6px 9px", borderRadius: 7, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 400, background: active ? "var(--sw-hover)" : "transparent", color: active ? "var(--crimson)" : "var(--sw-text-soft)" }}
+      style={{ display: "flex", alignItems: "center", width: "100%", textAlign: "left", padding: "6px 9px", borderRadius: 7, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 400, background: active ? "var(--sw-hover)" : "transparent", color: active ? "var(--sw-on-crimson)" : "var(--sw-text-soft)" }}
     >
       <span style={{ flex: 1, fontWeight: 400 }}>{label}</span>
       {badge ? (
@@ -77,7 +77,7 @@ export function Sidebar() {
       >
         <button
           onClick={() => setActiveList({ spaceId: l.space_id, listId: l.id })}
-          style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, minWidth: 0, padding: `5px 9px 5px ${indent ? 22 : 9}px`, borderRadius: 7, border: "none", cursor: "pointer", fontSize: 12, background: active ? "var(--sw-hover)" : "transparent", color: active ? "var(--crimson)" : "var(--sw-text-soft)", fontWeight: 400, textAlign: "left" }}
+          style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, minWidth: 0, padding: `5px 9px 5px ${indent ? 22 : 9}px`, borderRadius: 7, border: "none", cursor: "pointer", fontSize: 12, background: active ? "var(--sw-hover)" : "transparent", color: active ? "var(--sw-on-crimson)" : "var(--sw-text-soft)", fontWeight: 400, textAlign: "left" }}
         >
           <span style={{ flex: 1, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{l.name}</span>
           {hoverList !== l.id && n > 0 && (
@@ -88,7 +88,7 @@ export function Sidebar() {
           <button
             onClick={(e) => { e.stopPropagation(); togglePin(l.id); }}
             title={pinned ? "Unpin" : "Pin to sidebar"}
-            style={{ position: "absolute", right: 6, border: "none", background: "none", cursor: "pointer", color: pinned ? "var(--crimson)" : "var(--sw-muted)", padding: 2, display: "flex" }}
+            style={{ position: "absolute", right: 6, border: "none", background: "none", cursor: "pointer", color: pinned ? "var(--sw-on-crimson)" : "var(--sw-muted)", padding: 2, display: "flex" }}
           >
             <IconStar size={11} filled={pinned} />
           </button>
@@ -105,7 +105,7 @@ export function Sidebar() {
       {mobileNavOpen && <div className="sw-sidebar-backdrop" onClick={() => setMobileNavOpen(false)} />}
       <aside className={`sw-sidebar${mobileNavOpen ? " open" : ""}`} style={{ width: 228, flex: "none", background: "var(--sw-sidebar)", borderRight: "1px solid var(--sw-hair)", display: "flex", flexDirection: "column", height: "100%" }}>
       <div style={{ padding: "17px 16px 13px", display: "flex", alignItems: "center", gap: 7, borderBottom: "1px solid var(--sw-hair)" }}>
-        <span style={{ fontWeight: 800, letterSpacing: "0.07em", fontSize: 11.5, color: "var(--crimson)" }}>SANSICO</span>
+        <span style={{ fontWeight: 800, letterSpacing: "0.07em", fontSize: 11.5, color: "var(--sw-on-crimson)" }}>SANSICO</span>
         <span style={{ fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 12.5, color: "var(--sw-text-soft)" }}>Group</span>
         <span style={{ marginLeft: "auto", fontWeight: 400, fontSize: 11.5, color: "var(--sw-text-soft)" }}>SansiWorks</span>
       </div>

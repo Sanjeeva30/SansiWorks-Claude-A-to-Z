@@ -14,6 +14,27 @@ function rgbToHex(r: number, g: number, b: number): string {
   return `#${c(r)}${c(g)}${c(b)}`;
 }
 
+/** Pick black or white text for a background, by WCAG relative luminance.
+ *  Avatars used a hardcoded white, but colorForPerson() lightens the department
+ *  hue by rank — so junior staff ended up with near-pastel circles where white
+ *  initials measured 1.4:1 against a 4.5:1 requirement, illegible in BOTH themes.
+ *  Threshold 0.45 is where switching to dark ink wins on contrast. */
+export function readableTextOn(color: string): string {
+  if (!color || !color.startsWith("#")) return "#fff";
+  const [r, g, b] = hexToRgb(color);
+  const chan = (v: number) => {
+    const s = v / 255;
+    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+  };
+  const L = 0.2126 * chan(r) + 0.7152 * chan(g) + 0.0722 * chan(b);
+  /* 0.179 is the exact crossover where white and pure black give equal contrast
+     (both 4.58:1), so picking the better of the two ALWAYS clears AA whatever the
+     background. A softer ink like #17120F only reaches 4.31:1 at the crossover and
+     would leave mid-tone avatars failing, which is what a hand-picked 0.45 did:
+     #95B2A4 (L=0.41) kept white text at 2.29:1 when dark would have given 8.13:1. */
+  return L > 0.179 ? "#000" : "#fff";
+}
+
 /** Blend a hex colour toward white by `amount` (0 = unchanged, 1 = white). */
 export function lighten(hex: string, amount: number): string {
   const [r, g, b] = hexToRgb(hex);

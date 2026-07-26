@@ -8,11 +8,12 @@ import { isOpen, isOverdue, onTimeStats, tasksOfPerson, canViewSop, isSeniorRank
 import { TopIcons } from "./shared";
 import { IconX } from "./icons";
 import { OrgAdmin } from "./org-admin";
+import { readableTextOn } from "@/lib/colors";
 
 const STATUS_TINT: Record<string, [string, string]> = {
-  Active: ["var(--green)", "rgba(13,79,49,0.09)"],
-  "Under review": ["#B7791F", "rgba(183,121,31,0.12)"],
-  "Revisions requested": ["var(--red)", "rgba(243,38,62,0.09)"],
+  Active: ["var(--sw-on-green)", "rgba(13,79,49,0.09)"],
+  "Under review": ["var(--sw-on-amber)", "rgba(183,121,31,0.12)"],
+  "Revisions requested": ["var(--sw-on-red)", "rgba(243,38,62,0.09)"],
   Draft: ["var(--sw-muted)", "var(--sw-hover)"],
 };
 
@@ -53,7 +54,7 @@ const FEATURE_HELP: Record<string, string> = {
 };
 
 const card: React.CSSProperties = { background: "var(--sw-card)", border: "1px solid var(--sw-hair)", borderRadius: 12, boxShadow: "var(--shadow-card)", padding: "16px 18px" };
-const pillBtn = (color: string): React.CSSProperties => ({ padding: "6px 12px", borderRadius: 999, border: `1px solid ${color === "var(--green)" ? "var(--green)" : "var(--sw-hair)"}`, background: "none", color, fontSize: 11.5, fontWeight: 400, cursor: "pointer", whiteSpace: "nowrap", flex: "none" });
+const pillBtn = (color: string): React.CSSProperties => ({ padding: "6px 12px", borderRadius: 999, border: `1px solid ${color === "var(--sw-on-green)" ? "var(--sw-on-green)" : "var(--sw-hair)"}`, background: "none", color, fontSize: 11.5, fontWeight: 400, cursor: "pointer", whiteSpace: "nowrap", flex: "none" });
 
 export function WorkspaceSection() {
   const store = useStore();
@@ -127,7 +128,7 @@ export function WorkspaceSection() {
       const owner = profiles.find((p) => p.id === d.owner_id);
       const reviewState = !d.review_date ? "none" : d.review_date < today ? "overdue" : new Date(d.review_date).getTime() - Date.now() < 21 * 86400000 ? "soon" : "ok";
       const review = !d.review_date ? "No review date" : reviewState === "overdue" ? "Review overdue" : `Review ${fmtShort(d.review_date)}`;
-      return { ...d, owner, reviewState, review, reviewColor: reviewState === "overdue" ? "var(--red)" : reviewState === "soon" ? "#B7791F" : "var(--sw-muted)" };
+      return { ...d, owner, reviewState, review, reviewColor: reviewState === "overdue" ? "var(--sw-on-red)" : reviewState === "soon" ? "var(--sw-on-amber)" : "var(--sw-muted)" };
     });
   const docDeptOptions = ["All", ...Array.from(new Set(docsMapped.map((d) => d.category).filter(Boolean)))] as string[];
   const docTypeOptions = ["All", ...Array.from(new Set(docsMapped.map((d) => d.type)))];
@@ -141,10 +142,10 @@ export function WorkspaceSection() {
   const clearDocFilters = () => setDocFilters({ dept: "All", type: "All", status: "All", text: "", overdueOnly: false });
   const docStats = [
     { value: docsMapped.length, label: "Documents", color: "var(--sw-text)", onClick: clearDocFilters },
-    { value: docsMapped.filter((d) => d.status === "Active").length, label: "Active", color: "var(--green)", onClick: () => setDocFilters({ ...docFilters, status: "Active", overdueOnly: false }) },
-    { value: docsMapped.filter((d) => d.status === "Under review" || d.status === "Revisions requested").length, label: "Under review", color: "#B7791F", onClick: () => setDocFilters({ ...docFilters, status: "Under review", overdueOnly: false }) },
+    { value: docsMapped.filter((d) => d.status === "Active").length, label: "Active", color: "var(--sw-on-green)", onClick: () => setDocFilters({ ...docFilters, status: "Active", overdueOnly: false }) },
+    { value: docsMapped.filter((d) => d.status === "Under review" || d.status === "Revisions requested").length, label: "Under review", color: "var(--sw-on-amber)", onClick: () => setDocFilters({ ...docFilters, status: "Under review", overdueOnly: false }) },
     { value: docsMapped.filter((d) => d.status === "Draft").length, label: "Drafts", color: "var(--sw-muted)", onClick: () => setDocFilters({ ...docFilters, status: "Draft", overdueOnly: false }) },
-    { value: docsMapped.filter((d) => d.reviewState === "overdue").length, label: "Review overdue", color: "var(--red)", onClick: () => setDocFilters({ ...docFilters, status: "All", overdueOnly: true }) },
+    { value: docsMapped.filter((d) => d.reviewState === "overdue").length, label: "Review overdue", color: "var(--sw-on-red)", onClick: () => setDocFilters({ ...docFilters, status: "All", overdueOnly: true }) },
   ];
 
   /* ------- SOP review routing — resolved by role, never hardcoded names ------- */
@@ -261,7 +262,7 @@ export function WorkspaceSection() {
         )}
         {workspacePage === "forms" && (
           <>
-            <button onClick={() => setShowPortal(true)} style={{ padding: "7px 15px", borderRadius: 999, border: "1px solid var(--crimson)", background: "none", color: "var(--crimson)", fontSize: 12, fontWeight: 400, cursor: "pointer", whiteSpace: "nowrap", flex: "none" }}>View public portal</button>
+            <button onClick={() => setShowPortal(true)} style={{ padding: "7px 15px", borderRadius: 999, border: "1px solid var(--crimson)", background: "none", color: "var(--sw-on-crimson)", fontSize: 12, fontWeight: 400, cursor: "pointer", whiteSpace: "nowrap", flex: "none" }}>View public portal</button>
             <button onClick={() => { setNewForm((f) => ({ ...f, ownerId: f.ownerId || me?.id || "" })); setShowNewForm(true); }} style={{ padding: "7px 15px", borderRadius: 999, border: "none", background: "var(--crimson)", color: "#fff", fontSize: 12.5, fontWeight: 400, cursor: "pointer", whiteSpace: "nowrap", flex: "none" }}>+ New form</button>
           </>
         )}
@@ -303,11 +304,11 @@ export function WorkspaceSection() {
                     <span style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 12.5, fontWeight: n.read ? 400 : 700, lineHeight: 1.4 }}>{n.body}</div>
                       <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
-                        <span style={{ fontSize: 9.5, fontWeight: 400, color: "var(--crimson)", border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "1px 8px", borderRadius: 999 }}>{n.reason}</span>
+                        <span style={{ fontSize: 9.5, fontWeight: 400, color: "var(--sw-on-crimson)", border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "1px 8px", borderRadius: 999 }}>{n.reason}</span>
                         <span style={{ fontSize: 11, color: "var(--sw-muted)" }}>{relTime(n.created_at)}</span>
                       </div>
                     </span>
-                    {n.task_id && <span style={{ fontSize: 11.5, color: "var(--crimson)", fontWeight: 400, flex: "none" }}>Open task →</span>}
+                    {n.task_id && <span style={{ fontSize: 11.5, color: "var(--sw-on-crimson)", fontWeight: 400, flex: "none" }}>Open task →</span>}
                   </button>
                 ))}
                 {!inboxRows.length && (
@@ -355,12 +356,12 @@ export function WorkspaceSection() {
                         <h3 style={{ margin: "0 0 6px", fontSize: 14, fontWeight: 400, lineHeight: 1.35, color: "var(--sw-text)" }}>{d.title}</h3>
                         <p style={{ margin: 0, fontSize: 12, color: "var(--sw-text-soft)", lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{d.excerpt}</p>
                         <div style={{ display: "flex", gap: 10, marginTop: 10, fontSize: 10.5, color: "var(--sw-muted)", fontWeight: 400 }}>
-                          {d.is_sop && <span style={{ color: "var(--crimson)", fontWeight: 800 }}>SOP</span>}
+                          {d.is_sop && <span style={{ color: "var(--sw-on-crimson)", fontWeight: 800 }}>SOP</span>}
                           <span>{d.type}</span><span>{d.category}</span><span>v{d.version}</span>
                         </div>
                       </button>
                       <button onClick={() => d.owner && openProfile(d.owner.id)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 16px", borderTop: "1px solid var(--sw-hair)", borderLeft: "none", borderRight: "none", borderBottom: "none", background: "none", cursor: "pointer", textAlign: "left" }}>
-                        <span style={{ width: 20, height: 20, borderRadius: 99, background: d.owner?.color || "#9A918A", color: "#fff", fontSize: 8, fontWeight: 400, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>{d.owner ? initials(d.owner.name) : "?"}</span>
+                        <span style={{ width: 20, height: 20, borderRadius: 99, background: d.owner?.color || "#9A918A", color: readableTextOn(d.owner?.color || "#9A918A"), fontSize: 8, fontWeight: 400, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>{d.owner ? initials(d.owner.name) : "?"}</span>
                         <span style={{ flex: 1, fontSize: 11, fontWeight: 400, color: "var(--sw-text-soft)" }}>{d.owner?.name || "—"}</span>
                         <span style={{ fontSize: 10.5, color: d.reviewColor, fontWeight: 400 }}>{d.review}</span>
                       </button>
@@ -372,7 +373,7 @@ export function WorkspaceSection() {
                 <div style={{ textAlign: "center", padding: "44px 0 34px" }}>
                   <div style={{ fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 19, color: "var(--sw-text-soft)", marginBottom: 6 }}>Nothing here yet.</div>
                   <p style={{ margin: "0 0 16px", fontSize: 12, color: "var(--sw-muted)" }}>No documents match these filters.</p>
-                  <button onClick={() => setShowNewDoc(true)} style={{ padding: "8px 18px", borderRadius: 999, border: "1px solid var(--crimson)", background: "none", color: "var(--crimson)", fontSize: 12, fontWeight: 400, cursor: "pointer" }}>+ New SOP</button>
+                  <button onClick={() => setShowNewDoc(true)} style={{ padding: "8px 18px", borderRadius: 999, border: "1px solid var(--crimson)", background: "none", color: "var(--sw-on-crimson)", fontSize: 12, fontWeight: 400, cursor: "pointer" }}>+ New SOP</button>
                 </div>
               )}
             </>
@@ -400,13 +401,13 @@ export function WorkspaceSection() {
                 <div key={f.id} style={{ ...card, marginBottom: 10 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 5 }}>
                     <button onClick={() => openDetail("form", f.id)} style={{ margin: 0, fontSize: 14, fontWeight: 400, flex: 1, textAlign: "left", border: "none", background: "none", color: "var(--sw-text)", cursor: "pointer", padding: 0 }}>{f.title}</button>
-                    <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, fontWeight: 400, color: f.active ? "var(--green)" : "var(--sw-muted)" }}>
+                    <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, fontWeight: 400, color: f.active ? "var(--sw-on-green)" : "var(--sw-muted)" }}>
                       <span style={{ width: 6, height: 6, borderRadius: 99, background: f.active ? "var(--green)" : "var(--sw-muted)" }} />{f.active ? "Live" : "Paused"}
                     </span>
                   </div>
                   <p style={{ margin: "0 0 4px", fontSize: 12, color: "var(--sw-text-soft)" }}>Submissions → {listPath(f.list_id)} · {f.fields.length} questions</p>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 12 }}>
-                    <span style={{ fontSize: 11.5, color: owner ? "var(--sw-muted)" : "var(--red)" }}>
+                    <span style={{ fontSize: 11.5, color: owner ? "var(--sw-muted)" : "var(--sw-on-red)" }}>
                       {owner ? `Notifies & assigns to ${owner.name}` : "No owner set — submissions won't notify anyone"}
                     </span>
                     <select
@@ -452,7 +453,7 @@ export function WorkspaceSection() {
                     >
                       {f.active ? "Pause" : "Activate"}
                     </button>
-                    <button onClick={() => setExpandedSubmissionsFor(showSubs ? null : f.id)} style={pillBtn(pendingSubs.length ? "var(--crimson)" : "var(--sw-text-soft)")}>
+                    <button onClick={() => setExpandedSubmissionsFor(showSubs ? null : f.id)} style={pillBtn(pendingSubs.length ? "var(--sw-on-crimson)" : "var(--sw-text-soft)")}>
                       {showSubs ? "Hide" : "Show"} submissions ({subs.length}{pendingSubs.length ? ` · ${pendingSubs.length} pending` : ""})
                     </button>
                   </div>
@@ -464,9 +465,9 @@ export function WorkspaceSection() {
                           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
                             <span style={{ flex: 1, fontSize: 11, color: "var(--sw-muted)" }}>{relTime(s.submitted_at)}</span>
                             {s.task_id ? (
-                              <button onClick={() => setActiveTaskId(s.task_id)} style={pillBtn("var(--green)")}>View task</button>
+                              <button onClick={() => setActiveTaskId(s.task_id)} style={pillBtn("var(--sw-on-green)")}>View task</button>
                             ) : (
-                              <button disabled={convertingSubmission === s.id} onClick={() => convertSubmission(f.id, s.id, s.answers)} style={pillBtn("var(--crimson)")}>
+                              <button disabled={convertingSubmission === s.id} onClick={() => convertSubmission(f.id, s.id, s.answers)} style={pillBtn("var(--sw-on-crimson)")}>
                                 {convertingSubmission === s.id ? "Converting…" : "Convert to task"}
                               </button>
                             )}
@@ -484,7 +485,7 @@ export function WorkspaceSection() {
                                       const { data } = await supabase.storage.from("task-attachments").createSignedUrl(path, 60);
                                       if (data?.signedUrl) window.open(data.signedUrl, "_blank");
                                     }}
-                                    style={{ border: "none", background: "none", color: "var(--crimson)", cursor: "pointer", padding: 0, fontSize: 12 }}
+                                    style={{ border: "none", background: "none", color: "var(--sw-on-crimson)", cursor: "pointer", padding: 0, fontSize: 12 }}
                                   >
                                     Download {fileName}
                                   </button>
@@ -504,7 +505,7 @@ export function WorkspaceSection() {
                 <div style={{ textAlign: "center", padding: "44px 0 34px" }}>
                   <div style={{ fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 19, color: "var(--sw-text-soft)", marginBottom: 6 }}>Nothing here yet.</div>
                   <p style={{ margin: "0 0 16px", fontSize: 12, color: "var(--sw-muted)" }}>No forms match these filters.</p>
-                  <button onClick={() => { setNewForm((f) => ({ ...f, ownerId: f.ownerId || me?.id || "" })); setShowNewForm(true); }} style={{ padding: "8px 18px", borderRadius: 999, border: "1px solid var(--crimson)", background: "none", color: "var(--crimson)", fontSize: 12, fontWeight: 400, cursor: "pointer" }}>+ New form</button>
+                  <button onClick={() => { setNewForm((f) => ({ ...f, ownerId: f.ownerId || me?.id || "" })); setShowNewForm(true); }} style={{ padding: "8px 18px", borderRadius: 999, border: "1px solid var(--crimson)", background: "none", color: "var(--sw-on-crimson)", fontSize: 12, fontWeight: 400, cursor: "pointer" }}>+ New form</button>
                 </div>
               )}
             </>
@@ -556,7 +557,7 @@ export function WorkspaceSection() {
                     </select>
                     <span style={{ fontSize: 11, color: "var(--sw-muted)" }}>WIB, weekdays only</span>
                   </div>
-                  <button onClick={() => setEmailPreview("digest")} style={{ padding: "8px 18px", borderRadius: 999, border: "1px solid var(--crimson)", background: "none", color: "var(--crimson)", fontSize: 12, fontWeight: 400, cursor: "pointer" }}>Preview digest email</button>
+                  <button onClick={() => setEmailPreview("digest")} style={{ padding: "8px 18px", borderRadius: 999, border: "1px solid var(--crimson)", background: "none", color: "var(--sw-on-crimson)", fontSize: 12, fontWeight: 400, cursor: "pointer" }}>Preview digest email</button>
                 </section>
 
                 <section style={{ ...card, padding: "18px 20px" }}>
@@ -597,7 +598,7 @@ export function WorkspaceSection() {
                     <span style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: "flex", alignItems: "baseline", gap: 9 }}>
                         <span style={{ fontSize: 12.5, color: "var(--sw-text)" }}>{name}</span>
-                        <span style={{ fontSize: 10, color: "var(--crimson)" }}>{when}</span>
+                        <span style={{ fontSize: 10, color: "var(--sw-on-crimson)" }}>{when}</span>
                       </div>
                       <div style={{ fontSize: 11, color: "var(--sw-muted)", marginTop: 1 }}>{desc}</div>
                     </span>
@@ -613,7 +614,7 @@ export function WorkspaceSection() {
             <>
               <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 16, borderBottom: "1px solid var(--sw-hair)" }}>
                 {adminTabDefs.map(([key, label]) => (
-                  <button key={key} onClick={() => setAdminTab(key)} style={{ padding: "9px 13px", border: "none", background: "none", borderBottom: `2px solid ${adminTab === key ? "var(--crimson)" : "transparent"}`, color: adminTab === key ? "var(--crimson)" : "var(--sw-text-soft)", fontSize: 12.5, fontWeight: 400, cursor: "pointer", marginBottom: -1 }}>
+                  <button key={key} onClick={() => setAdminTab(key)} style={{ padding: "9px 13px", border: "none", background: "none", borderBottom: `2px solid ${adminTab === key ? "var(--crimson)" : "transparent"}`, color: adminTab === key ? "var(--sw-on-crimson)" : "var(--sw-text-soft)", fontSize: 12.5, fontWeight: 400, cursor: "pointer", marginBottom: -1 }}>
                     {label}
                   </button>
                 ))}
@@ -624,11 +625,11 @@ export function WorkspaceSection() {
                   <h3 style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 400 }}>Active users</h3>
                   {sansicoUsers.map((u) => (
                     <div key={u.id} style={{ display: "flex", alignItems: "center", gap: 11, padding: "9px 0", borderBottom: "1px solid var(--sw-hair)", flexWrap: "wrap" }}>
-                      <button onClick={() => openProfile(u.id)} title="View profile" style={{ width: 28, height: 28, borderRadius: 99, background: u.color, color: "#fff", fontSize: 10.5, fontWeight: 400, display: "flex", alignItems: "center", justifyContent: "center", flex: "none", border: "none", cursor: "pointer", padding: 0 }}>{initials(u.name)}</button>
+                      <button onClick={() => openProfile(u.id)} title="View profile" style={{ width: 28, height: 28, borderRadius: 99, background: u.color, color: readableTextOn(u.color), fontSize: 10.5, fontWeight: 400, display: "flex", alignItems: "center", justifyContent: "center", flex: "none", border: "none", cursor: "pointer", padding: 0 }}>{initials(u.name)}</button>
                       <button onClick={() => openProfile(u.id)} style={{ flex: "1 1 160px", minWidth: 0, textAlign: "left", border: "none", background: "none", cursor: "pointer", padding: 0 }}>
                         <div style={{ fontSize: 12.5, fontWeight: 400, display: "flex", alignItems: "center", gap: 6, color: "var(--sw-text)" }}>
                           {u.name}
-                          {u.is_super && <span style={{ fontSize: 9.5, fontWeight: 400, color: "var(--crimson)", background: "rgba(122,13,32,0.08)", padding: "1px 7px", borderRadius: 999 }}>Super admin</span>}
+                          {u.is_super && <span style={{ fontSize: 9.5, fontWeight: 400, color: "var(--sw-on-crimson)", background: "rgba(122,13,32,0.08)", padding: "1px 7px", borderRadius: 999 }}>Super admin</span>}
                         </div>
                         <div style={{ fontSize: 11, color: "var(--sw-muted)" }}>{u.email}</div>
                       </button>
@@ -642,7 +643,7 @@ export function WorkspaceSection() {
                       >
                         {u.is_super ? "Make member" : "Make super admin"}
                       </button>
-                      <button onClick={() => pushToast(`${u.name.split(" ")[0]} suspended (demo)`)} style={pillBtn("var(--red)")}>Suspend</button>
+                      <button onClick={() => pushToast(`${u.name.split(" ")[0]} suspended (demo)`)} style={pillBtn("var(--sw-on-red)")}>Suspend</button>
                     </div>
                   ))}
                 </section>
@@ -702,7 +703,7 @@ export function WorkspaceSection() {
                     </div>
                     {sansicoUsers.map((u) => (
                       <div key={u.id} style={{ display: "flex", alignItems: "center", gap: 11, padding: "9px 0", borderBottom: "1px solid var(--sw-hair)", flexWrap: "wrap" }}>
-                        <span style={{ width: 26, height: 26, borderRadius: 99, background: u.color, color: "#fff", fontSize: 10, fontWeight: 400, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>{initials(u.name)}</span>
+                        <span style={{ width: 26, height: 26, borderRadius: 99, background: u.color, color: readableTextOn(u.color), fontSize: 10, fontWeight: 400, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>{initials(u.name)}</span>
                         <span style={{ flex: "1 1 100px", minWidth: 0, fontSize: 12.5, fontWeight: 400 }}>{u.name}</span>
                         <select
                           className="sw-select"
@@ -828,7 +829,7 @@ export function WorkspaceSection() {
                                   <option value="">+ Add member…</option>
                                   {profiles.filter((p) => !members.some((m) => m!.id === p.id)).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                                 </select>
-                                <button onClick={() => { setNominateFor(d.id); setNominate({ name: "", reason: "" }); }} style={{ padding: "5px 11px", borderRadius: 999, border: "1px solid var(--crimson)", background: "none", color: "var(--crimson)", fontSize: 11, fontWeight: 400, cursor: "pointer", whiteSpace: "nowrap", flex: "none" }}>Nominate space admin…</button>
+                                <button onClick={() => { setNominateFor(d.id); setNominate({ name: "", reason: "" }); }} style={{ padding: "5px 11px", borderRadius: 999, border: "1px solid var(--crimson)", background: "none", color: "var(--sw-on-crimson)", fontSize: 11, fontWeight: 400, cursor: "pointer", whiteSpace: "nowrap", flex: "none" }}>Nominate space admin…</button>
                               </div>
                             </div>
                           </div>
@@ -902,11 +903,11 @@ export function WorkspaceSection() {
                           <div key={v.id} style={{ display: "flex", alignItems: "center", gap: 11, padding: "10px 0", borderBottom: "1px solid var(--sw-hair)" }}>
                             <span style={{ flex: 1, minWidth: 0 }}>
                               <div style={{ fontSize: 12.5, fontWeight: 400 }}>&quot;{doc.title}&quot; v{v.version_number} — waiting on {waitingOn}</div>
-                              <div style={{ fontSize: 11, color: overdueReview ? "var(--red)" : "var(--sw-muted)" }}>
+                              <div style={{ fontSize: 11, color: overdueReview ? "var(--sw-on-red)" : "var(--sw-muted)" }}>
                                 Submitted by {submitter?.name || "—"} · {v.review_due ? `review due ${fmtShort(v.review_due)}${overdueReview ? " — overdue" : ""}` : "no review deadline"}
                               </div>
                             </span>
-                            <button onClick={() => setDocDetailId(doc.id)} style={pillBtn("var(--crimson)")}>Open review</button>
+                            <button onClick={() => setDocDetailId(doc.id)} style={pillBtn("var(--sw-on-crimson)")}>Open review</button>
                           </div>
                         );
                       })}
@@ -930,7 +931,7 @@ export function WorkspaceSection() {
                             <div style={{ fontSize: 12.5, fontWeight: 400 }}>&quot;{f.title}&quot; — new submission {relTime(s.submitted_at)}</div>
                             <div style={{ fontSize: 11, color: "var(--sw-muted)" }}>{owner ? `Assigned to ${owner.name} on conversion` : "No owner set on this form"}</div>
                           </span>
-                          <button onClick={() => { setSection("workspace"); setWorkspacePage("forms"); setExpandedSubmissionsFor(f.id); }} style={pillBtn("var(--crimson)")}>Open in Forms</button>
+                          <button onClick={() => { setSection("workspace"); setWorkspacePage("forms"); setExpandedSubmissionsFor(f.id); }} style={pillBtn("var(--sw-on-crimson)")}>Open in Forms</button>
                         </div>
                       );
                     })}
@@ -963,7 +964,7 @@ export function WorkspaceSection() {
                                   await refresh();
                                 }
                               }}
-                              style={pillBtn(verdict === "approved" ? "var(--green)" : "var(--red)")}
+                              style={pillBtn(verdict === "approved" ? "var(--sw-on-green)" : "var(--sw-on-red)")}
                             >
                               {verdict === "approved" ? "Approve" : "Reject"}
                             </button>
@@ -994,7 +995,7 @@ export function WorkspaceSection() {
                               await decideDueDate(supabase, store, patch, a, me, "approved");
                               pushToast("Request approved — due date updated");
                             }}
-                            style={pillBtn("var(--green)")}
+                            style={pillBtn("var(--sw-on-green)")}
                           >
                             Approve
                           </button>
@@ -1005,7 +1006,7 @@ export function WorkspaceSection() {
                               await decideDueDate(supabase, store, patch, a, me, "declined");
                               pushToast("Request declined");
                             }}
-                            style={pillBtn("var(--red)")}
+                            style={pillBtn("var(--sw-on-red)")}
                           >
                             Reject
                           </button>
@@ -1041,7 +1042,7 @@ export function WorkspaceSection() {
                               }
                               pushToast(`Board "${b.board_name}" created`);
                             }}
-                            style={pillBtn("var(--green)")}
+                            style={pillBtn("var(--sw-on-green)")}
                           >
                             Approve
                           </button>
@@ -1050,7 +1051,7 @@ export function WorkspaceSection() {
                               patch("boardRequests", boardRequests.filter((x) => x.id !== b.id));
                               await supabase.from("board_requests").update({ status: "rejected" }).eq("id", b.id);
                             }}
-                            style={pillBtn("var(--red)")}
+                            style={pillBtn("var(--sw-on-red)")}
                           >
                             Reject
                           </button>
@@ -1098,7 +1099,7 @@ export function WorkspaceSection() {
                     {invites.map((i) => (
                       <button key={i.id} onClick={() => openDetail("invite", i.id)} className="sw-row" style={{ display: "flex", alignItems: "center", gap: 11, padding: "9px 0", width: "100%", border: "none", borderBottom: "1px solid var(--sw-hair)", background: "none", cursor: "pointer", textAlign: "left" }}>
                         <span style={{ flex: 1, fontSize: 12.5, fontWeight: 400 }}>{i.email}</span>
-                        <span style={{ fontSize: 11, fontWeight: 400, color: i.status === "registered" ? "var(--green)" : "#B7791F" }}>
+                        <span style={{ fontSize: 11, fontWeight: 400, color: i.status === "registered" ? "var(--sw-on-green)" : "var(--sw-on-amber)" }}>
                           {i.status === "registered" ? "Registered · active" : "Email sent · not registered"}
                         </span>
                         <span style={{ fontSize: 11, color: "var(--sw-muted)" }}>{fmtShort(i.created_at.slice(0, 10))}</span>
@@ -1139,7 +1140,7 @@ export function WorkspaceSection() {
                 <section style={card}>
                   <div style={{ display: "flex", alignItems: "center", marginBottom: 12 }}>
                     <h3 style={{ margin: 0, fontSize: 13, fontWeight: 400, flex: 1 }}>Audit log</h3>
-                    <button onClick={exportAuditPackage} style={{ padding: "7px 15px", borderRadius: 999, border: "1px solid var(--crimson)", background: "none", color: "var(--crimson)", fontSize: 12, fontWeight: 400, cursor: "pointer" }}>Export audit package (CSV)</button>
+                    <button onClick={exportAuditPackage} style={{ padding: "7px 15px", borderRadius: 999, border: "1px solid var(--crimson)", background: "none", color: "var(--sw-on-crimson)", fontSize: 12, fontWeight: 400, cursor: "pointer" }}>Export audit package (CSV)</button>
                   </div>
                   <p style={{ margin: "0 0 14px", fontSize: 11.5, color: "var(--sw-muted)" }}>Admin/permission/org changes and every SOP review decision, in one file — for handing to Internal Audit.</p>
                   {audit.map((a) => {
@@ -1329,7 +1330,7 @@ export function WorkspaceSection() {
                 <select className="sw-select" value={f.type} onChange={(e) => setNewForm({ ...newForm, fields: newForm.fields.map((x, j) => (j === i ? { ...x, type: e.target.value } : x)) })} style={{ height: 36, borderRadius: 9, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "0 10px", fontSize: 12, color: "var(--sw-text)", width: 130 }}>
                   <option>Short answer</option><option>Paragraph</option><option>Dropdown</option><option>File upload</option>
                 </select>
-                <button onClick={() => setNewForm({ ...newForm, fields: newForm.fields.filter((_, j) => j !== i) })} style={{ border: "none", background: "none", color: "var(--red)", cursor: "pointer" }}><IconX /></button>
+                <button onClick={() => setNewForm({ ...newForm, fields: newForm.fields.filter((_, j) => j !== i) })} style={{ border: "none", background: "none", color: "var(--sw-on-red)", cursor: "pointer" }}><IconX /></button>
               </div>
             ))}
             <button onClick={() => setNewForm({ ...newForm, fields: [...newForm.fields, { id: Date.now(), label: "", type: "Short answer" }] })} style={{ marginBottom: 18, padding: "7px 14px", borderRadius: 999, border: "1px dashed var(--sw-hair)", background: "none", color: "var(--sw-text-soft)", fontSize: 12, fontWeight: 400, cursor: "pointer" }}>+ Add question</button>
@@ -1381,7 +1382,7 @@ export function WorkspaceSection() {
                 <select className="sw-select" value={f.type} onChange={(e) => setEditingForm({ ...editingForm, fields: editingForm.fields.map((x, j) => (j === i ? { ...x, type: e.target.value } : x)) })} style={{ height: 36, borderRadius: 9, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "0 10px", fontSize: 12, color: "var(--sw-text)", width: 130 }}>
                   <option>Short answer</option><option>Paragraph</option><option>Dropdown</option><option>File upload</option>
                 </select>
-                <button onClick={() => setEditingForm({ ...editingForm, fields: editingForm.fields.filter((_, j) => j !== i) })} style={{ border: "none", background: "none", color: "var(--red)", cursor: "pointer" }}><IconX /></button>
+                <button onClick={() => setEditingForm({ ...editingForm, fields: editingForm.fields.filter((_, j) => j !== i) })} style={{ border: "none", background: "none", color: "var(--sw-on-red)", cursor: "pointer" }}><IconX /></button>
               </div>
             ))}
             <button onClick={() => setEditingForm({ ...editingForm, fields: [...editingForm.fields, { id: Date.now(), label: "", type: "Short answer" }] })} style={{ marginBottom: 18, padding: "7px 14px", borderRadius: 999, border: "1px dashed var(--sw-hair)", background: "none", color: "var(--sw-text-soft)", fontSize: 12, fontWeight: 400, cursor: "pointer" }}>+ Add question</button>
@@ -1509,7 +1510,7 @@ function EmailPreview({ kind, digestTime, onClose, dueSoon, myOpen, firstName, e
           <span><b style={{ fontWeight: 800, color: "var(--sw-text)" }}>From:</b> SansiWorks &lt;digest@sansico.com&gt;</span>
           <span><b style={{ fontWeight: 800, color: "var(--sw-text)" }}>To:</b> {email}</span>
           <span><b style={{ fontWeight: 800, color: "var(--sw-text)" }}>Subject:</b> {heads.subject}</span>
-          <span style={{ fontSize: 10.5, color: "var(--crimson)" }}>{heads.when}</span>
+          <span style={{ fontSize: 10.5, color: "var(--sw-on-crimson)" }}>{heads.when}</span>
         </div>
         <div style={{ padding: "24px 26px" }}>
           <div style={{ display: "flex", height: 4, borderRadius: 99, overflow: "hidden", marginBottom: 18 }}>
@@ -1524,9 +1525,9 @@ function EmailPreview({ kind, digestTime, onClose, dueSoon, myOpen, firstName, e
               </div>
               <h4 style={h4}>Needs your attention</h4>
               {dueSoon.map((n) => (
-                <div key={n} style={rowStyle}><span style={{ color: "var(--sw-text)" }}>{n}</span><span style={{ color: "var(--red)", fontSize: 11.5, flex: "none" }}>due</span></div>
+                <div key={n} style={rowStyle}><span style={{ color: "var(--sw-text)" }}>{n}</span><span style={{ color: "var(--sw-on-red)", fontSize: 11.5, flex: "none" }}>due</span></div>
               ))}
-              <div style={{ marginTop: 18, background: "rgba(13,79,49,0.07)", border: "1px solid var(--sw-hair)", borderRadius: 11, padding: "11px 16px", fontSize: 12.5, color: "var(--green)" }}>On-time this week — trending up</div>
+              <div style={{ marginTop: 18, background: "rgba(13,79,49,0.07)", border: "1px solid var(--sw-hair)", borderRadius: 11, padding: "11px 16px", fontSize: 12.5, color: "var(--sw-on-green)" }}>On-time this week — trending up</div>
             </>
           )}
           {kind === "wrap" && (
@@ -1536,10 +1537,10 @@ function EmailPreview({ kind, digestTime, onClose, dueSoon, myOpen, firstName, e
               <div style={{ fontSize: 11, color: "var(--sw-muted)", marginBottom: 18 }}>On-time rate 67% this week · 82% last week</div>
               <h4 style={h4}>Slipped this week</h4>
               {dueSoon.slice(0, 2).map((n) => (
-                <div key={n} style={rowStyle}><span style={{ color: "var(--sw-text)" }}>{n}</span><span style={{ color: "var(--red)", fontSize: 11.5, flex: "none" }}>slipped</span></div>
+                <div key={n} style={rowStyle}><span style={{ color: "var(--sw-text)" }}>{n}</span><span style={{ color: "var(--sw-on-red)", fontSize: 11.5, flex: "none" }}>slipped</span></div>
               ))}
               <div style={{ margin: "14px 0 18px" }}><span style={{ display: "inline-block", background: "var(--crimson)", color: "#fff", borderRadius: 999, padding: "8px 20px", fontSize: 12 }}>Reschedule both into next week →</span></div>
-              <div style={{ background: "rgba(13,79,49,0.07)", border: "1px solid var(--sw-hair)", borderRadius: 11, padding: "11px 16px", fontSize: 12.5, color: "var(--green)" }}>5 tasks due next week — heaviest day is Wednesday (3).</div>
+              <div style={{ background: "rgba(13,79,49,0.07)", border: "1px solid var(--sw-hair)", borderRadius: 11, padding: "11px 16px", fontSize: 12.5, color: "var(--sw-on-green)" }}>5 tasks due next week — heaviest day is Wednesday (3).</div>
             </>
           )}
           {kind === "plan" && (

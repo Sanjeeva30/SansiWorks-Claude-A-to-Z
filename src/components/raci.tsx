@@ -2,6 +2,7 @@
 import React, { useState } from "react";
 import { Profile, initials } from "@/lib/types";
 import { IconX } from "./icons";
+import { readableTextOn } from "@/lib/colors";
 
 // "Four search rows" RACI picker — R is the single assignee, chosen elsewhere. Here:
 // A (single, picked by the assignor — never auto-filled), C (Contributor), I (Informed).
@@ -61,7 +62,7 @@ export function RaciRows({
         return (
           <div key={k} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
             <span style={{ width: 92, flex: "none", paddingTop: 5, fontSize: 10, color: "var(--sw-muted)" }}>
-              <b style={{ fontWeight: 800, fontSize: 11.5, color: r.required ? "var(--crimson)" : "var(--sw-muted)" }}>{r.letter}</b> {r.label}
+              <b style={{ fontWeight: 800, fontSize: 11.5, color: r.required ? "var(--sw-on-crimson)" : "var(--sw-muted)" }}>{r.letter}</b> {r.label}
             </span>
             <div style={{ flex: 1, position: "relative", minWidth: 0 }}>
               <div style={{ border: `1.5px solid ${isOpen ? "var(--crimson)" : "var(--sw-hair)"}`, borderRadius: 9, background: "var(--sw-hover)", padding: "2px 6px", display: "flex", flexWrap: "wrap", gap: 4, alignItems: "center", minHeight: 24 }}>
@@ -70,7 +71,7 @@ export function RaciRows({
                   if (!p) return null;
                   return (
                     <span key={pid} style={{ display: "flex", alignItems: "center", gap: 4, background: "var(--sw-card)", border: "1px solid var(--sw-hair)", borderRadius: 999, padding: "1px 7px 1px 2px" }}>
-                      <span style={{ width: 15, height: 15, borderRadius: 99, background: p.color, color: "#fff", fontSize: 7, display: "flex", alignItems: "center", justifyContent: "center" }}>{initials(p.name)}</span>
+                      <span style={{ width: 15, height: 15, borderRadius: 99, background: p.color, color: readableTextOn(p.color), fontSize: 7, display: "flex", alignItems: "center", justifyContent: "center" }}>{initials(p.name)}</span>
                       <span style={{ fontSize: 11, color: "var(--sw-text)" }}>{p.name.split(" ")[0]}</span>
                       <button
                         onClick={() => r.set(r.selected.filter((x) => x !== pid))}
@@ -103,7 +104,7 @@ export function RaciRows({
                       className="sw-row"
                       style={{ display: "flex", alignItems: "center", gap: 7, width: "100%", textAlign: "left", padding: "6px 9px", border: "none", background: "none", cursor: "pointer" }}
                     >
-                      <span style={{ width: 18, height: 18, borderRadius: 99, background: p.color, color: "#fff", fontSize: 7.5, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>{initials(p.name)}</span>
+                      <span style={{ width: 18, height: 18, borderRadius: 99, background: p.color, color: readableTextOn(p.color), fontSize: 7.5, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>{initials(p.name)}</span>
                       <span style={{ flex: 1, fontSize: 11.5, color: "var(--sw-text)" }}>{p.name}</span>
                       {deptLabel && deptLabel(p) && (
                         <span style={{ fontSize: 9, color: "var(--sw-muted)", background: "var(--sw-hover)", borderRadius: 999, padding: "1px 7px", flex: "none" }}>{deptLabel(p)}</span>

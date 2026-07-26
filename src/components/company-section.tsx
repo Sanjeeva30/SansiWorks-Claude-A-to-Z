@@ -7,6 +7,7 @@ import { fmtShort, todayIso } from "@/lib/dates";
 import { isOpen, isOverdue, onTimeStats, tasksOfPerson, criticalUnblocker, metricTrend, trendDelta, sparkPath, type TrendKind } from "@/lib/logic";
 import { TopIcons } from "./shared";
 import { IconX } from "./icons";
+import { readableTextOn } from "@/lib/colors";
 
 
 export function CompanySection() {
@@ -39,7 +40,9 @@ export function CompanySection() {
     [sansicoPeople, tasks]
   );
 
-  const effColor = (v: number) => (v >= 80 ? "var(--green)" : v >= 60 ? "#B7791F" : "var(--red)");
+  // Foreground tokens: this colour is used as chip text and as a bar fill, and both
+  // must be visible on the page in either theme.
+  const effColor = (v: number) => (v >= 80 ? "var(--sw-on-green)" : v >= 60 ? "var(--sw-on-amber)" : "var(--sw-on-red)");
 
   /* The People list is a workload view, so lead with the people carrying the most
      open work. Alphabetical order buried the busiest team members below everyone
@@ -87,9 +90,9 @@ export function CompanySection() {
     trend: TrendKind; upIsGood: boolean | null; unit?: string;
   }[] = [
     { value: String(openTasks.length), label: "Open tasks", color: "var(--sw-text)", nav: goEverything, trend: "open", upIsGood: null },
-    { value: String(overdueAll.length), label: "Overdue", color: "var(--red)", nav: goEverything, trend: "overdue", upIsGood: false },
-    { value: String(criticalCount), label: "Critical priority", color: "var(--crimson)", nav: goEverything, trend: "critical", upIsGood: false },
-    { value: `${onTimeRate}%`, label: "On-time rate", color: "var(--green)", unit: "%", upIsGood: true, trend: "onTime", nav: () => setMetricModal({ title: "On-time rate — recent completions", taskIds: tasks.filter((t) => t.status === "Done").slice(-8).map((t) => t.id) }) },
+    { value: String(overdueAll.length), label: "Overdue", color: "var(--sw-on-red)", nav: goEverything, trend: "overdue", upIsGood: false },
+    { value: String(criticalCount), label: "Critical priority", color: "var(--sw-on-crimson)", nav: goEverything, trend: "critical", upIsGood: false },
+    { value: `${onTimeRate}%`, label: "On-time rate", color: "var(--sw-on-green)", unit: "%", upIsGood: true, trend: "onTime", nav: () => setMetricModal({ title: "On-time rate — recent completions", taskIds: tasks.filter((t) => t.status === "Done").slice(-8).map((t) => t.id) }) },
   ];
 
   // Predicted late (at-risk with reasons per design)
@@ -107,7 +110,7 @@ export function CompanySection() {
           const reasons = [overdue ? `overdue ${-days}d` : `due in ${days}d`];
           if (heavy) reasons.push(`${st.p.name.split(" ")[0]} at ${st.open.length} open`);
           if (slow) reasons.push(`${rate}% on-time history`);
-          out.push({ t, owner: st.p, reason: reasons.join(" · "), chip: overdue ? "Late" : "At risk", chipColor: overdue ? "var(--red)" : "#B7791F", sort: overdue ? days - 100 : days });
+          out.push({ t, owner: st.p, reason: reasons.join(" · "), chip: overdue ? "Late" : "At risk", chipColor: overdue ? "var(--sw-on-red)" : "var(--sw-on-amber)", sort: overdue ? days - 100 : days });
         }
       }
     }
@@ -132,7 +135,7 @@ export function CompanySection() {
   /* widgets */
   const widgetCatalog = [
     { id: 1, title: "Open tasks", desc: "Total open tasks company-wide", render: () => <Metric value={String(openTasks.length)} color="var(--sw-text)" subtitle="Across all departments" />, drill: goEverything },
-    { id: 2, title: "On-time rate", desc: "Share of tasks completed by their due date", render: () => <Metric value={`${onTimeRate}%`} color="var(--green)" subtitle="Last 30 days" />, drill: () => setMetricModal({ title: "On-time rate — recent completions", taskIds: tasks.filter((t) => t.status === "Done").slice(-8).map((t) => t.id) }) },
+    { id: 2, title: "On-time rate", desc: "Share of tasks completed by their due date", render: () => <Metric value={`${onTimeRate}%`} color="var(--sw-on-green)" subtitle="Last 30 days" />, drill: () => setMetricModal({ title: "On-time rate — recent completions", taskIds: tasks.filter((t) => t.status === "Done").slice(-8).map((t) => t.id) }) },
     { id: 3, title: "Tasks by status", desc: "Breakdown of open tasks by status", render: () => <Bars tasks={tasks} onOpen={(ids, title) => setMetricModal({ title, taskIds: ids })} /> },
     { id: 4, title: "At-risk tasks", desc: "Tasks overdue or marked stuck", render: () => (
       <>{atRisk.slice(0, 2).map((r) => (
@@ -142,7 +145,7 @@ export function CompanySection() {
         </button>
       ))}</>
     ) },
-    { id: 5, title: "Critical priority", desc: "Count of Critical-priority open tasks", render: () => <Metric value={String(criticalCount)} color="var(--crimson)" subtitle="Needs attention this week" />, drill: () => setMetricModal({ title: "Critical priority — open tasks", taskIds: openTasks.filter((t) => t.priority === "Critical").map((t) => t.id) }) },
+    { id: 5, title: "Critical priority", desc: "Count of Critical-priority open tasks", render: () => <Metric value={String(criticalCount)} color="var(--sw-on-crimson)" subtitle="Needs attention this week" />, drill: () => setMetricModal({ title: "Critical priority — open tasks", taskIds: openTasks.filter((t) => t.priority === "Critical").map((t) => t.id) }) },
     { id: 6, title: "Recent docs", desc: "Last updated documents in Docs & SOP Library", render: () => (
       <>{docs.slice(0, 2).map((d) => (
         <button key={d.id} className="sw-row" onClick={() => setDocDetailId(d.id)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: "1px solid var(--sw-hair)", fontSize: 12, width: "100%", border: "none", background: "none", cursor: "pointer", textAlign: "left", color: "var(--sw-text)" }}>
@@ -206,7 +209,7 @@ export function CompanySection() {
                   // Delta colour encodes meaning, not direction: overdue falling is good.
                   const deltaColor = diff === 0 || m.upIsGood === null
                     ? "var(--sw-muted)"
-                    : (diff > 0) === m.upIsGood ? "var(--green)" : "var(--red)";
+                    : (diff > 0) === m.upIsGood ? "var(--sw-on-green)" : "var(--sw-on-red)";
                   const accent = m.color === "var(--sw-text)" ? "var(--sw-text-soft)" : m.color;
                   const gid = `spark-${m.trend}`;
                   return (
@@ -251,12 +254,12 @@ export function CompanySection() {
                   <p style={{ margin: "0 0 10px", fontSize: 10.5, color: "var(--sw-muted)" }}>Due date proximity × assignee load × on-time history — flagged before they slip.</p>
                   {atRisk.map((r) => (
                     <button key={r.t.id} onClick={() => setActiveTaskId(r.t.id)} className="sw-row" style={{ display: "flex", alignItems: "center", gap: 9, width: "100%", textAlign: "left", padding: "7px 4px", border: "none", borderBottom: "1px solid var(--sw-hair)", background: "none", cursor: "pointer" }}>
-                      <span style={{ width: 20, height: 20, borderRadius: 99, background: r.owner?.color || "#9A918A", color: "#fff", fontSize: 8, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>{r.owner ? initials(r.owner.name) : "?"}</span>
+                      <span style={{ width: 20, height: 20, borderRadius: 99, background: r.owner?.color || "#9A918A", color: readableTextOn(r.owner?.color || "#9A918A"), fontSize: 8, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>{r.owner ? initials(r.owner.name) : "?"}</span>
                       <span style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 12, color: "var(--sw-text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.t.name}</div>
                         <div style={{ fontSize: 10.5, color: "var(--sw-muted)", marginTop: 1 }}>{r.reason}</div>
                       </span>
-                      <span style={{ flex: "none", fontSize: 9.5, fontWeight: 400, color: "#fff", background: r.chipColor, borderRadius: 999, padding: "2px 9px" }}>{r.chip}</span>
+                      <span style={{ flex: "none", fontSize: 9.5, fontWeight: 400, color: r.chipColor, background: "var(--sw-hover)", border: `1px solid ${r.chipColor}`, borderRadius: 999, padding: "1px 8px" }}>{r.chip}</span>
                     </button>
                   ))}
                   {!atRisk.length && <p style={{ margin: "8px 0 0", fontSize: 12, color: "var(--sw-muted)" }}>Nothing at risk this week.</p>}
@@ -269,10 +272,10 @@ export function CompanySection() {
                     <>
                       <button onClick={() => setActiveTaskId(unblocker.task.id)} className="sw-card-h" style={{ display: "block", width: "100%", textAlign: "left", border: "1.5px solid var(--crimson)", borderRadius: 11, background: "rgba(122,13,32,0.04)", padding: "13px 15px", cursor: "pointer", boxShadow: "var(--shadow-card)", marginBottom: 11 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 5 }}>
-                          <span style={{ width: 22, height: 22, borderRadius: 99, background: unblockerOwner?.color || "#9A918A", color: "#fff", fontSize: 8.5, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>{unblockerOwner ? initials(unblockerOwner.name) : "?"}</span>
+                          <span style={{ width: 22, height: 22, borderRadius: 99, background: unblockerOwner?.color || "#9A918A", color: readableTextOn(unblockerOwner?.color || "#9A918A"), fontSize: 8.5, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>{unblockerOwner ? initials(unblockerOwner.name) : "?"}</span>
                           <span style={{ fontSize: 13, fontWeight: 400, color: "var(--sw-text)" }}>{unblocker.task.name}</span>
                         </div>
-                        <div style={{ fontSize: 11.5, color: "var(--crimson)" }}>
+                        <div style={{ fontSize: 11.5, color: "var(--sw-on-crimson)" }}>
                           Completing this frees {unblocker.unblocks} task{unblocker.unblocks > 1 ? "s" : ""} downstream
                         </div>
                       </button>
@@ -327,7 +330,7 @@ export function CompanySection() {
                   <h3 style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 400 }}>People efficiency</h3>
                   {personStats.map((st) => (
                     <div key={st.p.id} onClick={() => setMetricModal({ title: `${st.p.name} — efficiency (75% × ${st.historyPct}% + 25% × ${st.healthPct}% = ${st.eff}%)`, taskIds: st.pt.filter(isOpen).map((t) => t.id) })} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderBottom: "1px solid var(--sw-hair)", cursor: "pointer" }}>
-                      <button onClick={(e) => { e.stopPropagation(); openProfile(st.p.id); }} title="View profile" style={{ width: 24, height: 24, borderRadius: 99, background: st.p.color, color: "#fff", fontSize: 9.5, fontWeight: 400, display: "flex", alignItems: "center", justifyContent: "center", flex: "none", border: "none", cursor: "pointer", padding: 0 }}>{initials(st.p.name)}</button>
+                      <button onClick={(e) => { e.stopPropagation(); openProfile(st.p.id); }} title="View profile" style={{ width: 24, height: 24, borderRadius: 99, background: st.p.color, color: readableTextOn(st.p.color), fontSize: 9.5, fontWeight: 400, display: "flex", alignItems: "center", justifyContent: "center", flex: "none", border: "none", cursor: "pointer", padding: 0 }}>{initials(st.p.name)}</button>
                       <span style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 12, fontWeight: 400, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{st.p.name}</div>
                         <div style={{ height: 5, borderRadius: 99, background: "var(--sw-hover)", overflow: "hidden", marginTop: 4 }}>
@@ -345,7 +348,7 @@ export function CompanySection() {
                 {overdueRows.map(({ t, label }) => (
                   <button key={t.id} className="sw-row" onClick={() => setActiveTaskId(t.id)} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left", padding: "8px 0", border: "none", borderBottom: "1px solid var(--sw-hair)", background: "none", cursor: "pointer" }}>
                     <span style={{ flex: 1, fontSize: 12, fontWeight: 400, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: "var(--sw-text)" }}>{t.name}</span>
-                    <span style={{ fontSize: 11.5, color: "var(--red)", fontWeight: 400 }}>{label}</span>
+                    <span style={{ fontSize: 11.5, color: "var(--sw-on-red)", fontWeight: 400 }}>{label}</span>
                   </button>
                 ))}
                 {!overdueRows.length && <p style={{ margin: 0, fontSize: 12, color: "var(--sw-muted)" }}>Nothing overdue.</p>}
@@ -436,7 +439,7 @@ export function CompanySection() {
                 return (
                   <div key={st.p.id} style={{ background: "var(--sw-card)", border: "1px solid var(--sw-hair)", borderRadius: 12, boxShadow: "var(--shadow-card)", marginBottom: 10, overflow: "hidden" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: peoplePad }}>
-                      <button onClick={() => openProfile(st.p.id)} title="View profile" style={{ width: 34, height: 34, borderRadius: 99, background: st.p.color, color: "#fff", fontSize: 12, fontWeight: 400, display: "flex", alignItems: "center", justifyContent: "center", flex: "none", border: "none", cursor: "pointer", padding: 0 }}>{initials(st.p.name)}</button>
+                      <button onClick={() => openProfile(st.p.id)} title="View profile" style={{ width: 34, height: 34, borderRadius: 99, background: st.p.color, color: readableTextOn(st.p.color), fontSize: 12, fontWeight: 400, display: "flex", alignItems: "center", justifyContent: "center", flex: "none", border: "none", cursor: "pointer", padding: 0 }}>{initials(st.p.name)}</button>
                       <button onClick={() => openProfile(st.p.id)} className="sw-person-meta" style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 0, textAlign: "left", padding: 0, border: "none", background: "none", cursor: "pointer" }} title="View full profile">
                         <span style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontSize: 13, fontWeight: 400 }}>{st.p.name}</div>

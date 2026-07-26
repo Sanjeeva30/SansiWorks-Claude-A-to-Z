@@ -4,6 +4,7 @@ import { useStore } from "@/lib/store";
 import { useUI } from "@/lib/ui";
 import { initials, Profile, STATUS_COLORS } from "@/lib/types";
 import { relTime, fmtShort } from "@/lib/dates";
+import { readableTextOn } from "@/lib/colors";
 import { efficiencyScore, tasksOfPerson, isOpen, isOverdue, onTimeStats, EFFICIENCY_EXPLAINER } from "@/lib/logic";
 import { IconBell, IconMoon, IconSparkle, IconSun, IconWhatsApp, IconX } from "./icons";
 import { AvatarUploadButton } from "./avatar-upload";
@@ -21,7 +22,8 @@ export function Avatar({
   ring?: boolean; // department heads and above get a bold ring — rank at a glance
 }) {
   const style: React.CSSProperties = {
-    width: size, height: size, borderRadius: 99, background: person.avatar_url ? undefined : person.color, color: "#fff",
+    width: size, height: size, borderRadius: 99, background: person.avatar_url ? undefined : person.color,
+    color: person.avatar_url ? "#fff" : readableTextOn(person.color),
     fontSize: fontSize || Math.round(size * 0.38), fontWeight: 400,
     display: "flex", alignItems: "center", justifyContent: "center", flex: "none",
     border: border || (ring ? "2px solid var(--crimson)" : "none"),
@@ -121,7 +123,7 @@ export function SansiPopover({ onClose }: { onClose: () => void }) {
       className="sw-popover" style={{ position: "absolute", top: 38, right: 0, width: 340, maxWidth: "calc(100vw - 24px)", maxHeight: 480, display: "flex", flexDirection: "column", background: "var(--sw-card)", border: "1px solid var(--sw-hair)", borderRadius: 12, boxShadow: "0 20px 60px rgba(23,18,15,.2)", zIndex: 60, padding: 14 }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10, flex: "none" }}>
-        <span style={{ display: "inline-flex", color: "var(--crimson)" }}><IconSparkle size={13} /></span>
+        <span style={{ display: "inline-flex", color: "var(--sw-on-crimson)" }}><IconSparkle size={13} /></span>
         <b style={{ fontSize: 12.5 }}>Sansi AI</b>
         <div style={{ flex: 1 }} />
         <button onClick={onClose} style={{ border: "none", background: "none", color: "var(--sw-text-soft)", cursor: "pointer", fontSize: 12 }}><IconX /></button>
@@ -174,7 +176,7 @@ export function SansiPopover({ onClose }: { onClose: () => void }) {
                     <button onClick={() => setMessages((cur) => cur.map((x, j) => (j === i ? { ...x, actionState: "dismissed" } : x)))} style={{ flex: 1, height: 28, borderRadius: 999, border: "1px solid var(--sw-hair)", background: "none", color: "var(--sw-text-soft)", fontSize: 11.5, cursor: "pointer" }}>Not now</button>
                   </div>
                 ) : (
-                  <div style={{ fontSize: 11, color: m.actionState === "confirmed" ? "var(--green)" : "var(--sw-muted)" }}>
+                  <div style={{ fontSize: 11, color: m.actionState === "confirmed" ? "var(--sw-on-green)" : "var(--sw-muted)" }}>
                     {m.actionState === "confirmed" ? "✓ Created" : "Dismissed"}
                   </div>
                 )}
@@ -228,7 +230,7 @@ export function NotifPopover({ onClose }: { onClose: () => void }) {
       <a
         href="#"
         onClick={(e) => { e.preventDefault(); onClose(); setSection("workspace"); setWorkspacePage("inbox"); }}
-        style={{ display: "block", textAlign: "center", padding: 9, fontSize: 11.5, fontWeight: 400, color: "var(--crimson)", textDecoration: "none" }}
+        style={{ display: "block", textAlign: "center", padding: 9, fontSize: 11.5, fontWeight: 400, color: "var(--sw-on-crimson)", textDecoration: "none" }}
       >
         View all in Inbox →
       </a>
@@ -355,7 +357,7 @@ export function ProfileModal() {
               {p.avatar_url ? (
                 <img src={p.avatar_url} alt={p.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
               ) : (
-                <div style={{ position: "absolute", inset: 0, background: p.color, color: "#fff", fontSize: 20, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center" }}>{initials(p.name)}</div>
+                <div style={{ position: "absolute", inset: 0, background: p.color, color: readableTextOn(p.color), fontSize: 20, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center" }}>{initials(p.name)}</div>
               )}
               {(me?.id === p.id || me?.is_super) && (
                 <div style={{ position: "absolute", inset: 0 }}><AvatarUploadButton profileId={p.id} /></div>
@@ -388,7 +390,7 @@ export function ProfileModal() {
               href={waDigits ? `https://wa.me/${waDigits}` : "#"}
               target="_blank"
               rel="noopener"
-              style={{ display: "inline-flex", alignItems: "center", gap: 6, textDecoration: "none", color: "var(--green)", fontSize: 12.5, fontWeight: 400, marginTop: -2 }}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, textDecoration: "none", color: "var(--sw-on-green)", fontSize: 12.5, fontWeight: 400, marginTop: -2 }}
             >
               <IconWhatsApp /> Message on WhatsApp
             </a>
@@ -417,14 +419,14 @@ export function ProfileModal() {
                   <div style={{ fontSize: 11, color: "var(--sw-muted)", fontWeight: 400 }}>Open tasks</div>
                 </div>
                 <div style={{ background: "var(--sw-hover)", border: "1px solid var(--sw-hair)", borderRadius: 10, padding: "10px 12px" }}>
-                  <div style={{ fontSize: 17, fontWeight: 400, color: "var(--green)" }}>{total ? Math.round((onTime / total) * 100) : 100}%</div>
+                  <div style={{ fontSize: 17, fontWeight: 400, color: "var(--sw-on-green)" }}>{total ? Math.round((onTime / total) * 100) : 100}%</div>
                   <div style={{ fontSize: 11, color: "var(--sw-muted)", fontWeight: 400 }}>On-time completion</div>
                 </div>
               </div>
               <div className="sw-grid-label" style={{ gap: "11px 10px" }}>
                 {row("Overdue rate", `${open.length ? Math.round((overdue.length / open.length) * 100) : 0}%`)}
                 <span style={{ fontSize: 12, fontWeight: 400, color: "var(--sw-muted)" }}>Account status</span>
-                <span style={{ fontSize: 12.5, fontWeight: 400, color: "var(--green)" }}>● Active</span>
+                <span style={{ fontSize: 12.5, fontWeight: 400, color: "var(--sw-on-green)" }}>● Active</span>
                 {row("Last login", lastLogin)}
               </div>
             </>
@@ -453,7 +455,7 @@ export function ProfileModal() {
               </div>
               <div style={{ marginBottom: 10 }}>
                 <div style={{ fontSize: 11.5, color: "var(--sw-muted)", marginBottom: 4 }}>
-                  Overrides {p.permission_overrides && <span style={{ color: "var(--crimson)" }}>· differs from template</span>}
+                  Overrides {p.permission_overrides && <span style={{ color: "var(--sw-on-crimson)" }}>· differs from template</span>}
                 </div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
                   {[["approve_extensions", "Approve extensions"], ["manage_org", "Manage org"], ["manage_people", "Manage people"], ["view_company_reports", "Company reports"]].map(([key, lbl]) => (

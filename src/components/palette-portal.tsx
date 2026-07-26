@@ -156,7 +156,7 @@ export function PublicPortal() {
         <span style={{ flex: 1, background: "#7A0D20" }} /><span style={{ flex: 1, background: "#22409E" }} /><span style={{ flex: 1, background: "#0D4F31" }} /><span style={{ flex: 1, background: "#F3263E" }} /><span style={{ flex: 1, background: "#BDDA5F" }} />
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "16px 28px", borderBottom: "1px solid var(--sw-hair)", background: "var(--sw-card)" }}>
-        <span style={{ fontWeight: 800, letterSpacing: "0.07em", fontSize: 12, color: "var(--crimson)" }}>SANSICO</span>
+        <span style={{ fontWeight: 800, letterSpacing: "0.07em", fontSize: 12, color: "var(--sw-on-crimson)" }}>SANSICO</span>
         <span style={{ fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 13, color: "var(--sw-text-soft)" }}>Group</span>
         <span style={{ fontSize: 12, color: "var(--sw-muted)", marginLeft: 6 }}>Request portal</span>
         <div style={{ flex: 1 }} />
@@ -178,7 +178,7 @@ export function PublicPortal() {
         {current ? (
           sent ? (
             <div style={{ maxWidth: 520, margin: "40px auto", background: "var(--sw-card)", border: "1px solid var(--sw-hair)", borderRadius: 16, boxShadow: "var(--shadow-card)", padding: 36, textAlign: "center" }}>
-              <div style={{ width: 52, height: 52, borderRadius: 99, background: "rgba(13,79,49,0.1)", color: "var(--green)", fontSize: 22, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>✓</div>
+              <div style={{ width: 52, height: 52, borderRadius: 99, background: "rgba(13,79,49,0.1)", color: "var(--sw-on-green)", fontSize: 22, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>✓</div>
               <h2 style={{ fontFamily: "var(--font-serif)", fontWeight: 400, fontSize: 26, margin: "0 0 8px" }}>Request <em style={{ fontStyle: "italic" }}>received</em>.</h2>
               <p style={{ margin: "0 0 6px", fontSize: 13, color: "var(--sw-text-soft)" }}>Your reference number is <b style={{ fontWeight: 800, color: "var(--sw-text)" }}>{refNo}</b>.</p>
               <p style={{ margin: "0 0 22px", fontSize: 12.5, color: "var(--sw-muted)" }}>The owning team has been notified in SansiWorks and will follow up on the contact you provided.</p>
@@ -186,7 +186,7 @@ export function PublicPortal() {
             </div>
           ) : (
             <>
-              <button onClick={() => setCurrentId(null)} style={{ border: "none", background: "none", color: "var(--crimson)", fontSize: 12.5, fontWeight: 400, cursor: "pointer", padding: 0, marginBottom: 18 }}>← All request types</button>
+              <button onClick={() => setCurrentId(null)} style={{ border: "none", background: "none", color: "var(--sw-on-crimson)", fontSize: 12.5, fontWeight: 400, cursor: "pointer", padding: 0, marginBottom: 18 }}>← All request types</button>
               <div style={{ maxWidth: 560, background: "var(--sw-card)", border: "1px solid var(--sw-hair)", borderRadius: 16, boxShadow: "var(--shadow-card)", padding: "28px 30px" }}>
                 <div style={{ display: "inline-block", fontSize: 10.5, fontWeight: 400, color: "var(--sw-text-soft)", background: "var(--sw-hover)", border: "1px solid var(--sw-hair)", borderRadius: 999, padding: "3px 11px", marginBottom: 10 }}>{deptOf(current.list_id)}</div>
                 <h2 style={{ fontFamily: "var(--font-serif)", fontWeight: 400, fontSize: 26, margin: "0 0 18px" }}>{current.title}</h2>
@@ -222,7 +222,7 @@ export function PublicPortal() {
                   <div style={{ display: "inline-block", fontSize: 10, fontWeight: 400, color: "var(--sw-text-soft)", background: "var(--sw-hover)", border: "1px solid var(--sw-hair)", borderRadius: 999, padding: "2px 10px", marginBottom: 10 }}>{deptOf(f.list_id)}</div>
                   <div style={{ fontSize: 15, fontWeight: 400, color: "var(--sw-text)", marginBottom: 6 }}>{f.title}</div>
                   <div style={{ fontSize: 11.5, color: "var(--sw-muted)" }}>{f.fields.length} questions · takes ~2 minutes</div>
-                  <div style={{ marginTop: 12, fontSize: 12, fontWeight: 400, color: "var(--crimson)" }}>Open form →</div>
+                  <div style={{ marginTop: 12, fontSize: 12, fontWeight: 400, color: "var(--sw-on-crimson)" }}>Open form →</div>
                 </button>
               ))}
             </div>

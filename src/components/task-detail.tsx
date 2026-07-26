@@ -11,7 +11,7 @@ import {
   listAttachments, uploadAttachment, deleteAttachment, downloadAttachmentUrl,
   createComment,
 } from "@/lib/actions";
-import { isHeadRank } from "@/lib/colors";
+import { isHeadRank , readableTextOn} from "@/lib/colors";
 import { ReminderInline } from "./reminders";
 import { relTime, fmtShort, todayIso } from "@/lib/dates";
 import { taskLink } from "@/lib/ui";
@@ -171,7 +171,7 @@ export function TaskDetailSlideOver() {
     const names = mentionedIds.map((id) => profiles.find((p) => p.id === id)?.name).filter((n): n is string => !!n);
     if (!names.length) return body;
     const re = new RegExp(`(@(?:${names.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")}))`, "g");
-    return body.split(re).map((part, i) => (names.some((n) => part === `@${n}`) ? <span key={i} style={{ color: "var(--crimson)", fontWeight: 500 }}>{part}</span> : <React.Fragment key={i}>{part}</React.Fragment>));
+    return body.split(re).map((part, i) => (names.some((n) => part === `@${n}`) ? <span key={i} style={{ color: "var(--sw-on-crimson)", fontWeight: 500 }}>{part}</span> : <React.Fragment key={i}>{part}</React.Fragment>));
   };
 
   return (
@@ -181,7 +181,7 @@ export function TaskDetailSlideOver() {
         <div className="sw-topbar" style={{ display: "flex", alignItems: "center", gap: 10, padding: "16px 20px", borderBottom: "1px solid var(--sw-hair)", flex: "none" }}>
           <span style={{ width: 8, height: 8, borderRadius: 99, background: STATUS_COLORS[t.status], flex: "none" }} />
           <span style={{ fontSize: 11, fontWeight: 400, color: "var(--sw-muted)" }}>SW-{t.task_number}</span>
-          {t.milestone && <span style={{ fontSize: 10, fontWeight: 400, color: "var(--crimson)", border: "1px solid var(--crimson)", borderRadius: 99, padding: "1px 8px" }}>◆ Milestone</span>}
+          {t.milestone && <span style={{ fontSize: 10, fontWeight: 400, color: "var(--sw-on-crimson)", border: "1px solid var(--crimson)", borderRadius: 99, padding: "1px 8px" }}>◆ Milestone</span>}
           <span style={{ fontSize: 11.5, fontWeight: 400, color: "var(--sw-text-soft)" }}>{listPath}</span>
           <div style={{ flex: 1 }} />
           <button
@@ -274,11 +274,11 @@ export function TaskDetailSlideOver() {
                     />
                   ) : (
                     <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <span style={{ fontSize: 12.5, fontWeight: 400, color: t.due && t.due < today && t.status !== "Done" ? "var(--red)" : "var(--sw-text)" }}>
+                      <span style={{ fontSize: 12.5, fontWeight: 400, color: t.due && t.due < today && t.status !== "Done" ? "var(--sw-on-red)" : "var(--sw-text)" }}>
                         {t.due ? fmtShort(t.due) : "No due date"}
                       </span>
                       {!pendingReq && (
-                        <button onClick={() => { setReqOpen(!reqOpen); setReqDate(t.due || today); }} style={{ border: "1px dashed var(--sw-hair)", background: "none", borderRadius: 999, padding: "3px 10px", fontSize: 11, color: "var(--crimson)", cursor: "pointer" }}>
+                        <button onClick={() => { setReqOpen(!reqOpen); setReqDate(t.due || today); }} style={{ border: "1px dashed var(--sw-hair)", background: "none", borderRadius: 999, padding: "3px 10px", fontSize: 11, color: "var(--sw-on-crimson)", cursor: "pointer" }}>
                           Request change
                         </button>
                       )}
@@ -347,7 +347,7 @@ export function TaskDetailSlideOver() {
                 <span style={label}>Milestone</span>
                 <button
                   onClick={() => set({ milestone: !t.milestone }, t.milestone ? "Milestone removed" : "Marked as milestone")}
-                  style={{ justifySelf: "start", display: "flex", alignItems: "center", gap: 6, border: `1px solid ${t.milestone ? "var(--crimson)" : "var(--sw-hair)"}`, background: t.milestone ? "rgba(122,13,32,0.07)" : "none", color: t.milestone ? "var(--crimson)" : "var(--sw-text-soft)", borderRadius: 999, padding: "5px 12px", fontSize: 11.5, cursor: "pointer" }}
+                  style={{ justifySelf: "start", display: "flex", alignItems: "center", gap: 6, border: `1px solid ${t.milestone ? "var(--crimson)" : "var(--sw-hair)"}`, background: t.milestone ? "rgba(122,13,32,0.07)" : "none", color: t.milestone ? "var(--sw-on-crimson)" : "var(--sw-text-soft)", borderRadius: 999, padding: "5px 12px", fontSize: 11.5, cursor: "pointer" }}
                 >
                   ◆ {t.milestone ? "Milestone" : "Mark as milestone"}
                 </button>
@@ -394,10 +394,10 @@ export function TaskDetailSlideOver() {
                       value={s.due || ""}
                       onChange={(e) => updateSubtask(supabase, store, patch, s.id, { due: e.target.value || null })}
                       title="Subtask due date"
-                      style={{ height: 24, borderRadius: 6, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", fontSize: 10.5, color: s.due && s.due < today && !s.done ? "var(--red)" : "var(--sw-text-soft)", padding: "0 4px", width: 112 }}
+                      style={{ height: 24, borderRadius: 6, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", fontSize: 10.5, color: s.due && s.due < today && !s.done ? "var(--sw-on-red)" : "var(--sw-text-soft)", padding: "0 4px", width: 112 }}
                     />
                     <DifficultyBadge value={s.difficulty} />
-                    {who && <span title={who.name} style={{ width: 18, height: 18, borderRadius: 99, background: who.color, color: "#fff", fontSize: 7.5, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>{initials(who.name)}</span>}
+                    {who && <span title={who.name} style={{ width: 18, height: 18, borderRadius: 99, background: who.color, color: readableTextOn(who.color), fontSize: 7.5, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>{initials(who.name)}</span>}
                     <button onClick={() => setExpandedSub(expandedSub === s.id ? null : s.id)} title="RACI & reminder" style={{ border: "none", background: expandedSub === s.id ? "var(--sw-hover)" : "none", borderRadius: 6, color: "var(--sw-muted)", cursor: "pointer", padding: "2px 5px", fontSize: 11, lineHeight: 1 }}>⋯</button>
                     <button onClick={() => deleteSubtask(supabase, store, patch, s.id)} title="Delete subtask" style={{ border: "none", background: "none", color: "var(--sw-muted)", cursor: "pointer", padding: 2, display: "flex" }}><IconX size={10} /></button>
                   </div>
@@ -584,7 +584,7 @@ export function TaskDetailSlideOver() {
                 <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 12 }}>
                   {attachments.map((a) => (
                     <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 9, padding: "8px 10px", border: "1px solid var(--sw-hair)", borderRadius: 9, background: "var(--sw-card)" }}>
-                      <span style={{ width: 28, height: 28, borderRadius: 7, background: "rgba(122,13,32,0.08)", color: "var(--crimson)", fontSize: 11, fontWeight: 400, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
+                      <span style={{ width: 28, height: 28, borderRadius: 7, background: "rgba(122,13,32,0.08)", color: "var(--sw-on-crimson)", fontSize: 11, fontWeight: 400, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
                         {(a.name.split(".").pop() || "").toUpperCase().slice(0, 3)}
                       </span>
                       <button onClick={() => handleDownload(a)} style={{ flex: 1, minWidth: 0, border: "none", background: "none", textAlign: "left", cursor: "pointer", padding: 0 }}>

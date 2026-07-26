@@ -2,6 +2,7 @@
 import React, { useState } from "react";
 import { Profile, initials } from "@/lib/types";
 import { IconX } from "./icons";
+import { readableTextOn } from "@/lib/colors";
 
 /* Single-select "R" picker — exactly one person. Department members are prepopulated;
    anyone outside the department only appears once 2+ letters are typed (lazy cross-dept
@@ -25,7 +26,7 @@ export function AssigneePicker({
   if (personal) {
     return (
       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: compact ? "6px 10px" : "8px 12px", border: "1px solid var(--sw-hair)", borderRadius: 10, background: "var(--sw-hover)" }}>
-        <span style={{ width: 20, height: 20, borderRadius: 99, background: me.color, color: "#fff", fontSize: 8.5, display: "flex", alignItems: "center", justifyContent: "center" }}>{initials(me.name)}</span>
+        <span style={{ width: 20, height: 20, borderRadius: 99, background: me.color, color: readableTextOn(me.color), fontSize: 8.5, display: "flex", alignItems: "center", justifyContent: "center" }}>{initials(me.name)}</span>
         <span style={{ fontSize: 12 }}>{me.name} <span style={{ color: "var(--sw-muted)" }}>— personal tasks are yours alone</span></span>
       </div>
     );
@@ -35,9 +36,9 @@ export function AssigneePicker({
     const p = allProfiles.find((x) => x.id === value);
     return (
       <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 8px 5px 5px", borderRadius: 999, border: "1.5px solid var(--crimson)", background: "rgba(122,13,32,0.06)" }}>
-        <span style={{ width: 20, height: 20, borderRadius: 99, background: p?.color || "#8C837C", color: "#fff", fontSize: 8.5, display: "flex", alignItems: "center", justifyContent: "center" }}>{initials(p?.name || "?")}</span>
-        <span style={{ fontSize: 12.5, color: "var(--crimson)" }}>{p?.name || "Selected"}</span>
-        <button onClick={() => onChange(null)} style={{ border: "none", background: "none", color: "var(--crimson)", cursor: "pointer", padding: 0, display: "flex" }}><IconX size={10} /></button>
+        <span style={{ width: 20, height: 20, borderRadius: 99, background: p?.color || "#8C837C", color: readableTextOn(p?.color || "#8C837C"), fontSize: 8.5, display: "flex", alignItems: "center", justifyContent: "center" }}>{initials(p?.name || "?")}</span>
+        <span style={{ fontSize: 12.5, color: "var(--sw-on-crimson)" }}>{p?.name || "Selected"}</span>
+        <button onClick={() => onChange(null)} style={{ border: "none", background: "none", color: "var(--sw-on-crimson)", cursor: "pointer", padding: 0, display: "flex" }}><IconX size={10} /></button>
       </span>
     );
   }
@@ -61,7 +62,7 @@ export function AssigneePicker({
           return (
             <button key={p.id} onClick={() => onChange(p.id)}
               style={{ display: "flex", alignItems: "center", gap: 5, padding: "4px 10px 4px 4px", borderRadius: 999, border: "1.5px solid var(--sw-hair)", background: "none", cursor: "pointer" }}>
-              <span style={{ width: 18, height: 18, borderRadius: 99, background: p.color, color: "#fff", fontSize: 7.5, display: "flex", alignItems: "center", justifyContent: "center" }}>{initials(p.name)}</span>
+              <span style={{ width: 18, height: 18, borderRadius: 99, background: p.color, color: readableTextOn(p.color), fontSize: 7.5, display: "flex", alignItems: "center", justifyContent: "center" }}>{initials(p.name)}</span>
               <span style={{ fontSize: 11.5, color: "var(--sw-text-soft)" }}>{p.name}</span>
               {crossDept && <span style={{ fontSize: 8.5, color: "var(--sw-muted)", background: "var(--sw-hover)", borderRadius: 999, padding: "1px 6px" }}>{deptLabel(p) || "other dept"}</span>}
             </button>

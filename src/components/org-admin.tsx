@@ -8,7 +8,7 @@ import { logAudit } from "@/lib/actions";
 import { IconX } from "./icons";
 
 const card: React.CSSProperties = { background: "var(--sw-card)", border: "1px solid var(--sw-hair)", borderRadius: 12, boxShadow: "var(--shadow-card)", padding: "16px 18px" };
-const pillBtn = (color: string): React.CSSProperties => ({ padding: "6px 12px", borderRadius: 999, border: `1px solid ${color === "var(--green)" ? "var(--green)" : "var(--sw-hair)"}`, background: "none", color, fontSize: 11.5, fontWeight: 400, cursor: "pointer", whiteSpace: "nowrap", flex: "none" });
+const pillBtn = (color: string): React.CSSProperties => ({ padding: "6px 12px", borderRadius: 999, border: `1px solid ${color === "var(--sw-on-green)" ? "var(--sw-on-green)" : "var(--sw-hair)"}`, background: "none", color, fontSize: 11.5, fontWeight: 400, cursor: "pointer", whiteSpace: "nowrap", flex: "none" });
 const label: React.CSSProperties = { fontSize: 10.5, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--sw-muted)", marginBottom: 6 };
 const selectSt: React.CSSProperties = { height: 30, borderRadius: 7, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", fontSize: 11.5, color: "var(--sw-text-soft)", padding: "0 6px" };
 const inputSt: React.CSSProperties = { height: 30, borderRadius: 7, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", fontSize: 11.5, color: "var(--sw-text)", padding: "0 8px" };
@@ -158,7 +158,7 @@ export function OrgAdmin({ tab }: { tab: "organisation" | "permissions" }) {
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
                 <span style={{ flex: 1, fontSize: 12.5, fontWeight: 400 }}>{t.name}</span>
                 <button onClick={() => setEditingTemplate(editingTemplate?.id === t.id ? null : { ...t })} style={pillBtn("var(--sw-text-soft)")}>{editingTemplate?.id === t.id ? "Close" : "Edit"}</button>
-                <button onClick={() => deleteTemplate(t.id)} style={pillBtn("var(--red)")}>Delete</button>
+                <button onClick={() => deleteTemplate(t.id)} style={pillBtn("var(--sw-on-red)")}>Delete</button>
               </div>
               {editingTemplate?.id === t.id && (
                 <div className="sw-grid-2" style={{ paddingLeft: 12, gap: 16 }}>
@@ -196,7 +196,7 @@ export function OrgAdmin({ tab }: { tab: "organisation" | "permissions" }) {
           {profiles.map((p) => (
             <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "1px solid var(--sw-hair)" }}>
               <span style={{ flex: 1, fontSize: 12.5 }}>{p.name}</span>
-              {p.permission_overrides && <span style={{ fontSize: 10.5, color: "var(--crimson)", border: "1px solid var(--crimson)", borderRadius: 999, padding: "2px 8px" }}>overrides set</span>}
+              {p.permission_overrides && <span style={{ fontSize: 10.5, color: "var(--sw-on-crimson)", border: "1px solid var(--crimson)", borderRadius: 999, padding: "2px 8px" }}>overrides set</span>}
               <select style={selectSt} value={p.template_id || ""} onChange={(e) => assignTemplate(p.id, e.target.value)}>
                 <option value="">No template</option>
                 {permissionTemplates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
@@ -250,7 +250,7 @@ export function OrgAdmin({ tab }: { tab: "organisation" | "permissions" }) {
               <button onClick={() => openDetail("department", d.id)} style={{ flex: 1, fontSize: 12.5, textAlign: "left", border: "none", background: "none", color: "var(--sw-text)", cursor: "pointer", padding: 0 }}>{d.name}</button>
               <span style={{ fontSize: 10.5, color: "var(--sw-muted)", border: "1px solid var(--sw-hair)", borderRadius: 999, padding: "2px 8px" }}>{ORG_UNIT_TYPES.find((t) => t.value === d.type)?.label || d.type}</span>
               {d.parent_id && <span style={{ fontSize: 10.5, color: "var(--sw-muted)" }}>under {unitName(d.parent_id)}</span>}
-              <button onClick={() => toggleDormant(d.id, !d.dormant)} title={d.dormant ? "Hidden unless the overseas-teams toggle is on" : "Hide this overseas-only unit until the toggle is on"} style={pillBtn(d.dormant ? "var(--crimson)" : "var(--sw-muted)")}>
+              <button onClick={() => toggleDormant(d.id, !d.dormant)} title={d.dormant ? "Hidden unless the overseas-teams toggle is on" : "Hide this overseas-only unit until the toggle is on"} style={pillBtn(d.dormant ? "var(--sw-on-crimson)" : "var(--sw-muted)")}>
                 {d.dormant ? "Dormant — hidden" : "Mark dormant"}
               </button>
               <button onClick={() => archiveUnit(d.id, true)} style={pillBtn("var(--sw-muted)")}>Archive</button>
@@ -302,7 +302,7 @@ export function OrgAdmin({ tab }: { tab: "organisation" | "permissions" }) {
           return (
             <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "1px solid var(--sw-hair)", fontSize: 12 }}>
               <span style={{ flex: 1 }}>{p?.name || "—"} · <b style={{ fontWeight: 500 }}>{a.function_name}</b>{a.scope_unit_id ? ` · scoped to ${unitName(a.scope_unit_id)}` : ""}{a.reports_to_unit_id ? ` · reports to ${unitName(a.reports_to_unit_id)}` : ""}</span>
-              <button onClick={() => deleteAssignment(a.id)} style={pillBtn("var(--red)")}>Remove</button>
+              <button onClick={() => deleteAssignment(a.id)} style={pillBtn("var(--sw-on-red)")}>Remove</button>
             </div>
           );
         })}
