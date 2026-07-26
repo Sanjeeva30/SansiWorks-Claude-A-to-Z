@@ -4,16 +4,10 @@ import { useStore } from "@/lib/store";
 import { useUI } from "@/lib/ui";
 import { STATUS_COLORS, PRIORITY_COLORS, STATUSES, initials, Task } from "@/lib/types";
 import { fmtShort, todayIso } from "@/lib/dates";
-import { isOpen, isOverdue, onTimeStats, tasksOfPerson, criticalUnblocker } from "@/lib/logic";
+import { isOpen, isOverdue, onTimeStats, tasksOfPerson, criticalUnblocker, metricTrend, trendDelta, sparkPath, type TrendKind } from "@/lib/logic";
 import { TopIcons } from "./shared";
 import { IconX } from "./icons";
 
-const SPARKS = [
-  "M0 15 L15 13 L30 16 L45 11 L60 12 L75 8 L90 10 L105 6 L120 4",
-  "M0 12 L15 13 L30 11 L45 13 L60 10 L75 12 L90 8 L105 7 L120 5",
-  "M0 8 L15 10 L30 9 L45 12 L60 11 L75 13 L90 12 L105 14 L120 13",
-  "M0 14 L15 12 L30 13 L45 10 L60 11 L75 9 L90 10 L105 7 L120 6",
-];
 
 export function CompanySection() {
   const store = useStore();
@@ -79,15 +73,23 @@ export function CompanySection() {
   const onTimeRate = totalDone ? Math.round((onT / totalDone) * 100) : 100;
   const scored = deptStats.filter((x) => x.hasData);
   const health = scored.length ? Math.round(scored.reduce((s, x) => s + x.eff, 0) / scored.length) : 100;
-  const onTrack = deptStats.filter((x) => x.risk < 50).length;
+  // Only departments with actual work can be "on track" — counting the empty ones
+  // turned this into a meaningless "26 depts on track".
+  const onTrack = scored.filter((x) => x.risk < 50).length;
 
   const goEverything = () => { setSection("list"); setListPage("everything"); };
 
-  const execMetrics = [
-    { value: String(openTasks.length), label: "Open tasks", color: "var(--sw-text)", nav: goEverything },
-    { value: String(overdueAll.length), label: "Overdue", color: "var(--red)", nav: goEverything },
-    { value: String(criticalCount), label: "Critical priority", color: "var(--crimson)", nav: goEverything },
-    { value: `${onTimeRate}%`, label: "On-time rate", color: "var(--green)", nav: () => setMetricModal({ title: "On-time rate — recent completions", taskIds: tasks.filter((t) => t.status === "Done").slice(-8).map((t) => t.id) }) },
+  /* trend: real 12-week series per metric. `upIsGood` colours the delta chip by
+     meaning, not by direction — a falling overdue count is good news. `open` is
+     deliberately neutral: more open work is neither good nor bad on its own. */
+  const execMetrics: {
+    value: string; label: string; color: string; nav: () => void;
+    trend: TrendKind; upIsGood: boolean | null; unit?: string;
+  }[] = [
+    { value: String(openTasks.length), label: "Open tasks", color: "var(--sw-text)", nav: goEverything, trend: "open", upIsGood: null },
+    { value: String(overdueAll.length), label: "Overdue", color: "var(--red)", nav: goEverything, trend: "overdue", upIsGood: false },
+    { value: String(criticalCount), label: "Critical priority", color: "var(--crimson)", nav: goEverything, trend: "critical", upIsGood: false },
+    { value: `${onTimeRate}%`, label: "On-time rate", color: "var(--green)", unit: "%", upIsGood: true, trend: "onTime", nav: () => setMetricModal({ title: "On-time rate — recent completions", taskIds: tasks.filter((t) => t.status === "Done").slice(-8).map((t) => t.id) }) },
   ];
 
   // Predicted late (at-risk with reasons per design)
@@ -193,18 +195,54 @@ export function CompanySection() {
                 </div>
                 <div style={{ flex: "none" }}>
                   <div style={{ fontSize: 13, fontWeight: 400 }}>Company health</div>
-                  <div style={{ fontSize: 11.5, color: "var(--sw-muted)" }}>{health >= 70 ? "Healthy" : "Needs attention"} — {onTrack} depts on track</div>
+                  <div style={{ fontSize: 11.5, color: "var(--sw-muted)" }}>{health >= 70 ? "Healthy" : "Needs attention"} — {onTrack} of {scored.length} active depts on track</div>
                 </div>
                 <div className="sw-topbar-label" style={{ width: 1, alignSelf: "stretch", background: "var(--sw-hair)" }} />
-                {execMetrics.map((m, i) => (
-                  <button key={m.label} onClick={m.nav} style={{ flex: "1 1 90px", minWidth: 90, border: "none", background: "none", padding: 0, textAlign: "left", cursor: "pointer" }}>
-                    <div style={{ fontSize: 20, fontWeight: 800, lineHeight: 1, color: m.color, fontVariantNumeric: "tabular-nums" }}>{m.value}</div>
-                    <div style={{ fontSize: 11, color: "var(--sw-text-soft)", marginTop: 5, fontWeight: 400 }}>{m.label}</div>
-                    <svg width="100%" height="16" viewBox="0 0 120 18" preserveAspectRatio="none" style={{ display: "block", marginTop: 6, opacity: 0.85 }}>
-                      <path d={SPARKS[i % SPARKS.length]} fill="none" stroke={m.color === "var(--sw-text)" ? "var(--green)" : m.color} strokeWidth="1.8" />
-                    </svg>
-                  </button>
-                ))}
+                {execMetrics.map((m) => {
+                  const series = metricTrend(tasks, m.trend);
+                  const delta = trendDelta(series);          // null when not comparable
+                  const diff = delta?.diff ?? 0;
+                  const { line, area, lastX, lastY } = sparkPath(series, 120, 26);
+                  // Delta colour encodes meaning, not direction: overdue falling is good.
+                  const deltaColor = diff === 0 || m.upIsGood === null
+                    ? "var(--sw-muted)"
+                    : (diff > 0) === m.upIsGood ? "var(--green)" : "var(--red)";
+                  const accent = m.color === "var(--sw-text)" ? "var(--sw-text-soft)" : m.color;
+                  const gid = `spark-${m.trend}`;
+                  return (
+                    <button
+                      key={m.label} onClick={m.nav}
+                      title={delta
+                        ? `${m.label}: ${diff > 0 ? "up" : diff < 0 ? "down" : "unchanged"} ${Math.abs(diff)}${m.unit || ""} vs 4 weeks ago · sparkline covers 12 weeks`
+                        : `${m.label} — not enough history yet for a comparison`}
+                      style={{ flex: "1 1 110px", minWidth: 110, border: "none", background: "none", padding: 0, textAlign: "left", cursor: "pointer" }}
+                    >
+                      <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+                        <span style={{ fontSize: 20, fontWeight: 800, lineHeight: 1, color: m.color }}>{m.value}</span>
+                        {delta && diff !== 0 && (
+                          <span style={{ fontSize: 10.5, fontWeight: 400, color: deltaColor, whiteSpace: "nowrap" }}>
+                            {diff > 0 ? "▲" : "▼"}{Math.abs(diff)}{m.unit || ""}
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: 11, color: "var(--sw-text-soft)", marginTop: 5, fontWeight: 400 }}>{m.label}</div>
+                      {/* Real 12-week series. Line sits in the de-emphasis hue with only the
+                          current period accented, so the eye lands on now, not on the noise. */}
+                      <svg viewBox="0 0 126 30" width="100%" height="26" style={{ display: "block", marginTop: 6, overflow: "visible" }} aria-hidden="true">
+                        <defs>
+                          <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor={accent} stopOpacity="0.16" />
+                            <stop offset="100%" stopColor={accent} stopOpacity="0" />
+                          </linearGradient>
+                        </defs>
+                        <path d={area} fill={`url(#${gid})`} />
+                        <path d={line} fill="none" stroke={accent} strokeOpacity="0.45" strokeWidth="1.5"
+                              strokeLinecap="round" strokeLinejoin="round" />
+                        <circle cx={lastX} cy={lastY} r="2.6" fill={accent} stroke="var(--sw-card)" strokeWidth="1.5" />
+                      </svg>
+                    </button>
+                  );
+                })}
               </div>
 
               <div className="sw-grid-2" style={{ gap: 14, marginBottom: 14 }}>

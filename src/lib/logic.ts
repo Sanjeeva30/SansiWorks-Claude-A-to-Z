@@ -10,6 +10,95 @@ import { todayIso } from "./dates";
 export const isOpen = (t: Task) => t.status !== "Done";
 export const isOverdue = (t: Task) => isOpen(t) && !!t.due && t.due < todayIso();
 
+/* ----- metric trends -----
+   The Overview stat tiles used to draw four hardcoded SVG squiggles cycled by
+   index: decorative fiction implying trend data that did not exist. These
+   reconstruct the real series from task history, so a rising overdue line means
+   overdue actually rose.
+
+   Each point is the state of the world at the END of that week, derived from
+   created_at / completed_at / due / status. Caveat: priority is only stored as a
+   current value, so the "critical" series applies today's priority to historical
+   weeks — it shows when critical work was open, not when it was labelled
+   critical. Good enough for a sparkline, wrong for an audit. */
+export type TrendKind = "open" | "overdue" | "critical" | "onTime";
+
+/** Was this task open at end-of-day `dayIso`? (created by then, not yet completed) */
+function wasOpenAt(t: Task, dayIso: string): boolean {
+  const created = (t.created_at || "").slice(0, 10);
+  if (created && created > dayIso) return false;
+  const done = (t.completed_at || "").slice(0, 10);
+  return !done || done > dayIso;
+}
+
+export function metricTrend(tasks: Task[], kind: TrendKind, points = 12, today: Date = new Date()): number[] {
+  const series: number[] = [];
+  for (let i = points - 1; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i * 7);
+    const dayIso = d.toISOString().slice(0, 10);
+
+    if (kind === "onTime") {
+      // Cumulative on-time share of everything completed up to that week.
+      const done = tasks.filter(
+        (t) => t.completed_at && t.due && t.completed_at.slice(0, 10) <= dayIso
+      );
+      const onTime = done.filter((t) => t.completed_at!.slice(0, 10) <= t.due!).length;
+      // NaN, not 100, before anything has been completed: "no completions yet" is
+      // not a perfect record, and plotting it as 100 invented a cliff.
+      series.push(done.length ? Math.round((onTime / done.length) * 100) : NaN);
+      continue;
+    }
+
+    // Before any task existed there is nothing to plot — NaN keeps the sparkline
+    // from drawing a fake ramp up from zero on the day the workspace was seeded.
+    const existedThen = tasks.some((t) => (t.created_at || "").slice(0, 10) <= dayIso);
+    if (!existedThen) { series.push(NaN); continue; }
+    const openThen = tasks.filter((t) => wasOpenAt(t, dayIso));
+    if (kind === "open") series.push(openThen.length);
+    else if (kind === "overdue") series.push(openThen.filter((t) => t.due && t.due < dayIso).length);
+    else series.push(openThen.filter((t) => t.priority === "Critical").length);
+  }
+  return series;
+}
+
+/** Change vs `lookback` points ago (default 4 weeks = "vs last month") for the
+ *  stat tile's delta chip. Returns null when either end of the comparison has no
+ *  real data — comparing against a week before the workspace existed produced a
+ *  meaningless "+27". */
+export function trendDelta(series: number[], lookback = 4): { diff: number } | null {
+  if (series.length < 2) return null;
+  const last = series[series.length - 1];
+  const prev = series[series.length - 1 - Math.min(lookback, series.length - 1)];
+  if (!Number.isFinite(last) || !Number.isFinite(prev)) return null;
+  return { diff: last - prev };
+}
+
+/** Build an SVG polyline for a sparkline, plus the last point so the caller can
+ *  accent the current period. Y is inverted (SVG origin is top-left) and a flat
+ *  series is drawn through the vertical middle rather than dividing by zero. */
+export function sparkPath(series: number[], w: number, h: number, pad = 2): { line: string; area: string; lastX: number; lastY: number } {
+  // Points can be NaN where no data existed yet; the line simply starts later
+  // rather than ramping up from a fabricated zero.
+  const idx = series.map((v, i) => [v, i] as const).filter(([v]) => Number.isFinite(v));
+  if (!idx.length) return { line: "", area: "", lastX: 0, lastY: h / 2 };
+  const vals = idx.map(([v]) => v);
+  const min = Math.min(...vals);
+  const max = Math.max(...vals);
+  const span = max - min;
+  const stepX = series.length > 1 ? w / (series.length - 1) : 0;
+  const pts = idx.map(([v, i]) => {
+    const x = i * stepX;
+    const y = span === 0 ? h / 2 : pad + (1 - (v - min) / span) * (h - pad * 2);
+    return [x, y] as const;
+  });
+  const line = pts.map(([x, y], i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)} ${y.toFixed(1)}`).join(" ");
+  const [firstX] = pts[0];
+  const [lastX, lastY] = pts[pts.length - 1];
+  const area = `${line} L${lastX.toFixed(1)} ${h} L${firstX.toFixed(1)} ${h} Z`;
+  return { line, area, lastX, lastY };
+}
+
 /** Birthdays in the next 7 days, org-wide — year is optional and never shown.
  *  Wraps the new-year boundary (e.g. today Dec 28 picks up a Jan 2 birthday). */
 export function upcomingBirthdays(profiles: Profile[], today: Date = new Date()): { p: Profile; daysAway: number }[] {
