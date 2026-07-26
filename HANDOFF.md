@@ -50,14 +50,31 @@ Audit artifact: private Claude artifact "SansiWorks — Full QA & Improvement Au
       task-attachments narrowed to the `form-submissions/` prefix.
       **Still needs you:** enable Leaked Password Protection in the Supabase
       dashboard (Auth → Policies) — it is a toggle Claude cannot set.
-- [ ] **4. Dark-mode contrast pass** — priority chips, "View all tasks" link and
-      People efficiency figures fail WCAG AA on dark. ~½ day.
+- [x] **4. WCAG AA both themes.** Measured, not eyeballed: 47 dark + 35 light
+      failures -> **0 / 0** across 9 screens. Root cause was brand hues used as TEXT
+      (#7A0D20 = 1.49:1 on a dark card). Added `--sw-on-crimson/-green/-navy/-red/
+      -amber` foreground tokens per theme (plain `--crimson` etc. stay as FILL, so
+      white-on-crimson buttons are unaffected); ~90 call sites + PRIORITY_COLORS/
+      STATUS_COLORS migrated. Also darkened light `--sw-muted` (2.77:1 -> 4.65) and
+      dark muted alpha .45 -> .50. Two theme-independent bugs found: avatar initials
+      were hardcoded white on rank-lightened pastels (1.4:1 in BOTH themes) — now
+      `readableTextOn()` with a derived 0.179 luminance crossover; and the Late/At-risk
+      chip painted the status colour as a background with white text.
+      *Note: light-mode secondary text is now visibly darker — that's the AA fix,
+      and it's one token if you want it tuned.*
 - [x] **5. Honest efficiency.** `efficiencyScore()` returns `hasData`; no-data
       people render "— no data" instead of a fake 100%. `EFFICIENCY_EXPLAINER`
       surfaced on the profile modal. Company health excludes unscored depts →
       moved 97 to an honest **79**.
-- [ ] **6. Sansi company-scope grounding** — asked "what is at risk this week?"
-      it answers from a personal lens only, missing the 3 company criticals. ~1 day.
+- [x] **6. Sansi company scope.** The grounding contained no company task data at
+      all — only rows where the asker was assignee/accountable — so it could not have
+      answered correctly. Now fetches company-wide open tasks for levels with
+      `exec_visibility` (Board/Group/Regional Heads; Dept Heads and below unchanged
+      and told to say so), computes at-risk with the SAME rule as the Overview's
+      "Predicted late" so the two never disagree, and the prompt requires Sansi to
+      name its scope. Verified: "what is at risk this week?" -> "Across the company,
+      12 tasks..." naming the same criticals the Overview flags; personal questions
+      still answer personally.
 - [ ] **7. Scoped queries + row-level realtime.** Client still loads all 35 tables
       in full and refetches everything on any change. Hard scale ceiling before
       the 30-user seed. (`notifications`/`audit_log` reads are now RLS-scoped,
