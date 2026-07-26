@@ -17,11 +17,21 @@ export async function POST(req: NextRequest) {
   const { data: form } = await supabase.from("forms").select("title,default_assignee_id").eq("id", formId).single();
   if (!form?.default_assignee_id) return NextResponse.json({ ok: true, notified: false });
 
-  await supabase.from("notifications").insert({
+  // Idempotent per submission: this endpoint is unauthenticated, so without a
+  // dedupe key anyone could replay the same submissionId in a loop and bury the
+  // form owner in identical alerts. The unique partial index on dedupe_key means
+  // a replay conflicts instead of inserting, and we report it as already-notified.
+  const { error } = await supabase.from("notifications").insert({
     profile_id: form.default_assignee_id,
     task_id: null,
     body: `New submission on "${form.title}" — convert it to a task from the Forms page`,
     reason: "form submission",
+    dedupe_key: `form-submission:${submissionId}`,
   });
+  if (error) {
+    // 23505 = unique_violation: this submission has already raised its notification.
+    if (error.code === "23505") return NextResponse.json({ ok: true, notified: false, duplicate: true });
+    return NextResponse.json({ ok: false }, { status: 500 });
+  }
   return NextResponse.json({ ok: true, notified: true });
 }

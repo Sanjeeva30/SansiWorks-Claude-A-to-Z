@@ -3,6 +3,16 @@ import { createAdminClient } from "@/lib/server/admin";
 import { sendEmail, wrapEmailHtml } from "@/lib/server/email";
 import { atRiskTasks, workloadPct } from "@/lib/logic";
 import type { Task, Profile } from "@/lib/types";
+import { timingSafeEqual } from "node:crypto";
+
+/* Constant-time string compare so a caller can't discover CRON_SECRET one
+   character at a time from response-timing differences. */
+function timingSafeEqualStr(a: string, b: string): boolean {
+  const ab = Buffer.from(a);
+  const bb = Buffer.from(b);
+  if (ab.length !== bb.length) return false;
+  return timingSafeEqual(ab, bb);
+}
 
 // One batched Gemini call covering everyone at risk today, not one call per
 // person — keeps free-tier quota use flat regardless of headcount. Failure
@@ -33,8 +43,14 @@ async function proactiveFlags(people: { profile: Profile; reasons: string[]; pct
 // One cron endpoint, dispatched by kind: digest (daily), plan (Mon 08:00 WIB), wrap (Fri 15:00 WIB).
 // Guarded by CRON_SECRET. Requires SUPABASE_SERVICE_ROLE_KEY in production.
 export async function GET(req: NextRequest) {
-  const secret = req.nextUrl.searchParams.get("secret") || req.headers.get("authorization")?.replace("Bearer ", "");
-  if (secret !== process.env.CRON_SECRET) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  // Header only — a secret in the query string ends up in server logs, browser
+  // history and referrer headers. Vercel Cron sends `Authorization: Bearer
+  // $CRON_SECRET` on its own, so nothing is lost by dropping ?secret=.
+  const expected = process.env.CRON_SECRET;
+  const presented = req.headers.get("authorization")?.replace(/^Bearer /, "");
+  if (!expected || !presented || !timingSafeEqualStr(presented, expected)) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
   let kind = req.nextUrl.searchParams.get("kind") || "digest";
   // Vercel Hobby allows 2 crons: "morning" = daily digest, plus the Monday plan on Mondays.
   const isMonday = new Date().getUTCDay() === 1;
