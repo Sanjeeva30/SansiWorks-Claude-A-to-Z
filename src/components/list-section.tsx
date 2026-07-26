@@ -188,7 +188,7 @@ export function ListSection() {
 
   /* ---- List page (table / board / calendar / gantt) ---- */
   return (
-    <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, height: "100%" }}>
+    <div className="sw-content-col" style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, height: "100%" }}>
       <header style={{ flex: "none", borderBottom: "1px solid var(--sw-hair)", background: "var(--sw-page)" }}>
         <div className="sw-topbar" style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 22px 10px" }}>
           <span style={{ width: 7, height: 7, borderRadius: 99, background: space?.color || "var(--navy)", flex: "none" }} />
@@ -762,7 +762,7 @@ function EverythingView() {
   };
 
   return (
-    <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, height: "100%" }}>
+    <div className="sw-content-col" style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, height: "100%" }}>
       <header style={{ flex: "none", borderBottom: "1px solid var(--sw-hair)", background: "var(--sw-page)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 22px" }}>
           <span style={{ width: 7, height: 7, borderRadius: 99, background: "var(--navy)", flex: "none" }} />

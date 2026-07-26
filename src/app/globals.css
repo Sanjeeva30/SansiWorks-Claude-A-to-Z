@@ -161,6 +161,32 @@ button, select, input, textarea { color: inherit; font: inherit; }
 @keyframes swModalIn { from { opacity: 0; transform: translateY(10px) scale(.98); } to { opacity: 1; transform: none; } }
 @keyframes swSectionIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
 main { animation: swSectionIn .16s ease; }
+
+/* ---- why the layout rules below are @container, not @media ----
+   The content column is the viewport MINUS the 228px desktop sidebar. A viewport
+   media query cannot see that, so every viewport-based breakpoint in this app was
+   effectively 228px too late whenever the sidebar was open: at an 805px viewport
+   `main` is only 577px, the calendar's side-by-side split left the month grid
+   268px wide — 38px per weekday column — and no `@media (max-width: 768px)` rule
+   ever fired to rescue it.
+
+   Making `main` a query container lets each layout rule respond to the space it
+   actually has, so the same component adapts correctly whether it is narrowed by a
+   small screen or by the sidebar. `min-width: 0` is required for a flex child to
+   shrink below its content width at all.
+
+   Rules that are genuinely about the device — the fixed hamburger, safe-area
+   insets, and full-screen modals (which are portalled outside `main`) — stay as
+   viewport @media queries further down. */
+/* The container is the whole content COLUMN (topbar + main), not just main: the
+   topbar is a <header> sibling of <main>, so a container on main alone left the
+   topbar's own crowding rules stuck on viewport queries — which is how the theme
+   and bell icons ended up pushed off the right edge at an 805px viewport. */
+.sw-content-col {
+  container-type: inline-size;
+  container-name: content;
+  min-width: 0;
+}
 .sw-row { transition: background .12s ease; }
 .sw-row:hover { background: var(--sw-hover) !important; }
 .sw-select {
@@ -222,45 +248,82 @@ html, body { max-width: 100%; overflow-x: hidden; }
 .sw-grid-2 > *, .sw-grid-3 > *, .sw-grid-5 > *,
 .sw-grid-label > *, .sw-table-row5 > * { min-width: 0; }
 
-/* main content column next to the sidebar needs room for the
-   fixed hamburger button below 768px */
+/* Device-level rules: the fixed hamburger needs clearance, and the content
+   column gets tighter side padding on an actual small screen. These are about
+   the viewport, so they stay @media. */
 @media (max-width: 768px) {
   main, .sw-main { padding-top: 56px !important; }
   .sw-topbar { padding-left: 56px !important; }
-  /* main content gets tighter side padding so cards have real room */
   main { padding-left: 14px !important; padding-right: 14px !important; }
-  /* calendar: the "Next deadlines" sidebar stacks below the grid
-     instead of overlapping it */
-  .sw-cal-row { flex-direction: column !important; }
-  .sw-cal-side { width: 100% !important; }
 }
 
-/* tablets: trim the widest grids down before they get cramped */
-@media (max-width: 1024px) {
+/* ---- container queries: layout responds to available space ---- */
+
+/* A side-by-side calendar needs roughly 900px of content width before the month
+   grid starts losing legibility. Below that the "Next deadlines" panel stacks
+   underneath and the grid takes the full width. */
+@container content (max-width: 900px) {
+  .sw-cal-row { flex-direction: column !important; }
+  .sw-cal-side { width: 100% !important; max-width: none !important; }
+}
+
+/* Five metric columns get cramped before three do. */
+@container content (max-width: 860px) {
   .sw-grid-5 { grid-template-columns: repeat(3, 1fr) !important; }
 }
 
 /* small phones: table-like rows collapse to stacked cards */
-@media (max-width: 640px) {
+/* Space-driven collapses: these fire when the CONTENT is narrow, whether that is
+   a small screen or the sidebar taking 228px on a laptop. */
+@container content (max-width: 700px) {
   .sw-hide-mobile { display: none !important; }
   /* gantt: person column narrows so the timeline gets the room */
   :root { --sw-gantt-name: 130px; }
-  /* quick-add: the Sansi Assist side panel is a nice-to-have —
-     on phones the form itself gets the whole modal */
-  .sw-modal-split-side { display: none !important; }
   .sw-grid-3, .sw-grid-5 { grid-template-columns: 1fr 1fr !important; }
   .sw-table-row5 {
     grid-template-columns: 1fr !important;
     gap: 4px !important;
     padding: 10px 14px !important;
   }
-  /* topbars: drop the least-essential items so the important
-     buttons (New task, Sansi, notifications) never get pushed
-     off-screen; anything left still overflowing scrolls rather
-     than silently clipping */
-  .sw-topbar-title, .sw-topbar-search { display: none !important; }
-  .sw-topbar { overflow-x: auto !important; }
+  /* Matrices keep their shape and scroll rather than crushing their labels.
+     !important because these carry an inline overflow:hidden for rounded corners,
+     which would otherwise clip the table into unreachability. */
+  .sw-table-scroll { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
+  .sw-table-scroll > * { min-width: 520px; }
+  /* People rows: name takes its own line so the open-count and efficiency badge
+     sit on a second row instead of being shoved off the right edge. */
+  .sw-person-meta { flex-wrap: wrap; }
+  .sw-person-meta > span:first-child { flex: 1 1 100% !important; }
+  .sw-people-bar { display: none !important; }
+}
+
+/* Topbars: shed the least-essential items so the important controls (New task,
+   Sansi, notifications) are never pushed off the edge. Keyed to available space,
+   because the topbar crowds when the sidebar is open just as surely as on a phone.
+   Anything still overflowing scrolls rather than clipping silently. */
+@container content (max-width: 720px) {
+  .sw-topbar-search { display: none !important; }
   .sw-topbar-label { display: none !important; }
+}
+@container content (max-width: 560px) {
+  .sw-topbar-title { display: none !important; }
+  .sw-topbar { overflow-x: auto !important; }
+}
+
+/* A weekday column needs ~90px to hold a date plus one task chip. Below 630px of
+   content width the month grid scrolls horizontally instead of collapsing into
+   unreadable 38px slivers — which is exactly what a viewport-only rule allowed
+   whenever the sidebar was open. */
+@container content (max-width: 630px) {
+  .sw-calendar-scroll { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
+  .sw-calendar-scroll > * { min-width: 630px; }
+}
+
+@media (max-width: 640px) {
+  /* quick-add: the Sansi Assist side panel is a nice-to-have —
+     on phones the form itself gets the whole modal */
+  .sw-modal-split-side { display: none !important; }
+
   /* any button/select in a topbar keeps its text on one line and
      never shrinks below that — the row scrolls instead of the
      text wrapping into a garbled multi-line pill */
@@ -279,12 +342,15 @@ html, body { max-width: 100%; overflow-x: hidden; }
     width: auto !important;
   }
 }
-@media (max-width: 480px) {
+@container content (max-width: 520px) {
   /* ticket numbers (SW-123) are the least useful column on a task
-     row on a phone — drop them so the task name gets the room */
+     row — drop them so the task name gets the room */
   .sw-ticket-no { display: none !important; }
   .sw-grid-2, .sw-grid-3, .sw-grid-5 { grid-template-columns: 1fr !important; }
   .sw-grid-label { grid-template-columns: 1fr !important; gap: 3px !important; }
+}
+
+@media (max-width: 480px) {
   .sw-modal-split { flex-direction: column !important; }
   .sw-modal-split-side { width: 100% !important; border-left: none !important; border-top: 1px solid var(--sw-hair) !important; }
 
@@ -303,24 +369,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
   }
 }
 
-/* fixed-column tables (radio/checkbox matrices) keep their shape
-   but scroll horizontally on narrow screens instead of squeezing */
-@media (max-width: 640px) {
-  /* !important because these sections carry an inline `overflow:hidden`
-     for their rounded corners — without it the inline style wins and
-     the table is clipped (unreachable) instead of scrollable. */
-  .sw-table-scroll { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
-  .sw-table-scroll > * { min-width: 520px; }
-
-  /* People rows: name takes its own line so the open-count and
-     efficiency badge sit on a second row instead of being shoved
-     off the right edge. The bar duplicates the % number — drop it. */
-  .sw-person-meta { flex-wrap: wrap; }
-  .sw-person-meta > span:first-child { flex: 1 1 100% !important; }
-  .sw-people-bar { display: none !important; }
-  .sw-calendar-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  .sw-calendar-scroll > * { min-width: 640px; }
-}
+/* (superseded: these rules are now container-query driven above) */
 
 /* horizontally-scrolling surfaces (kanban, gantt, wide tables):
    momentum scroll on iOS + a visible scroll affordance */

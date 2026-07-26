@@ -159,7 +159,7 @@ export function CompanySection() {
   const peoplePad = peopleDensity === "compact" ? "10px 14px" : "16px 18px";
 
   return (
-    <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, height: "100%" }}>
+    <div className="sw-content-col" style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, height: "100%" }}>
       <header className="sw-topbar" style={{ height: 52, flex: "none", display: "flex", alignItems: "center", gap: 10, padding: "0 22px", borderBottom: "1px solid var(--sw-hair)", background: "var(--sw-page)" }}>
         <h1 className="sw-topbar-title" style={{ fontSize: 14, fontWeight: 400, margin: 0 }}>{companyPage === "executive" ? "Overview" : "People"}</h1>
         <div style={{ flex: 1 }} />
