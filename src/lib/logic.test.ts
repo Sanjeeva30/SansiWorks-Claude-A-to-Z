@@ -74,6 +74,19 @@ describe("onTimeStats / efficiencyScore (75% history + 25% current health)", () 
   it("scores 100 with no history and no open overdue work", () => {
     expect(efficiencyScore([]).score).toBe(100);
   });
+  it("reports hasData=false for someone with no tracked work, so the UI shows “—” not a perfect score", () => {
+    // The score still computes to 100 (both halves default to "nothing wrong"),
+    // but nothing has actually been measured. These figures are peer-visible and
+    // may inform reviews, so an empty workload must never read as 100%.
+    const empty = efficiencyScore([]);
+    expect(empty.hasData).toBe(false);
+  });
+  it("reports hasData=true once there is completed history or open work", () => {
+    const doneWithDue = task({ status: "Done", due: iso(0), completed_at: new Date().toISOString() });
+    expect(efficiencyScore([doneWithDue]).hasData).toBe(true);
+    const openOnly = task({ status: "Working on it", due: iso(5) });
+    expect(efficiencyScore([openOnly]).hasData).toBe(true);
+  });
   it("penalizes a mix of late history and currently-overdue open work", () => {
     const lateDone = task({ status: "Done", due: iso(-3), completed_at: new Date().toISOString() });
     const overdueOpen = task({ status: "Working on it", due: iso(-1) });

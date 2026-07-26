@@ -40,12 +40,20 @@ export function CompanySection() {
         const overdue = open.filter(isOverdue);
         const healthPct = open.length > 0 ? 100 - (overdue.length / open.length) * 100 : 100;
         const eff = Math.round(historyPct * 0.75 + healthPct * 0.25);
-        return { p, pt, onTime, late, historyPct: Math.round(historyPct), open, overdue, healthPct: Math.round(healthPct), eff };
+        return { p, pt, onTime, late, historyPct: Math.round(historyPct), open, overdue, healthPct: Math.round(healthPct), eff, hasData: total > 0 || open.length > 0 };
       }),
     [sansicoPeople, tasks]
   );
 
   const effColor = (v: number) => (v >= 80 ? "var(--green)" : v >= 60 ? "#B7791F" : "var(--red)");
+
+  /* The People list is a workload view, so lead with the people carrying the most
+     open work. Alphabetical order buried the busiest team members below everyone
+     with an empty queue. Ties fall back to name so the order stays stable. */
+  const peopleByWorkload = useMemo(
+    () => [...personStats].sort((a, b) => b.open.length - a.open.length || a.p.name.localeCompare(b.p.name)),
+    [personStats]
+  );
 
   const deptStats = useMemo(
     () =>
@@ -59,7 +67,7 @@ export function CompanySection() {
         const historyPct = total > 0 ? (onTime / total) * 100 : 100;
         const healthPct = open.length > 0 ? 100 - (overdue.length / open.length) * 100 : 100;
         const eff = Math.round(historyPct * 0.75 + healthPct * 0.25);
-        return { d, risk, riskLabel: risk > 50 ? "High" : risk > 20 ? "Moderate" : "Low", eff, overdue, open, onTime, late, historyPct: Math.round(historyPct), healthPct: Math.round(healthPct) };
+        return { d, risk, riskLabel: risk > 50 ? "High" : risk > 20 ? "Moderate" : "Low", eff, overdue, open, onTime, late, historyPct: Math.round(historyPct), healthPct: Math.round(healthPct), hasData: total > 0 || open.length > 0 };
       }),
     [departments, deptMembers, tasks]
   );
@@ -69,7 +77,8 @@ export function CompanySection() {
   const criticalCount = openTasks.filter((t) => t.priority === "Critical").length;
   const { onTime: onT, total: totalDone } = onTimeStats(tasks);
   const onTimeRate = totalDone ? Math.round((onT / totalDone) * 100) : 100;
-  const health = deptStats.length ? Math.round(deptStats.reduce((s, x) => s + x.eff, 0) / deptStats.length) : 100;
+  const scored = deptStats.filter((x) => x.hasData);
+  const health = scored.length ? Math.round(scored.reduce((s, x) => s + x.eff, 0) / scored.length) : 100;
   const onTrack = deptStats.filter((x) => x.risk < 50).length;
 
   const goEverything = () => { setSection("list"); setListPage("everything"); };
@@ -267,10 +276,10 @@ export function CompanySection() {
                       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
                         <span style={{ width: 8, height: 8, borderRadius: 99, background: x.d.color, flex: "none" }} />
                         <span style={{ fontSize: 12, fontWeight: 400, flex: 1, color: "var(--sw-text)" }}>{x.d.name}</span>
-                        <span style={{ fontSize: 11, color: "var(--sw-muted)", fontWeight: 400 }}>{x.eff}%</span>
+                        <span style={{ fontSize: 11, color: "var(--sw-muted)", fontWeight: 400 }}>{x.hasData ? `${x.eff}%` : "—"}</span>
                       </div>
                       <div style={{ height: 5, borderRadius: 99, background: "var(--sw-hover)", overflow: "hidden" }}>
-                        <div style={{ height: "100%", borderRadius: 99, background: effColor(x.eff), width: `${x.eff}%` }} />
+                        <div style={{ height: "100%", borderRadius: 99, background: effColor(x.eff), width: x.hasData ? `${x.eff}%` : "0%" }} />
                       </div>
                     </button>
                   ))}
@@ -287,7 +296,7 @@ export function CompanySection() {
                           <div style={{ height: "100%", borderRadius: 99, background: effColor(st.eff), width: `${st.eff}%` }} />
                         </div>
                       </span>
-                      <span style={{ fontSize: 11, fontWeight: 400, color: "var(--sw-muted)", flex: "none", width: 34, textAlign: "right" }}>{st.eff}%</span>
+                      <span style={{ fontSize: 11, fontWeight: 400, color: "var(--sw-muted)", flex: "none", width: 34, textAlign: "right" }}>{st.hasData ? `${st.eff}%` : "—"}</span>
                     </div>
                   ))}
                 </section>
@@ -377,7 +386,7 @@ export function CompanySection() {
                 </button>
               </div>
 
-              {personStats.map((st) => {
+              {peopleByWorkload.map((st) => {
                 const dept = departments.find((d) => d.id === st.p.department_id);
                 const cats = new Map<string, number>();
                 for (const t of st.open) {
@@ -399,7 +408,7 @@ export function CompanySection() {
                         <div className="sw-people-bar" style={{ width: 80, height: 5, borderRadius: 99, background: "var(--sw-hover)", overflow: "hidden", margin: "0 4px" }}>
                           <div style={{ height: "100%", borderRadius: 99, background: effColor(st.eff), width: `${st.eff}%` }} />
                         </div>
-                        <span style={{ fontSize: 11, fontWeight: 400, color: effColor(st.eff), width: 76, textAlign: "right" }}>{st.eff}% eff.</span>
+                        <span title={st.hasData ? undefined : "No tracked work yet — nothing to measure"} style={{ fontSize: 11, fontWeight: 400, color: st.hasData ? effColor(st.eff) : "var(--sw-muted)", width: 76, textAlign: "right" }}>{st.hasData ? `${st.eff}% eff.` : "— no data"}</span>
                       </button>
                       <button onClick={() => setOpenPerson(expanded ? null : st.p.name)} title="Peek at open tasks" style={{ border: "none", background: "none", cursor: "pointer", padding: 4, flex: "none" }}>
                         <span style={{ fontSize: 11, color: "var(--sw-muted)", display: "inline-block", transform: expanded ? "rotate(180deg)" : "none", transition: "transform .15s" }}>▾</span>

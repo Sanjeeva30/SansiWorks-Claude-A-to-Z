@@ -85,9 +85,13 @@ export function HomeSection() {
   const deptScores = departments.map((d) => {
     const memberIds = deptMembers.filter((m) => m.department_id === d.id).map((m) => m.profile_id);
     const dTasks = tasks.filter((t) => !!t.assignee_id && memberIds.includes(t.assignee_id));
-    return { d, eff: efficiencyScore(dTasks).score, risk: departmentRisk(dTasks) };
+    const { score, hasData } = efficiencyScore(dTasks);
+    return { d, eff: score, hasData, risk: departmentRisk(dTasks) };
   });
-  const health = deptScores.length ? Math.round(deptScores.reduce((s, x) => s + x.eff, 0) / deptScores.length) : 100;
+  // Departments with no tracked work score a default 100 — averaging those in
+  // would inflate company health, so only scored departments count.
+  const scoredDepts = deptScores.filter((x) => x.hasData);
+  const health = scoredDepts.length ? Math.round(scoredDepts.reduce((s, x) => s + x.eff, 0) / scoredDepts.length) : 100;
   const onTrack = deptScores.filter((x) => x.risk < 50).length;
 
   const unread = notifications.filter((n) => !n.read);

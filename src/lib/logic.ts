@@ -34,15 +34,34 @@ export function onTimeStats(tasks: Task[]) {
   return { onTime, late, total: done.length };
 }
 
-export function efficiencyScore(tasks: Task[]): { score: number; color: string } {
+/* Efficiency = 75% on-time history + 25% current health.
+   `hasData` is false when there is nothing to score — no completed tasks with a
+   due date AND no open tasks. The formula returns 100 in that case (both halves
+   default to "nothing has gone wrong"), which reads as a perfect record when it
+   actually means "no tracked work". Callers must show "—" instead of a number
+   when hasData is false: these figures are visible to peers and may inform
+   reviews, so rewarding an empty workload would be indefensible. */
+export function efficiencyScore(tasks: Task[]): { score: number; color: string; hasData: boolean } {
   const { onTime, total } = onTimeStats(tasks);
   const historyPct = total > 0 ? (onTime / total) * 100 : 100;
   const open = tasks.filter(isOpen);
   const overdue = open.filter(isOverdue);
   const healthPct = open.length > 0 ? 100 - (overdue.length / open.length) * 100 : 100;
   const score = Math.round(historyPct * 0.75 + healthPct * 0.25);
-  return { score, color: score >= 80 ? "var(--green)" : score >= 60 ? "#B7791F" : "var(--red)" };
+  return {
+    score,
+    color: score >= 80 ? "var(--green)" : score >= 60 ? "#B7791F" : "var(--red)",
+    hasData: total > 0 || open.length > 0,
+  };
 }
+
+/* The formula in words, for the in-app explainer. Employees are measured by this,
+   so it should never be a black box they have to take on trust. */
+export const EFFICIENCY_EXPLAINER =
+  "Efficiency blends two things: 75% is your on-time history — the share of tasks " +
+  "you finished on or before their due date — and 25% is the current health of your " +
+  "open work, which drops as tasks go overdue. It is shown as “—” until you have " +
+  "tracked work to measure, so an empty workload never counts as a perfect score.";
 
 export function tasksOfPerson(tasks: Task[], pid: string) {
   return tasks.filter((t) => t.assignee_id === pid);

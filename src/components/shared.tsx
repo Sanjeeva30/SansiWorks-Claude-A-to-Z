@@ -4,7 +4,7 @@ import { useStore } from "@/lib/store";
 import { useUI } from "@/lib/ui";
 import { initials, Profile, STATUS_COLORS } from "@/lib/types";
 import { relTime, fmtShort } from "@/lib/dates";
-import { efficiencyScore, tasksOfPerson, isOpen, isOverdue, onTimeStats } from "@/lib/logic";
+import { efficiencyScore, tasksOfPerson, isOpen, isOverdue, onTimeStats, EFFICIENCY_EXPLAINER } from "@/lib/logic";
 import { IconBell, IconMoon, IconSparkle, IconSun, IconWhatsApp, IconX } from "./icons";
 import { AvatarUploadButton } from "./avatar-upload";
 import { createTask } from "@/lib/actions";
@@ -397,9 +397,10 @@ export function ProfileModal() {
             <span style={{ fontSize: 12, fontWeight: 400, color: "var(--sw-muted)" }}>Efficiency</span>
             <button
               onClick={() => setMetricModal({ title: `${p.name} — efficiency breakdown`, taskIds: personTasks.map((t) => t.id) })}
-              style={{ border: "none", background: "none", padding: 0, fontSize: 12.5, fontWeight: 400, color: eff.color, textDecoration: "underline", cursor: "pointer", textAlign: "left" }}
+              title={EFFICIENCY_EXPLAINER}
+              style={{ border: "none", background: "none", padding: 0, fontSize: 12.5, fontWeight: 400, color: eff.hasData ? eff.color : "var(--sw-muted)", textDecoration: "underline", cursor: "pointer", textAlign: "left" }}
             >
-              {eff.score}%
+              {eff.hasData ? `${eff.score}%` : "—"}
             </button>
             {row("Direct reports", reports.length ? reports.map((r) => r.name).join(", ") : "—")}
             {row("Joined", joined)}
