@@ -1,7 +1,7 @@
 # SansiWorks — Session Handoff
 
 > Kept current at every major milestone so any fresh session (or fresh context window)
-> can pick up without re-deriving state. Last updated: **2026-07-27**.
+> can pick up without re-deriving state. Last updated: **2026-07-27** (auth QA).
 
 ## What this project is
 1:1 rebuild of the SansiWorks design (Sansico Group PM workspace) on Next.js 16 + Supabase
@@ -96,6 +96,44 @@ Audit artifact: private Claude artifact "SansiWorks — Full QA & Improvement Au
       mention waiting. Digest now has a Mentions & replies section, email is
       opt-OUT, and `?dryRun=1` / `?html=<email>` let the digest be tested without
       mailing the company (BREVO_API_KEY is live).
+
+## Auth & onboarding (audited 2026-07-27)
+Every signed-out surface was walked end to end against `sanjeeva.sansico@gmail.com`.
+Two flows were not merely rough — they were broken or acted on the wrong account.
+- **Invite onboarding never completed.** "Confirm email" is ON in Supabase, so
+  signUp() yields no session and the ignored signInWithPassword() failed. Joiners
+  either couldn't sign in, or inherited whoever was already signed in on that
+  machine. Fixed via `/api/invite/confirm` (service-role, re-verifies token age +
+  email match) plus signOut-before-signUp.
+- **A reset link could reset the wrong person's password** (reproduced: it changed
+  the admin's). Causes: the reset page accepted any existing session as authority;
+  the redirect fired before the token was exchanged; and `@supabase/ssr` uses PKCE
+  so it ignores implicit fragment tokens entirely. Now the fragment is exchanged
+  explicitly and `RECOVERY_FLAG` is required.
+- Added: `/forgot-password`, `/reset-password`, `/auth/callback`, Settings →
+  Account (change password + **sign out**, neither existed).
+- Removed the fake "2 attempts remaining before your account is temporarily
+  locked" — no such counter or lockout exists.
+- `/api/email-preview?kind=…` (CRON_SECRET) renders any email without sending.
+
+### ⚠ Dashboard settings still required (cannot be set from code)
+1. **Auth → URL Configuration → Redirect URLs**: add
+   `https://<prod-domain>/auth/callback` (and the localhost equivalent).
+   Without it Supabase discards our `redirect_to`, falls back to the Site URL, and
+   sends implicit-flow links. The app now copes, but the PKCE path is cleaner.
+2. **Auth → Providers → Email**: recovery/confirmation emails use SUPABASE's
+   templates and SMTP, NOT our Brevo sender — they are unbranded, and the built-in
+   SMTP is heavily rate-limited and unreliable for non-team addresses. Configure
+   custom SMTP + templates before rollout.
+3. **Leaked Password Protection** — still off (flagged since the first audit).
+4. **`EMAIL_FROM`** env var: sender still falls back to a personal Gmail, which
+   cannot align SPF/DKIM with sansico.com. Set to e.g. `noreply@sansico.com`.
+
+### Known, not yet fixed
+- Invites always use the sender's own `department_id` — no department picker, so
+  an admin cannot invite into another department.
+- `sanjeeva.sansico@gmail.com` exists as a real test account from this audit
+  (password `InAppSansi2026!`). Delete it before go-live.
 
 ## Status: open
 - Phase 4 remainder: **Sansi 2.0 info-finder** and **realtime multiplayer presence**.
