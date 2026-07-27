@@ -6,6 +6,7 @@ import { initials, Doc, PRIORITY_COLORS } from "@/lib/types";
 import { relTime, fmtShort, todayIso } from "@/lib/dates";
 import { isOpen, isOverdue, onTimeStats, tasksOfPerson, canViewSop, isSeniorRank, isInternalAudit, isInternalAuditManager, isDeptHead, internalAuditDept } from "@/lib/logic";
 import { TopIcons } from "./shared";
+import { passwordMeetsRules } from "./auth-shell";
 import { IconX } from "./icons";
 import { OrgAdmin } from "./org-admin";
 import { readableTextOn } from "@/lib/colors";
@@ -103,6 +104,40 @@ export function WorkspaceSection() {
   const pageTitle =
     workspacePage === "inbox" ? "Inbox" : workspacePage === "docs" ? "SOPs & Docs" : workspacePage === "forms" ? "Forms" :
     workspacePage === "settings" ? "Settings" : "Admin console";
+
+  /* ------- account: password change + sign out ------- */
+  const [newPw, setNewPw] = useState("");
+  const [confirmPw, setConfirmPw] = useState("");
+  const [pwBusy, setPwBusy] = useState(false);
+  const [pwMsg, setPwMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const changePassword = async () => {
+    if (!passwordMeetsRules(newPw) || newPw !== confirmPw) return;
+    setPwBusy(true);
+    setPwMsg(null);
+    const { error } = await supabase.auth.updateUser({ password: newPw });
+    setPwBusy(false);
+    if (error) {
+      setPwMsg({
+        ok: false,
+        text: /should be different|same/i.test(error.message)
+          ? "That's the password you already have — choose a different one."
+          : error.message,
+      });
+      return;
+    }
+    setNewPw("");
+    setConfirmPw("");
+    setPwMsg({ ok: true, text: "Password updated. It applies the next time you sign in." });
+  };
+
+  const signOut = async () => {
+    await supabase.auth.signOut();
+    // Clear the one-shot onboarding flag so the next person to sign in on this
+    // device doesn't inherit a half-finished checklist.
+    try { localStorage.removeItem("sw-show-onboarding"); } catch {}
+    window.location.href = "/login";
+  };
 
   /* ------- helpers ------- */
   const setPref = async (cat: string, val: string) => {
@@ -610,6 +645,57 @@ export function WorkspaceSection() {
                     <button onClick={() => setEmailPreview(kind)} style={{ flex: "none", padding: "5px 14px", borderRadius: 999, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", color: "var(--sw-text-soft)", fontSize: 11, fontWeight: 400, cursor: "pointer" }}>Preview</button>
                   </div>
                 ))}
+              </section>
+
+              {/* ---- Account ----
+                  Neither of these existed anywhere in the app: there was no way to
+                  change a password once set, and no way to sign out at all — on a
+                  shared or office machine the session simply persisted. */}
+              <h2 style={{ fontFamily: "var(--font-serif)", fontWeight: 400, fontSize: 24, margin: "28px 0 3px", fontStyle: "italic" }}>Account</h2>
+              <p style={{ margin: "0 0 16px", fontSize: 12.5, color: "var(--sw-text-soft)" }}>Your sign-in details and this device&apos;s session.</p>
+
+              <section style={{ background: "var(--sw-card)", border: "1px solid var(--sw-hair)", borderRadius: 12, boxShadow: "var(--shadow-card)", padding: "16px 18px", marginBottom: 14 }}>
+                <div style={{ fontSize: 13, fontWeight: 400, marginBottom: 3 }}>Change password</div>
+                <p style={{ margin: "0 0 12px", fontSize: 11.5, color: "var(--sw-muted)" }}>
+                  Must be 8+ characters with an uppercase letter, a number and a symbol — the same rules as when you joined.
+                </p>
+                {pwMsg && (
+                  <p style={{ margin: "0 0 10px", fontSize: 12, color: pwMsg.ok ? "var(--sw-on-green)" : "var(--sw-on-red)" }}>{pwMsg.text}</p>
+                )}
+                <div className="sw-grid-2" style={{ gap: 10, marginBottom: 10 }}>
+                  <input
+                    type="password" autoComplete="new-password" value={newPw} onChange={(e) => setNewPw(e.target.value)}
+                    placeholder="New password"
+                    style={{ height: 38, borderRadius: 8, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "0 12px", fontSize: 12.5, color: "var(--sw-text)", outline: "none" }}
+                  />
+                  <input
+                    type="password" autoComplete="new-password" value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)}
+                    placeholder="Confirm new password"
+                    style={{ height: 38, borderRadius: 8, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "0 12px", fontSize: 12.5, color: "var(--sw-text)", outline: "none" }}
+                  />
+                </div>
+                <button
+                  onClick={changePassword}
+                  disabled={pwBusy || !passwordMeetsRules(newPw) || newPw !== confirmPw}
+                  style={{ padding: "8px 18px", borderRadius: 999, border: "none", background: (!pwBusy && passwordMeetsRules(newPw) && newPw === confirmPw) ? "var(--crimson)" : "var(--sw-muted)", color: "#fff", fontSize: 12, fontWeight: 400, cursor: (!pwBusy && passwordMeetsRules(newPw) && newPw === confirmPw) ? "pointer" : "not-allowed" }}
+                >
+                  {pwBusy ? "Saving…" : "Update password"}
+                </button>
+              </section>
+
+              <section style={{ background: "var(--sw-card)", border: "1px solid var(--sw-hair)", borderRadius: 12, boxShadow: "var(--shadow-card)", padding: "16px 18px", marginBottom: 14, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ display: "block", fontSize: 13, fontWeight: 400 }}>Sign out</span>
+                  <span style={{ display: "block", fontSize: 11.5, color: "var(--sw-muted)", marginTop: 2 }}>
+                    Signed in as {me?.email}. Ends the session on this device only.
+                  </span>
+                </span>
+                <button
+                  onClick={signOut}
+                  style={{ flex: "none", padding: "8px 18px", borderRadius: 999, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", color: "var(--sw-on-crimson)", fontSize: 12, fontWeight: 400, cursor: "pointer" }}
+                >
+                  Sign out
+                </button>
               </section>
             </>
           )}

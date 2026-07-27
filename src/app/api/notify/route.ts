@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
               <div style="font-size:11.5px;color:#4A423D;">Assigned by ${actor?.name || "a teammate"}, just now</div>
             </div>
             <a href="${req.nextUrl.origin}" style="display:inline-block;background:#7A0D20;color:#fff;border-radius:999px;padding:8px 20px;font-size:12px;text-decoration:none;">Open in SansiWorks →</a>
-            <p style="margin:16px 0 0;font-size:10.5px;color:#9A918A;">You're receiving this instantly because 'Task assigned to me' is set to Instant email in your settings.</p>`);
+            <p style="margin:16px 0 0;font-size:10.5px;color:#9A918A;">You're receiving this instantly because 'Task assigned to me' is set to Instant email in your settings.</p>`, "alert");
           await sendEmail({ email: person.email, name: person.name }, `${(actor?.name || "A teammate").split(" ")[0]} assigned you: ${task.name}`, html);
         }
       }
@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
           ${approval.detail ? `<div style="font-size:11.5px;color:#4A423D;">"${approval.detail}"</div>` : ""}
         </div>
         <a href="${req.nextUrl.origin}" style="display:inline-block;background:#7A0D20;color:#fff;border-radius:999px;padding:8px 20px;font-size:12px;text-decoration:none;">Review in SansiWorks →</a>
-        <p style="margin:16px 0 0;font-size:10.5px;color:#9A918A;">You're receiving this instantly because 'Approval requested from me' is set to Instant email in your settings.</p>`);
+        <p style="margin:16px 0 0;font-size:10.5px;color:#9A918A;">You're receiving this instantly because 'Approval requested from me' is set to Instant email in your settings.</p>`, "alert");
       await sendEmail({ email: person.email, name: person.name }, `${(actor?.name || "A teammate").split(" ")[0]} needs your approval: ${task?.name || "a task"}`, html);
     }
     return NextResponse.json({ ok: true });
@@ -88,7 +88,7 @@ export async function POST(req: NextRequest) {
           <div style="font-size:11.5px;color:#9A918A;">${approved ? `New due date ${approval.requested_due}` : "The current due date stays as-is"} · decided by ${decider?.name || "a superior"}</div>
           ${body.note ? `<div style="font-size:11.5px;color:#4A423D;margin-top:6px;">"${body.note}"</div>` : ""}
         </div>
-        <a href="${req.nextUrl.origin}" style="display:inline-block;background:#7A0D20;color:#fff;border-radius:999px;padding:8px 20px;font-size:12px;text-decoration:none;">Open in SansiWorks →</a>`);
+        <a href="${req.nextUrl.origin}" style="display:inline-block;background:#7A0D20;color:#fff;border-radius:999px;padding:8px 20px;font-size:12px;text-decoration:none;">Open in SansiWorks →</a>`, "alert");
       await sendEmail({ email: person.email, name: person.name }, `Your request was ${body.verdict}: ${task?.name || "a task"}`, html);
     }
     return NextResponse.json({ ok: true });
@@ -101,13 +101,20 @@ export async function POST(req: NextRequest) {
       supabase.from("profiles").select("name").eq("id", invite.invited_by).single(),
       supabase.from("org_units").select("name").eq("id", invite.department_id).single(),
     ]);
-    const acceptUrl = `${req.nextUrl.origin}/accept-invite?token=${invite.token}`;
+    /* The emailed link must point at the real site. req.nextUrl.origin is the
+       origin of whoever called this route — an admin sending an invite from a
+       local dev server would email a http://localhost link the recipient can
+       never open, and behind Vercel's proxy it can resolve to an internal host. */
+    const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || req.headers.get("origin") || req.nextUrl.origin).replace(/\/$/, "");
+    const acceptUrl = `${siteUrl}/accept-invite?token=${invite.token}`;
     const html = wrapEmailHtml(`
       <p style="margin:0 0 4px;font-size:12px;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:#7A0D20;">You're invited</p>
       <h1 style="margin:0 0 14px;font-family:Georgia,serif;font-weight:400;font-size:28px;">Join <em>SansiWorks</em></h1>
       <p style="margin:0 0 22px;font-size:14.5px;line-height:1.6;color:#4A423D;">${inviter?.name || "A colleague"} has invited you to join the <b>${dept?.name || "Sansico"}</b> workspace on SansiWorks, Sansico Group's internal work-management platform.</p>
       <a href="${acceptUrl}" style="display:inline-block;background:#7A0D20;color:#fff;text-decoration:none;padding:13px 28px;border-radius:999px;font-size:14px;font-weight:700;">Accept invitation →</a>
-      <p style="margin:22px 0 0;font-size:12px;color:#9A918A;line-height:1.6;">This invitation expires in 7 days. If you weren't expecting this, you can ignore this email.</p>`);
+      <p style="margin:22px 0 0;font-size:12px;color:#8A8078;line-height:1.6;">This invitation expires in 7 days. If the button doesn't work, copy this link into your browser:<br><span style="color:#4A423D;word-break:break-all;">${acceptUrl}</span></p>`,
+      "invite",
+      `${inviter?.name || "A colleague"} invited you to the ${dept?.name || "Sansico"} workspace — expires in 7 days.`);
     await sendEmail({ email: invite.email }, "You're invited to join SansiWorks", html);
     return NextResponse.json({ ok: true });
   }

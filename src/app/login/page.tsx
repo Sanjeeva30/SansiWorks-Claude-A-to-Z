@@ -2,25 +2,48 @@
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { AuthNotice, PasswordField } from "@/components/auth-shell";
 
 export default function LoginPage() {
   const router = useRouter();
   const [supabase] = useState(() => createClient());
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState(false);
+  const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const doLogin = async () => {
-    setBusy(true);
-    setError(false);
-    const { error: err } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-    if (err) {
-      setError(true);
-      setBusy(false);
+  const doLogin = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (busy) return;
+    if (!email.trim() || !password) {
+      setError("Enter your email and password.");
       return;
     }
-    await supabase.from("profiles").update({ last_login: new Date().toISOString() }).eq("email", email.trim());
+    setBusy(true);
+    setError("");
+    const { data, error: err } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    if (err) {
+      setBusy(false);
+      /* Report what actually happened. The previous message was a fixed string
+         claiming "2 attempts remaining before your account is temporarily
+         locked" — there is no attempt counter and no lockout anywhere in the
+         system, so it told every user who mistyped a password something untrue.
+         Credentials stay deliberately vague (not "no such user") so this form
+         can't be used to enumerate who works here. */
+      if (/email not confirmed/i.test(err.message)) {
+        setError("Your email address hasn't been confirmed yet. Check your inbox for the invitation link.");
+      } else if (/invalid login credentials/i.test(err.message)) {
+        setError("That email and password don't match. Check them and try again.");
+      } else {
+        setError(err.message);
+      }
+      return;
+    }
+    // Stamp last_login by id — the row is the signed-in user's own, which is what
+    // the profiles RLS policy allows.
+    if (data.user) {
+      await supabase.from("profiles").update({ last_login: new Date().toISOString() }).eq("id", data.user.id);
+    }
     router.push("/");
     router.refresh();
   };
@@ -43,37 +66,29 @@ export default function LoginPage() {
           </h1>
           <p style={{ margin: "0 0 28px", fontSize: 13.5, color: "#4A423D", textAlign: "center" }}>Sign in to your workspace.</p>
 
-          <label style={label}>Email</label>
-          <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@sansico.com" style={{ ...input, marginBottom: 16 }} />
+          {/* A real <form>: gives Enter-to-submit on every field and lets browsers
+              and password managers recognise this as a sign-in to save/fill. */}
+          <form onSubmit={doLogin}>
+          <label htmlFor="email" style={label}>Email</label>
+          <input id="email" name="email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@sansico.com" style={{ ...input, marginBottom: 16 }} />
 
-          <label style={label}>Password</label>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") doLogin(); }}
-            placeholder="••••••••"
-            style={{ ...input, marginBottom: 10 }}
-          />
+          <label htmlFor="current-password" style={label}>Password</label>
+          <PasswordField id="current-password" autoComplete="current-password" value={password} onChange={setPassword} placeholder="••••••••" />
 
-          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 22 }}>
-            <a href="#" onClick={(e) => e.preventDefault()} style={{ fontSize: 12.5, color: "#7A0D20", textDecoration: "none", fontWeight: 600 }}>Forgot password?</a>
+          <div style={{ display: "flex", justifyContent: "flex-end", margin: "10px 0 22px" }}>
+            <a href="/forgot-password" style={{ fontSize: 12.5, color: "#7A0D20", textDecoration: "none", fontWeight: 600 }}>Forgot password?</a>
           </div>
 
-          {error && (
-            <div style={{ display: "flex", alignItems: "center", gap: 8, background: "rgba(243,38,62,0.08)", border: "1px solid rgba(243,38,62,0.3)", borderRadius: 9, padding: "10px 12px", marginBottom: 16 }}>
-              <span style={{ color: "#F3263E", fontSize: 14 }}>⚠</span>
-              <span style={{ fontSize: 12.5, color: "#7A0D20", fontWeight: 600 }}>Incorrect email or password. 2 attempts remaining before your account is temporarily locked.</span>
-            </div>
-          )}
+          {error && <AuthNotice tone="error">{error}</AuthNotice>}
 
           <button
-            onClick={doLogin}
+            type="submit"
             disabled={busy}
             style={{ width: "100%", height: 46, borderRadius: 999, border: "none", background: "#7A0D20", color: "#fff", fontSize: 14.5, fontWeight: 700, cursor: "pointer", boxShadow: "0 8px 20px rgba(122,13,32,.25)", marginBottom: 16, opacity: busy ? 0.7 : 1 }}
           >
             {busy ? "Signing in…" : "Sign in"}
           </button>
+          </form>
 
           <p style={{ margin: "0 0 6px", fontSize: 12, color: "#9A918A", textAlign: "center", lineHeight: 1.6 }}>
             Access is by invitation only. Contact your Department Head if you need an account.

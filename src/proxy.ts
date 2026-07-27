@@ -30,8 +30,15 @@ export default async function proxy(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const path = request.nextUrl.pathname;
+  /* Signed-out routes. Password recovery has to be here: the whole point is
+     that the person cannot sign in, so anything gated would bounce them to
+     /login — which is exactly what happened the first time these pages were
+     added without updating this list. */
   const isPublic =
     path.startsWith("/login") ||
+    path.startsWith("/forgot-password") ||
+    path.startsWith("/reset-password") ||
+    path.startsWith("/auth/") ||
     path.startsWith("/accept-invite") ||
     path.startsWith("/invite-email") ||
     path.startsWith("/portal") ||
@@ -44,6 +51,8 @@ export default async function proxy(request: NextRequest) {
     url.pathname = "/login";
     return NextResponse.redirect(url);
   }
+  // Note: /reset-password is deliberately NOT redirected for signed-in users —
+  // arriving there with a valid recovery session is the normal path.
   if (user && path.startsWith("/login")) {
     const url = request.nextUrl.clone();
     url.pathname = "/";

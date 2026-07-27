@@ -49,12 +49,24 @@ function AcceptInviteInner() {
     if (disabled || !invite || !token) return;
     setBusy(true);
     setErr("");
+
+    /* Clear any session already on this device FIRST. Accepting an invite on a
+       colleague's machine used to leave their session in place: sign-up creates
+       no session while email confirmation is on, the sign-in below then failed,
+       and the new joiner was redirected into whoever was already logged in. */
+    await supabase.auth.signOut();
+
     const { data: signUp, error: suErr } = await supabase.auth.signUp({ email: invite.email, password });
     if (suErr || !signUp.user) {
-      setErr(suErr?.message || "Could not create your account.");
+      setErr(
+        /already registered|already been registered/i.test(suErr?.message || "")
+          ? "An account already exists for this email. Try signing in instead, or reset your password."
+          : suErr?.message || "Could not create your account."
+      );
       setBusy(false);
       return;
     }
+
     const fullPhone = `${countryCode} ${phone.trim()}`;
     const { error: ciErr } = await supabase.rpc("complete_invite", {
       invite_token: token, user_id: signUp.user.id, full_name: name.trim(), phone_number: fullPhone,
@@ -64,11 +76,30 @@ function AcceptInviteInner() {
       birthday_year_in: birthYear ? Number(birthYear) : null,
     });
     if (ciErr) {
-      setErr(ciErr.message);
+      /* The auth account now exists but has no profile. Say so explicitly rather
+         than leaving someone on a dead form — re-submitting would fail with
+         "already registered" and look like a different problem entirely. */
+      setErr(`${ciErr.message} — your login was created but your profile wasn't. Ask your Department Head to re-send the invitation.`);
       setBusy(false);
       return;
     }
-    await supabase.auth.signInWithPassword({ email: invite.email, password });
+
+    // Redeeming the emailed token proves this address; confirm it server-side so
+    // the sign-in below can succeed.
+    await fetch("/api/invite/confirm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token, userId: signUp.user.id }),
+    }).catch(() => {});
+
+    const { error: siErr } = await supabase.auth.signInWithPassword({ email: invite.email, password });
+    if (siErr) {
+      // Never redirect on a failed sign-in — that is what hid this bug before.
+      setErr("Your account was created, but we couldn't sign you in automatically. Please sign in with your new password.");
+      setBusy(false);
+      return;
+    }
+
     localStorage.setItem("sw-show-onboarding", "1");
     router.push("/");
     router.refresh();

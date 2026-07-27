@@ -173,11 +173,11 @@ export async function GET(req: NextRequest) {
         overdue: overdue.length, dueToday: dueToday.length,
         // ?html=<email> returns the rendered body for one recipient, so a change
         // to the template can be eyeballed without mailing anyone.
-        ...(req.nextUrl.searchParams.get("html") === person.email ? { html: wrapEmailHtml(inner) } : {}),
+        ...(req.nextUrl.searchParams.get("html") === person.email ? { html: wrapEmailHtml(inner, "digest", subject) } : {}),
       });
       continue;
     }
-    const ok = await sendEmail({ email: person.email, name: person.name }, subject, wrapEmailHtml(inner));
+    const ok = await sendEmail({ email: person.email, name: person.name }, subject, wrapEmailHtml(inner, "digest", subject));
     if (ok) sent++;
   }
   if (dryRun) return NextResponse.json({ dryRun: true, kinds, wouldSend: preview.length, of: profiles.length, preview });

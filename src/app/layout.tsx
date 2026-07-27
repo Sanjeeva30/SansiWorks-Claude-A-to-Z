@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { ServiceWorkerRegister } from "./sw-register";
+import { RecoveryRedirect } from "@/components/recovery-redirect";
 
 export const metadata: Metadata = {
   title: "SansiWorks — Sansico Group",
@@ -28,6 +29,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
+        {/* A password-recovery link can land on any route (Supabase falls back
+            to the Site URL, and the proxy may bounce to /login) — the fragment
+            survives those redirects, so handle it app-wide. */}
+        <RecoveryRedirect />
         {children}
         <ServiceWorkerRegister />
       </body>
