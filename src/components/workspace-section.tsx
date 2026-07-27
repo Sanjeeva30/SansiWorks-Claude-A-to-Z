@@ -93,6 +93,7 @@ export function WorkspaceSection() {
   const [deptForm, setDeptForm] = useState({ name: "", reason: "" });
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteLevel, setInviteLevel] = useState("l6");
+  const [inviteDept, setInviteDept] = useState<string | null>(null);
 
   const today = todayIso();
   const listPath = (listId: string | null) => {
@@ -276,6 +277,12 @@ export function WorkspaceSection() {
   const [expandedLevel, setExpandedLevel] = useState<string | null>(null);
 
   const isBoardish = me?.is_super || me?.level_id === "l1" || me?.level_id === "l2";
+  /* Who can choose the invite's department: Group Heads and above (l1, l2,
+     l2r — Regional Group Heads carry the same cross-department reach) plus
+     super admins. Everyone below (Department Heads and lower) can only ever
+     invite into their own department, so their picker stays locked to it. */
+  const canPickInviteDept = me?.is_super || (me?.level_id ? ["l1", "l2", "l2r"].includes(me.level_id) : false);
+  const inviteDeptValue = canPickInviteDept ? (inviteDept ?? me?.department_id ?? "") : (me?.department_id ?? "");
   /* Admin console access — same rank set the DB's admin_invites_* RLS policies
      trust (is_super or l1/l2/l2r/l3). The old code only used this workspacePage
      state to pick which nav item was highlighted, never to gate entry, so any
@@ -1192,11 +1199,21 @@ export function WorkspaceSection() {
                       <select className="sw-select" value={inviteLevel} onChange={(e) => setInviteLevel(e.target.value)} style={{ height: 36, borderRadius: 8, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "0 10px", fontSize: 12, color: "var(--sw-text)", width: 150 }}>
                         {(isBoardish ? levels : levels.filter((l) => ["l4", "l5", "l6"].includes(l.id))).map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
                       </select>
+                      <select
+                        className="sw-select"
+                        value={inviteDeptValue}
+                        onChange={(e) => setInviteDept(e.target.value)}
+                        disabled={!canPickInviteDept}
+                        title={canPickInviteDept ? undefined : "Locked to your own department"}
+                        style={{ height: 36, borderRadius: 8, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "0 10px", fontSize: 12, color: "var(--sw-text)", width: 170, opacity: canPickInviteDept ? 1 : 0.65, cursor: canPickInviteDept ? "pointer" : "not-allowed" }}
+                      >
+                        {departments.filter((d) => !d.archived).map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+                      </select>
                       <button
                         onClick={async () => {
                           const email = inviteEmail.trim();
                           if (!email || !me) return;
-                          const { data, error } = await supabase.from("invites").insert({ email, level_id: inviteLevel, department_id: me.department_id, invited_by: me.id, status: "sent" }).select().single();
+                          const { data, error } = await supabase.from("invites").insert({ email, level_id: inviteLevel, department_id: inviteDeptValue, invited_by: me.id, status: "sent" }).select().single();
                           if (error || !data) {
                             pushToast(`Couldn't send the invite — ${error?.message || "unknown error"}.`);
                             return;
