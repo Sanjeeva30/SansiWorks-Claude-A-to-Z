@@ -183,7 +183,7 @@ export function CompanySection() {
         <h1 className="sw-topbar-title" style={{ fontSize: 14, fontWeight: 400, margin: 0 }}>{companyPage === "executive" ? "Overview" : "People"}</h1>
         <div style={{ flex: 1 }} />
         {companyPage === "executive" && (
-          <button onClick={() => window.print()} style={{ padding: "7px 14px", borderRadius: 999, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", color: "var(--sw-text-soft)", fontSize: 12, fontWeight: 400, cursor: "pointer" }}>Export PDF</button>
+          <button onClick={() => window.print()} title={'Opens your browser\'s print dialog — choose "Save as PDF" as the destination'} style={{ padding: "7px 14px", borderRadius: 999, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", color: "var(--sw-text-soft)", fontSize: 12, fontWeight: 400, cursor: "pointer" }}>Export PDF</button>
         )}
         <TopIcons />
       </header>

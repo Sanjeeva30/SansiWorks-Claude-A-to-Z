@@ -20,6 +20,9 @@ const S = (p: { size?: number; sw?: number; children: React.ReactNode; fill?: st
 export const IconX = ({ size = 11 }: { size?: number }) => (
   <S size={size} sw={2.4}><path d="M6 6l12 12M18 6L6 18" /></S>
 );
+export const IconTrash = ({ size = 14 }: { size?: number }) => (
+  <S size={size}><path d="M4 7h16M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2m-9 0 1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13" /></S>
+);
 export const IconSparkle = ({ size = 12 }: { size?: number }) => (
   <S size={size}><path d="M12 3l2.2 6.8L21 12l-6.8 2.2L12 21l-2.2-6.8L3 12l6.8-2.2z" /></S>
 );

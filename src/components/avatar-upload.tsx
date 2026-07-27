@@ -7,7 +7,7 @@ const OUT_SIZE = 256;
 
 /** Loads the picked image, lets the person drag it within a square frame to
     choose what's kept, then exports exactly that square at a fixed size. */
-function CropModal({ file, onDone, onCancel }: { file: File; onDone: (blob: Blob) => void; onCancel: () => void }) {
+export function CropModal({ file, onDone, onCancel }: { file: File; onDone: (blob: Blob) => void; onCancel: () => void }) {
   const [url] = useState(() => URL.createObjectURL(file));
   const [offset, setOffset] = useState({ x: 0, y: 0 }); // % of image shifted, -50..50
   const dragging = useRef<{ startX: number; startY: number; ox: number; oy: number } | null>(null);

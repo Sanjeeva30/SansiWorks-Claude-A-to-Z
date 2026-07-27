@@ -17,7 +17,7 @@ import { readableTextOn } from "@/lib/colors";
 export function QuickAddModal() {
   const { showQuickAdd, setShowQuickAdd, quickAddStatus, pushToast, activeList } = useUI();
   const store = useStore();
-  const { me, profiles, lists, spaces, tasks, patch, supabase } = store;
+  const { me, profiles, lists, spaces, tasks, features, patch, supabase } = store;
 
   const listOptions = useMemo(() => {
     const opts: { value: string; label: string }[] = [{ value: "my", label: "My List (personal)" }];
@@ -272,12 +272,14 @@ export function QuickAddModal() {
             <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Add more details about this task…"
               style={{ width: "100%", height: 88, resize: "vertical", borderRadius: 10, border: "1.5px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "12px 14px", fontSize: 13.5, fontFamily: "var(--font-sans)", color: "var(--sw-text)", outline: "none", marginBottom: 18 }} />
 
-            {label("Attachments")}
-            <FileDropZone
-              inputId="sw-file-input"
-              onFiles={(files) => setAttachments((a) => [...a, ...files.map((file) => ({ id: Math.random().toString(36).slice(2), name: file.name, size: file.size, file }))])}
-            />
-            {attachments.length > 0 && (
+            {features.file_uploads && label("Attachments")}
+            {features.file_uploads && (
+              <FileDropZone
+                inputId="sw-file-input"
+                onFiles={(files) => setAttachments((a) => [...a, ...files.map((file) => ({ id: Math.random().toString(36).slice(2), name: file.name, size: file.size, file }))])}
+              />
+            )}
+            {features.file_uploads && attachments.length > 0 && (
               <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 10 }}>
                 {attachments.map((f) => (
                   <div key={f.id} style={{ display: "flex", alignItems: "center", gap: 9, padding: "8px 10px", border: "1px solid var(--sw-hair)", borderRadius: 9, background: "var(--sw-card)" }}>

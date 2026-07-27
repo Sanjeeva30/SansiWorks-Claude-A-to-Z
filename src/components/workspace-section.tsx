@@ -44,9 +44,12 @@ const PERM_DEFS: [string, string][] = [
   ["edit_dept_boards", "Edit boards within their department"],
   ["edit_own_scope", "Edit only tasks assigned to them"],
 ];
+/* "Time tracking" was removed from here — there is no time-tracking feature
+   anywhere in the app (no field, no UI, nothing this toggle could ever have
+   turned on or off). The DB row can stay; nothing reads it once it's gone
+   from this map. */
 const FEATURE_LABELS: Record<string, string> = {
   ai_assistant: "Sansi AI assistant",
-  time_tracking: "Time tracking",
   file_uploads: "File attachments",
   member_can_create_board: "Members can create boards",
   capacity_tracking: "Capacity tracking (per-person workload limits)",
@@ -55,6 +58,7 @@ const FEATURE_LABELS: Record<string, string> = {
 const FEATURE_HELP: Record<string, string> = {
   capacity_tracking: "The workload math is built and correct — this just decides whether people see a capacity number and whether it's used to flag overload. Off by default until you're ready to switch it on.",
   overseas_teams: "Trends & BD, Design & Product Development, and other overseas-reporting units exist in the org tree but stay invisible everywhere until this is on.",
+  member_can_create_board: "Off: a member's \"+ Board\" click goes to their Department Head as a request to approve, same queue as Approvals. On: it creates the board immediately, no approval step.",
 };
 
 const card: React.CSSProperties = { background: "var(--sw-card)", border: "1px solid var(--sw-hair)", borderRadius: 12, boxShadow: "var(--shadow-card)", padding: "16px 18px" };
@@ -747,6 +751,7 @@ export function WorkspaceSection() {
                         <div style={{ fontSize: 12.5, fontWeight: 400, display: "flex", alignItems: "center", gap: 6, color: "var(--sw-text)" }}>
                           {u.name}
                           {u.is_super && <span style={{ fontSize: 9.5, fontWeight: 400, color: "var(--sw-on-crimson)", background: "rgba(122,13,32,0.08)", padding: "1px 7px", borderRadius: 999 }}>Super admin</span>}
+                          {u.active === false && <span style={{ fontSize: 9.5, fontWeight: 400, color: "var(--sw-on-red)", background: "rgba(243,38,62,0.08)", padding: "1px 7px", borderRadius: 999 }}>Suspended</span>}
                         </div>
                         <div style={{ fontSize: 11, color: "var(--sw-muted)" }}>{u.email}</div>
                       </button>
@@ -768,7 +773,27 @@ export function WorkspaceSection() {
                           {u.is_super ? "Make member" : "Make super admin"}
                         </button>
                       )}
-                      <button onClick={() => pushToast(`${u.name.split(" ")[0]} suspended (demo)`)} style={pillBtn("var(--sw-on-red)")}>Suspend</button>
+                      {u.id !== me?.id && (
+                        <button
+                          onClick={async () => {
+                            const nextActive = u.active === false;
+                            const firstName = u.name.split(" ")[0];
+                            if (!nextActive && !(await confirm({
+                              title: `Suspend ${firstName}?`,
+                              message: `${firstName} will be signed out and can't sign back in until reactivated. Their tasks, history, and assignments are untouched — this doesn't delete anything.`,
+                              confirmLabel: "Suspend", danger: true,
+                            }))) return;
+                            const res = await fetch(`/api/admin/users/${u.id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ active: nextActive }) }).catch(() => null);
+                            const json = res ? await res.json().catch(() => ({ ok: false })) : { ok: false };
+                            if (!json.ok) { pushToast(`Couldn't update ${firstName} — ${json.error || "unknown error"}.`); return; }
+                            patch("profiles", profiles.map((p) => (p.id === u.id ? { ...p, active: nextActive } : p)));
+                            pushToast(nextActive ? `${firstName} reactivated` : `${firstName} suspended`);
+                          }}
+                          style={pillBtn("var(--sw-on-red)")}
+                        >
+                          {u.active === false ? "Reactivate" : "Suspend"}
+                        </button>
+                      )}
                     </div>
                   ))}
                 </section>
@@ -872,16 +897,39 @@ export function WorkspaceSection() {
                       {isBoardish && <button onClick={() => { setDeptModal("create"); setDeptForm({ name: "", reason: "" }); }} style={{ padding: "6px 14px", borderRadius: 999, border: "none", background: "var(--crimson)", color: "#fff", fontSize: 11.5, fontWeight: 400, cursor: "pointer", whiteSpace: "nowrap" }}>+ Create department</button>}
                     </div>
                     <p style={{ margin: "0 0 12px", fontSize: 11.5, color: "var(--sw-muted)" }}>Board / Group Heads assign department heads. A department head manages their own members and can nominate an additional space admin, subject to Board approval.</p>
-                    {departments.map((d) => {
+                    {[...departments].sort((a, b) => Number(a.archived) - Number(b.archived)).map((d) => {
                       const heads = deptHeads.filter((h) => h.unit_id === d.id).map((h) => profiles.find((p) => p.id === h.profile_id)).filter(Boolean);
                       const members = deptMembers.filter((m) => m.department_id === d.id).map((m) => profiles.find((p) => p.id === m.profile_id)).filter(Boolean);
                       return (
-                        <div key={d.id} style={{ padding: "12px 0", borderBottom: "1px solid var(--sw-hair)" }}>
+                        <div key={d.id} style={{ padding: "12px 0", borderBottom: "1px solid var(--sw-hair)", opacity: d.archived ? 0.55 : 1 }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
                             <span style={{ width: 8, height: 8, borderRadius: 99, background: d.color, flex: "none" }} />
                             <button onClick={() => openDetail("department", d.id)} style={{ flex: 1, minWidth: 0, textAlign: "left", fontSize: 12.5, fontWeight: 400, border: "none", background: "none", color: "var(--sw-text)", cursor: "pointer", padding: 0 }}>{d.name}</button>
+                            {d.archived && <span style={{ fontSize: 10.5, fontWeight: 400, color: "var(--sw-on-red)", background: "rgba(243,38,62,0.08)", borderRadius: 999, padding: "3px 9px", marginRight: 6 }}>Archived</span>}
                             <span style={{ fontSize: 11, fontWeight: 400, color: "var(--sw-text-soft)", background: "var(--sw-hover)", border: "1px solid var(--sw-hair)", borderRadius: 999, padding: "4px 11px", marginRight: 6 }}>{d.mode}</span>
-                            <button onClick={() => pushToast("Archiving departments needs Board sign-off (demo)")} style={{ padding: "6px 12px", borderRadius: 999, border: "1px solid var(--sw-hair)", background: "none", color: "var(--sw-muted)", fontSize: 11, fontWeight: 400, cursor: "pointer" }}>Archive</button>
+                            <button
+                              onClick={async () => {
+                                if (d.archived) {
+                                  patch("departments", departments.map((x) => (x.id === d.id ? { ...x, archived: false } : x)));
+                                  await supabase.from("org_units").update({ archived: false }).eq("id", d.id);
+                                  if (me) { const { logAudit } = await import("@/lib/actions"); await logAudit(supabase, me.id, "restored department", d.name); }
+                                  pushToast(`"${d.name}" restored`);
+                                  return;
+                                }
+                                if (!(await confirm({
+                                  title: `Archive "${d.name}"?`,
+                                  message: `${heads.length + members.length} ${heads.length + members.length === 1 ? "person keeps" : "people keep"} their existing tasks and history — archiving only hides it from pickers going forward. You can restore it any time.`,
+                                  confirmLabel: "Archive", danger: true,
+                                }))) return;
+                                patch("departments", departments.map((x) => (x.id === d.id ? { ...x, archived: true } : x)));
+                                await supabase.from("org_units").update({ archived: true }).eq("id", d.id);
+                                if (me) { const { logAudit } = await import("@/lib/actions"); await logAudit(supabase, me.id, "archived department", d.name); }
+                                pushToast(`"${d.name}" archived`);
+                              }}
+                              style={{ padding: "6px 12px", borderRadius: 999, border: "1px solid var(--sw-hair)", background: "none", color: "var(--sw-muted)", fontSize: 11, fontWeight: 400, cursor: "pointer" }}
+                            >
+                              {d.archived ? "Restore" : "Archive"}
+                            </button>
                           </div>
                           <div className="sw-grid-2" style={{ gap: 16, paddingLeft: 18 }}>
                             <div>

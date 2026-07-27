@@ -9,7 +9,7 @@ import {
   addDependency, removeDependency, canAddSubtask, accountableCandidates,
   createReminder, canEditDifficulty, updateTaskDifficulty, updateSubtaskDifficulty,
   listAttachments, uploadAttachment, deleteAttachment, downloadAttachmentUrl,
-  createComment,
+  createComment, archiveTask,
 } from "@/lib/actions";
 import { isHeadRank , readableTextOn} from "@/lib/colors";
 import { ReminderInline } from "./reminders";
@@ -21,7 +21,7 @@ import { RaciRows, raciNote } from "./raci";
 import { SubtaskFields, SubtaskDraft, blankSubtaskDraft } from "./subtask-fields";
 import { DifficultyPicker, DifficultyBadge } from "./difficulty";
 import { FileDropZone } from "./dropzone";
-import { IconLink, IconX } from "./icons";
+import { IconLink, IconX, IconTrash } from "./icons";
 import { Avatar } from "./shared";
 import { useFocusTrap } from "@/lib/a11y";
 
@@ -37,7 +37,7 @@ export function TaskDetailSlideOver() {
   const { ensureDeferred } = store;
   useEffect(() => { if (activeTaskId) ensureDeferred(); }, [activeTaskId, ensureDeferred]);
 
-  const { me, tasks, profiles, levels, lists, spaces, activity, subtasks, deps, approvals, comments, patch, supabase } = store;
+  const { me, tasks, profiles, levels, lists, spaces, activity, subtasks, deps, approvals, comments, features, patch, supabase } = store;
   const [tab, setTab] = useState<"details" | "activity" | "files" | "comments">("details");
   const [commentDraft, setCommentDraft] = useState("");
   const [pendingMentions, setPendingMentions] = useState<string[]>([]);
@@ -148,7 +148,7 @@ export function TaskDetailSlideOver() {
     { key: "details", label: "Details" },
     { key: "comments", label: "Comments" },
     { key: "activity", label: "Activity" },
-    { key: "files", label: "Files" },
+    ...(features.file_uploads ? [{ key: "files" as const, label: "Files" }] : []),
   ];
 
   const mentionCandidates = mentionFilter !== null
@@ -200,6 +200,19 @@ export function TaskDetailSlideOver() {
           >
             <IconLink size={11} /> Copy link
           </button>
+          {maySubtask && (
+            <button
+              onClick={async () => {
+                if (!(await confirm({ title: `Delete "${t.name}"?`, message: "This removes it from every list and view. Subtasks, comments, and history go with it — this can't be undone from here.", confirmLabel: "Delete task", danger: true }))) return;
+                setActiveTaskId(null);
+                await archiveTask(supabase, tasks, patch, t.id);
+              }}
+              title="Delete task"
+              style={{ border: "none", background: "var(--sw-hover)", width: 28, height: 28, borderRadius: 99, cursor: "pointer", color: "var(--sw-on-red)", display: "flex", alignItems: "center", justifyContent: "center" }}
+            >
+              <IconTrash size={13} />
+            </button>
+          )}
           <button onClick={() => setActiveTaskId(null)} aria-label="Close" style={{ border: "none", background: "var(--sw-hover)", width: 28, height: 28, borderRadius: 99, cursor: "pointer", fontSize: 13, color: "var(--sw-text-soft)" }}><IconX /></button>
         </div>
 
@@ -530,11 +543,25 @@ export function TaskDetailSlideOver() {
               <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 16 }}>
                 {taskComments.map((c) => {
                   const who = profiles.find((p) => p.id === c.author_id);
+                  const canDelete = me && (c.author_id === me.id || me.is_super);
                   return (
                     <div key={c.id} style={{ display: "flex", gap: 10 }}>
                       {who && <Avatar person={who} size={24} ring={isHeadRank(who, levels)} onClick={(e) => { e.stopPropagation(); openProfile(who.id); }} />}
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 12.5 }}><b style={{ fontWeight: 400 }}>{who?.name || "Someone"}</b></div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <div style={{ fontSize: 12.5, flex: 1 }}><b style={{ fontWeight: 400 }}>{who?.name || "Someone"}</b></div>
+                          {canDelete && (
+                            <button
+                              onClick={async () => {
+                                if (!(await confirm({ title: "Delete this comment?", message: "This can't be undone.", confirmLabel: "Delete", danger: true }))) return;
+                                patch("comments", comments.filter((x) => x.id !== c.id));
+                                await supabase.from("comments").delete().eq("id", c.id);
+                              }}
+                              title="Delete comment"
+                              style={{ border: "none", background: "none", color: "var(--sw-muted)", cursor: "pointer", padding: 2, display: "flex" }}
+                            ><IconX size={10} /></button>
+                          )}
+                        </div>
                         <div style={{ fontSize: 12.5, marginTop: 2, whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{renderCommentBody(c.body, c.mentioned_ids)}</div>
                         <div style={{ fontSize: 11, color: "var(--sw-muted)", marginTop: 3 }}>{relTime(c.created_at)}</div>
                       </div>

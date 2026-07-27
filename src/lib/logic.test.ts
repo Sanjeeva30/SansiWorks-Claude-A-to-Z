@@ -35,7 +35,7 @@ function profile(fields: Partial<Profile> = {}): Profile {
     wa_enabled: true, wa_number: null, digest_time: "08:00", theme: "light",
     avatar_url: null, template_id: null, permission_overrides: null,
     capacity_points: null, birthday_day: null, birthday_month: null, birthday_year: null,
-    designation: null,
+    designation: null, active: true,
     ...fields,
   };
 }

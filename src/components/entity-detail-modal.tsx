@@ -6,7 +6,7 @@ import { initials, DocVersion } from "@/lib/types";
 import { relTime, fmtShort } from "@/lib/dates";
 import { isDeptHead, isInternalAuditManager, isInternalAudit, internalAuditDept } from "@/lib/logic";
 import { notify, logAudit } from "@/lib/actions";
-import { IconX } from "./icons";
+import { IconX, IconTrash } from "./icons";
 import { Avatar } from "./shared";
 import { useFocusTrap } from "@/lib/a11y";
 import { readableTextOn } from "@/lib/colors";
@@ -171,7 +171,7 @@ const REVIEW_COLOR: Record<string, string> = { pending: "var(--sw-muted)", appro
    For SOPs, also carries the version history + dual-review (dept head +
    Internal Audit) actions and the "submit a revision" flow. */
 export function DocDetailModal() {
-  const { docDetailId, setDocDetailId, openProfile } = useUI();
+  const { docDetailId, setDocDetailId, openProfile, confirm } = useUI();
   const { docs, docVersions, profiles, departments, deptHeads, me, supabase, patch, ensureDeferred } = useStore();
   // doc_versions is deferred — the revision trail is only needed once open.
   useEffect(() => { if (docDetailId) ensureDeferred(); }, [docDetailId, ensureDeferred]);
@@ -312,6 +312,21 @@ export function DocDetailModal() {
           <span style={{ display: "inline-block", fontSize: 10, fontWeight: 800, letterSpacing: "0.04em", color: (STATUS_TINT[d.status] || STATUS_TINT.Draft)[0], background: (STATUS_TINT[d.status] || STATUS_TINT.Draft)[1], padding: "3px 10px", borderRadius: 999 }}>{d.status}</span>
           {d.is_sop && <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 800, color: "var(--sw-on-crimson)" }}>SOP</span>}
           <div style={{ flex: 1 }} />
+          {!!me && (me.is_super || me.id === d.owner_id || iAmHead) && (
+            <button
+              onClick={async () => {
+                if (!(await confirm({ title: `Delete "${d.title}"?`, message: "This removes it from Docs & SOPs everywhere it's listed, including any version history. This can't be undone from here.", confirmLabel: "Delete document", danger: true }))) return;
+                setDocDetailId(null);
+                patch("docs", docs.filter((x) => x.id !== d.id));
+                await supabase.from("docs").update({ archived: true }).eq("id", d.id);
+              }}
+              title="Delete document"
+              aria-label="Delete document"
+              style={{ ...closeBtn, color: "var(--sw-on-red)", marginRight: 8 }}
+            >
+              <IconTrash size={13} />
+            </button>
+          )}
           <button onClick={() => setDocDetailId(null)} aria-label="Close" style={closeBtn}><IconX /></button>
         </div>
         <h2 style={{ margin: "0 0 10px", fontSize: 20, fontWeight: 800, lineHeight: 1.3 }}>{d.title}</h2>

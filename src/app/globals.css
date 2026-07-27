@@ -186,6 +186,21 @@ a { color: inherit; text-decoration: none; }
   }
 }
 
+/* ---- print (Overview → Export PDF) ----
+   window.print() with no print stylesheet at all printed the entire app
+   chrome — sidebar, topbar buttons, everything — around a single narrow
+   scrolling pane, since the layout's real height/overflow rules are inline
+   styles meant for screen. This is what actually makes "Export PDF" (via the
+   browser's own Print → Save as PDF) produce just the report. */
+@media print {
+  .sw-sidebar, .sw-hamburger, .sw-sidebar-backdrop, .sw-topbar { display: none !important; }
+  .sw-app-shell, .sw-content-col, .sw-content-col main {
+    display: block !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+}
+
 /* ---- app-level style block from SansiWorks.dc.html ---- */
 button, select, input, textarea { color: inherit; font: inherit; }
 @keyframes swModalIn { from { opacity: 0; transform: translateY(10px) scale(.98); } to { opacity: 1; transform: none; } }

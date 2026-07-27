@@ -119,6 +119,7 @@ export interface Profile {
   birthday_month: number | null;
   birthday_year: number | null;
   designation: string | null;
+  active: boolean;
 }
 
 export interface Space {

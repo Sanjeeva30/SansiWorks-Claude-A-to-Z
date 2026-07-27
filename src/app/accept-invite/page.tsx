@@ -3,6 +3,7 @@ import React, { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { initials } from "@/lib/types";
+import { CropModal } from "@/components/avatar-upload";
 
 function AcceptInviteInner() {
   const router = useRouter();
@@ -23,6 +24,14 @@ function AcceptInviteInner() {
   const [terms, setTerms] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  /* Storage requires an authenticated user, and this person doesn't have an
+     account yet — the avatar circle here used to be purely decorative, with
+     no file input behind it at all. The picked/cropped photo is held in
+     memory and uploaded right after signInWithPassword succeeds below,
+     before the redirect. */
+  const [pendingPhoto, setPendingPhoto] = useState<File | null>(null);
+  const [avatarBlob, setAvatarBlob] = useState<Blob | null>(null);
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -100,6 +109,17 @@ function AcceptInviteInner() {
       return;
     }
 
+    if (avatarBlob) {
+      const path = `${signUp.user.id}/${Date.now()}.jpg`;
+      const { error: upErr } = await supabase.storage.from("avatars").upload(path, avatarBlob, { contentType: "image/jpeg", upsert: true });
+      if (!upErr) {
+        const { data } = supabase.storage.from("avatars").getPublicUrl(path);
+        await supabase.from("profiles").update({ avatar_url: `${data.publicUrl}?v=${Date.now()}` }).eq("id", signUp.user.id);
+      }
+      // A failed photo upload here shouldn't block onboarding — the tour's
+      // own upload step covers it as a fallback either way.
+    }
+
     localStorage.setItem("sw-show-onboarding", "1");
     router.push("/");
     router.refresh();
@@ -140,16 +160,39 @@ function AcceptInviteInner() {
               </p>
 
               <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 22 }}>
-                <div style={{ position: "relative", width: 56, height: 56, borderRadius: 99, overflow: "hidden", flex: "none", border: "2px solid #FAF8F4", boxShadow: "0 1px 2px rgba(23,18,15,.06)" }}>
-                  <div style={{ position: "absolute", inset: 0, background: "#5A0915", color: "#fff", fontSize: 18, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    {name.trim() ? initials(name) : "?"}
-                  </div>
-                </div>
+                <label
+                  htmlFor="accept-invite-photo"
+                  title="Choose a profile photo"
+                  style={{ position: "relative", width: 56, height: 56, borderRadius: 99, overflow: "hidden", flex: "none", border: "2px solid #FAF8F4", boxShadow: "0 1px 2px rgba(23,18,15,.06)", cursor: "pointer", display: "block" }}
+                >
+                  {avatarPreviewUrl ? (
+                    <img src={avatarPreviewUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  ) : (
+                    <div style={{ position: "absolute", inset: 0, background: "#5A0915", color: "#fff", fontSize: 18, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      {name.trim() ? initials(name) : "?"}
+                    </div>
+                  )}
+                  <input
+                    id="accept-invite-photo" type="file" accept="image/*" style={{ display: "none" }}
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) setPendingPhoto(f); e.target.value = ""; }}
+                  />
+                </label>
                 <div>
                   <div style={{ fontSize: 13.5, fontWeight: 700 }}>Add a profile photo</div>
-                  <div style={{ fontSize: 11.5, color: "#9A918A" }}>Required — you'll be prompted right after you sign in.</div>
+                  <div style={{ fontSize: 11.5, color: "#9A918A" }}>{avatarPreviewUrl ? "Looks good — click it again to change." : "Optional here — or you'll be prompted right after you sign in."}</div>
                 </div>
               </div>
+              {pendingPhoto && (
+                <CropModal
+                  file={pendingPhoto}
+                  onCancel={() => setPendingPhoto(null)}
+                  onDone={(blob) => {
+                    setAvatarBlob(blob);
+                    setAvatarPreviewUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return URL.createObjectURL(blob); });
+                    setPendingPhoto(null);
+                  }}
+                />
+              )}
 
               <label style={label}>Full name <span style={{ color: "#7A0D20" }}>*</span></label>
               <input value={name} onChange={(e) => setName(e.target.value)} style={{ ...input, marginBottom: 14 }} />

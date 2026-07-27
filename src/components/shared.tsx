@@ -241,21 +241,23 @@ export function NotifPopover({ onClose }: { onClose: () => void }) {
 /* ---------- Topbar icon cluster: Sansi + theme + notifications ---------- */
 export function TopIcons() {
   const { theme, toggleTheme } = useUI();
-  const { notifications } = useStore();
+  const { notifications, features } = useStore();
   const [showSansi, setShowSansi] = useState(false);
   const [showNotif, setShowNotif] = useState(false);
   const unread = notifications.filter((n) => !n.read).length;
   return (
     <>
-      <div style={{ position: "relative" }}>
-        <button
-          onClick={() => { setShowSansi((v) => !v); setShowNotif(false); }}
-          style={{ display: "flex", alignItems: "center", gap: 5, background: "var(--sw-hover)", color: "var(--sw-text-soft)", border: "1px solid var(--sw-hair)", borderRadius: 999, padding: "6px 12px", fontSize: 12, fontWeight: 400, cursor: "pointer" }}
-        >
-          <IconSparkle /> <span className="sw-topbar-label">Sansi</span>
-        </button>
-        {showSansi && <SansiPopover onClose={() => setShowSansi(false)} />}
-      </div>
+      {features.ai_assistant && (
+        <div style={{ position: "relative" }}>
+          <button
+            onClick={() => { setShowSansi((v) => !v); setShowNotif(false); }}
+            style={{ display: "flex", alignItems: "center", gap: 5, background: "var(--sw-hover)", color: "var(--sw-text-soft)", border: "1px solid var(--sw-hair)", borderRadius: 999, padding: "6px 12px", fontSize: 12, fontWeight: 400, cursor: "pointer" }}
+          >
+            <IconSparkle /> <span className="sw-topbar-label">Sansi</span>
+          </button>
+          {showSansi && <SansiPopover onClose={() => setShowSansi(false)} />}
+        </div>
+      )}
       <button
         onClick={toggleTheme}
         title="Toggle theme"

@@ -191,13 +191,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       supabase.from("assignments").select("*"),
       supabase.from("spaces").select("*").order("sort"),
       supabase.from("lists").select("*").order("sort"),
-      supabase.from("tasks").select("*").order("due", { ascending: true, nullsFirst: false }),
+      supabase.from("tasks").select("*").eq("archived", false).order("due", { ascending: true, nullsFirst: false }),
       supabase.from("task_raci").select("*"),
       supabase.from("subtasks").select("*").order("sort"),
       supabase.from("reminders").select("*").eq("profile_id", uid).neq("status", "dismissed").order("remind_at"),
       supabase.from("task_dependencies").select("*"),
       supabase.from("task_activity").select("*").order("created_at", { ascending: false }).limit(200),
-      supabase.from("docs").select("*").order("created_at"),
+      supabase.from("docs").select("*").eq("archived", false).order("created_at"),
       supabase.from("forms").select("*").order("created_at"),
       supabase.from("notifications").select("*").eq("profile_id", uid).order("created_at", { ascending: false }).limit(100),
       supabase.from("notification_prefs").select("*").eq("profile_id", uid),
@@ -328,7 +328,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         // eventual fetch will include this row anyway.
         if ((DEFERRED_KEYS as readonly string[]).includes(spec.key as string) && !deferredWanted.current) return d;
 
-        if (evt === "DELETE") {
+        if (evt === "DELETE" || (next as { archived?: boolean } | null)?.archived === true) {
+          // The initial fetch excludes archived rows (tasks/docs) entirely — an
+          // UPDATE that flips archived to true has to be treated the same as a
+          // delete here, or the row would reappear in the live store the next
+          // time anything else about it changes.
           const after = current.filter((r) => r.id !== id);
           return after.length === current.length ? d : { ...d, [spec.key]: after };
         }

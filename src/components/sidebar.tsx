@@ -21,6 +21,8 @@ export function Sidebar() {
   } = useUI();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [hoverList, setHoverList] = useState<string | null>(null);
+  const [addingBoardFor, setAddingBoardFor] = useState<string | null>(null);
+  const [boardName, setBoardName] = useState("");
 
   useEffect(() => {
     try { setCollapsed(JSON.parse(localStorage.getItem(COLLAPSE_KEY) || "{}")); } catch {}
@@ -32,6 +34,30 @@ export function Sidebar() {
   };
 
   const isAdmin = me?.is_super || (me?.level_id ? ["l1", "l2", "l2r", "l3"].includes(me.level_id) : false);
+
+  /* "member_can_create_board" used to be a toggle with nothing behind it —
+     there was no board-creation UI at all, self-serve or request-based, so
+     the admin-side "Approve/Reject board requests" panel could never have
+     anything land in it either. Admins always create directly; a plain
+     member gets a direct create when the feature is on, or a request that
+     shows up in that same admin queue when it's off (the default). */
+  const submitBoard = async (space: { id: string; department_id: string | null }) => {
+    const name = boardName.trim();
+    if (!name || !me) return;
+    if (isAdmin || features.member_can_create_board) {
+      const { data } = await supabase.from("lists").insert({ space_id: space.id, name, sort: 99 }).select().single();
+      if (data) {
+        patch("lists", [...lists, data]);
+        setActiveList({ spaceId: space.id, listId: data.id });
+      }
+      pushToast(`"${name}" created`);
+    } else {
+      await supabase.from("board_requests").insert({ board_name: name, requester_id: me.id, department_id: space.department_id });
+      pushToast(`Request sent — your Department Head will review "${name}"`);
+    }
+    setAddingBoardFor(null);
+    setBoardName("");
+  };
   const unread = notifications.filter((n) => !n.read).length;
   const openCount = (listId: string) => tasks.filter((t) => t.list_id === listId && t.status !== "Done").length;
   const pinnedListIds = pins.filter((p) => p.kind === "list").map((p) => p.target_id);
@@ -160,6 +186,28 @@ export function Sidebar() {
                 </span>
               </button>
               {!isCollapsed && spaceLists.map((l) => listRow(l, true))}
+              {!isCollapsed && (
+                addingBoardFor === space.id ? (
+                  <div style={{ display: "flex", gap: 4, padding: "3px 9px 3px 24px" }}>
+                    <input
+                      autoFocus
+                      value={boardName}
+                      onChange={(e) => setBoardName(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") submitBoard(space); if (e.key === "Escape") setAddingBoardFor(null); }}
+                      placeholder="Board name…"
+                      style={{ flex: 1, minWidth: 0, height: 24, borderRadius: 6, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", fontSize: 11, padding: "0 7px", color: "var(--sw-text)", outline: "none" }}
+                    />
+                    <button onClick={() => submitBoard(space)} title="Save" style={{ border: "none", background: "var(--crimson)", color: "#fff", borderRadius: 6, width: 22, height: 24, fontSize: 12, cursor: "pointer" }}>✓</button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => { setAddingBoardFor(space.id); setBoardName(""); }}
+                    style={{ display: "block", width: "100%", textAlign: "left", padding: "3px 9px 3px 24px", border: "none", background: "none", cursor: "pointer", fontSize: 11, color: "var(--sw-muted)" }}
+                  >
+                    + {isAdmin || features.member_can_create_board ? "Board" : "Propose a board"}
+                  </button>
+                )
+              )}
             </div>
           );
         })}

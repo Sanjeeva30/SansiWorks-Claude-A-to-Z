@@ -104,6 +104,16 @@ export async function updateTask(
   }
 }
 
+/** Soft-delete: sets tasks.archived so the row drops out of the live store
+ *  (see the store's fetch filter and realtime guard) without destroying it —
+ *  history, subtasks, comments, and attachments all stay in place in case it
+ *  needs to come back. There is deliberately no "restore" path exposed in the
+ *  app yet; the row is still there for a human with DB access to recover. */
+export async function archiveTask(supabase: Supabase, tasks: Task[], patch: Patch, id: string) {
+  patch("tasks", tasks.filter((t) => t.id !== id));
+  await supabase.from("tasks").update({ archived: true }).eq("id", id);
+}
+
 export async function createTask(
   supabase: Supabase,
   tasks: Task[],
@@ -384,13 +394,16 @@ export function eligibleAssignees(
   store: Pick<StoreData, "profiles" | "deptMembers" | "lists" | "spaces">,
   listId: string | null
 ): Profile[] {
-  if (!listId) return store.profiles; // personal tasks may involve anyone
+  // A suspended account can't sign in to act on anything assigned to it —
+  // offering it in an assignee picker just sets work up to go nowhere.
+  const active = store.profiles.filter((p) => p.active !== false);
+  if (!listId) return active; // personal tasks may involve anyone
   const list = store.lists.find((l: List) => l.id === listId);
   const space = store.spaces.find((s: Space) => s.id === list?.space_id);
-  if (!space?.department_id) return store.profiles; // cross-functional space
+  if (!space?.department_id) return active; // cross-functional space
   const memberIds = new Set(store.deptMembers.filter((m) => m.department_id === space.department_id).map((m) => m.profile_id));
-  const scoped = store.profiles.filter((p) => memberIds.has(p.id) || p.is_super);
-  return scoped.length ? scoped : store.profiles;
+  const scoped = active.filter((p) => memberIds.has(p.id) || p.is_super);
+  return scoped.length ? scoped : active;
 }
 
 /* ----- due-date requests ----- */
