@@ -23,6 +23,8 @@ export function CommandPalette() {
     }
   }, [showPalette]);
 
+  const isAdmin = store.me?.is_super || (store.me?.level_id ? ["l1", "l2", "l2r", "l3"].includes(store.me.level_id) : false);
+
   const items = useMemo(() => {
     const q = query.trim();
     const out: { group: string; label: string; sub: string; run: () => void }[] = [];
@@ -38,7 +40,7 @@ export function CommandPalette() {
       ["SOPs & Docs", () => setWorkspacePage("docs")],
       ["Forms", () => setWorkspacePage("forms")],
       ["Settings", () => setWorkspacePage("settings")],
-      ["Admin console", () => setWorkspacePage("admin")],
+      ...(isAdmin ? [["Admin console", () => setWorkspacePage("admin")] as [string, () => void]] : []),
     ];
     const actions: [string, string, () => void][] = [
       ["New task", "Ctrl+T or N", () => setShowQuickAdd(true)],

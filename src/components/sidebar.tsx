@@ -4,6 +4,7 @@ import { useStore } from "@/lib/store";
 import { useUI } from "@/lib/ui";
 import { initials } from "@/lib/types";
 import { IconChevDown, IconStar } from "./icons";
+import { Avatar } from "./shared";
 
 const COLLAPSE_KEY = "sw-collapsed-spaces";
 
@@ -30,6 +31,7 @@ export function Sidebar() {
     try { localStorage.setItem(COLLAPSE_KEY, JSON.stringify(next)); } catch {}
   };
 
+  const isAdmin = me?.is_super || (me?.level_id ? ["l1", "l2", "l2r", "l3"].includes(me.level_id) : false);
   const unread = notifications.filter((n) => !n.read).length;
   const openCount = (listId: string) => tasks.filter((t) => t.list_id === listId && t.status !== "Done").length;
   const pinnedListIds = pins.filter((p) => p.kind === "list").map((p) => p.target_id);
@@ -163,19 +165,20 @@ export function Sidebar() {
         })}
 
         <div style={{ marginTop: "auto", paddingTop: 13 }}>
-          {navBtn("Admin console", section === "workspace" && workspacePage === "admin", () => setWorkspacePage("admin"))}
+          {isAdmin && navBtn("Admin console", section === "workspace" && workspacePage === "admin", () => setWorkspacePage("admin"))}
           {navBtn("Settings", section === "workspace" && workspacePage === "settings", () => setWorkspacePage("settings"))}
         </div>
       </nav>
 
       <div style={{ padding: "11px 14px", borderTop: "1px solid var(--sw-hair)", display: "flex", alignItems: "center", gap: 9 }}>
-        <button
-          onClick={() => { if (me) { openProfile(me.id); setMobileNavOpen(false); } }}
-          title="View profile"
-          style={{ width: 26, height: 26, borderRadius: 99, background: me?.color || "var(--crimson)", color: "#fff", fontSize: 10.5, fontWeight: 400, display: "flex", alignItems: "center", justifyContent: "center", flex: "none", border: "none", cursor: "pointer", padding: 0 }}
-        >
-          {me ? initials(me.name) : ""}
-        </button>
+        {me && (
+          <Avatar
+            person={me}
+            size={26}
+            fontSize={10.5}
+            onClick={() => { openProfile(me.id); setMobileNavOpen(false); }}
+          />
+        )}
         <button onClick={() => { if (me) { openProfile(me.id); setMobileNavOpen(false); } }} style={{ flex: 1, minWidth: 0, border: "none", background: "none", textAlign: "left", cursor: "pointer", padding: 0 }}>
           <div style={{ fontSize: 12, fontWeight: 400, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{me?.name || ""}</div>
           <div style={{ fontSize: 10.5, color: "var(--sw-muted)" }}>{deptOf(me?.department_id || null)?.name || me?.role_title || ""}</div>

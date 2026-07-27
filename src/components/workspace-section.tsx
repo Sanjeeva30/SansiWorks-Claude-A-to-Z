@@ -276,6 +276,14 @@ export function WorkspaceSection() {
   const [expandedLevel, setExpandedLevel] = useState<string | null>(null);
 
   const isBoardish = me?.is_super || me?.level_id === "l1" || me?.level_id === "l2";
+  /* Admin console access — same rank set the DB's admin_invites_* RLS policies
+     trust (is_super or l1/l2/l2r/l3). The old code only used this workspacePage
+     state to pick which nav item was highlighted, never to gate entry, so any
+     authenticated account — including a freshly accepted l6 Staff invite —
+     could reach the full admin panel just by setting workspacePage to "admin"
+     (via the sidebar button, command palette, or client state). Real data
+     mutations were still blocked by RLS, but the panel itself was wide open. */
+  const isAdmin = me?.is_super || (me?.level_id ? ["l1", "l2", "l2r", "l3"].includes(me.level_id) : false);
 
   /* ------- digest preview data (live) ------- */
   const myTasks = me ? tasksOfPerson(tasks, me.id) : [];
@@ -701,7 +709,15 @@ export function WorkspaceSection() {
           )}
 
           {/* ============ ADMIN ============ */}
-          {workspacePage === "admin" && (
+          {workspacePage === "admin" && !isAdmin && (
+            <section style={card}>
+              <h3 style={{ margin: "0 0 6px", fontSize: 13, fontWeight: 400 }}>You don't have access to this</h3>
+              <p style={{ margin: 0, fontSize: 12, color: "var(--sw-muted)" }}>
+                The admin console is limited to Department Heads and above. Contact your Department Head if you need something changed here.
+              </p>
+            </section>
+          )}
+          {workspacePage === "admin" && isAdmin && (
             <>
               <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 16, borderBottom: "1px solid var(--sw-hair)" }}>
                 {adminTabDefs.map(([key, label]) => (
@@ -1172,11 +1188,16 @@ export function WorkspaceSection() {
                         onClick={async () => {
                           const email = inviteEmail.trim();
                           if (!email || !me) return;
-                          const { data } = await supabase.from("invites").insert({ email, level_id: inviteLevel, department_id: me.department_id, invited_by: me.id, status: "sent" }).select().single();
-                          if (data) patch("invites", [data, ...invites]);
+                          const { data, error } = await supabase.from("invites").insert({ email, level_id: inviteLevel, department_id: me.department_id, invited_by: me.id, status: "sent" }).select().single();
+                          if (error || !data) {
+                            pushToast(`Couldn't send the invite — ${error?.message || "unknown error"}.`);
+                            return;
+                          }
+                          patch("invites", [data, ...invites]);
                           setInviteEmail("");
-                          fetch("/api/notify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: "invite", inviteId: data?.id }) }).catch(() => {});
-                          pushToast(`Invite sent to ${email}`);
+                          const res = await fetch("/api/notify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: "invite", inviteId: data.id }) }).catch(() => null);
+                          const ok = res ? (await res.json().catch(() => ({ ok: false }))).ok : false;
+                          pushToast(ok ? `Invite sent to ${email}` : `Invite created, but the email failed to send to ${email}.`);
                         }}
                         style={{ padding: "8px 16px", borderRadius: 999, border: "none", background: "var(--crimson)", color: "#fff", fontSize: 12.5, fontWeight: 400, cursor: "pointer" }}
                       >

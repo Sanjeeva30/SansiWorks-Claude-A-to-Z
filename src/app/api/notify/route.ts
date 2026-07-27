@@ -115,8 +115,8 @@ export async function POST(req: NextRequest) {
       <p style="margin:22px 0 0;font-size:12px;color:#8A8078;line-height:1.6;">This invitation expires in 7 days. If the button doesn't work, copy this link into your browser:<br><span style="color:#4A423D;word-break:break-all;">${acceptUrl}</span></p>`,
       "invite",
       `${inviter?.name || "A colleague"} invited you to the ${dept?.name || "Sansico"} workspace — expires in 7 days.`);
-    await sendEmail({ email: invite.email }, "You're invited to join SansiWorks", html);
-    return NextResponse.json({ ok: true });
+    const sent = await sendEmail({ email: invite.email }, "You're invited to join SansiWorks", html);
+    return NextResponse.json({ ok: sent });
   }
 
   return NextResponse.json({ ok: false });
