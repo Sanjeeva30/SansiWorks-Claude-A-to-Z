@@ -242,6 +242,30 @@ export function HomeSection() {
             </div>
           </div>
 
+          {/* First-run orientation. The onboarding checklist only fires once, right
+              after an invite is accepted, so anyone who dismissed it — or who is
+              simply new to the workspace — used to land on a wall of zeros with
+              nothing to act on. Shown only when the person genuinely has no work
+              anywhere, never when a filter merely returned nothing. */}
+          {!myTasks.length && (
+            <section style={{ background: "var(--sw-card)", border: "1px solid var(--sw-hair)", borderRadius: 12, padding: "20px 22px", boxShadow: "var(--shadow-card)", marginBottom: 14 }}>
+              <h3 style={{ margin: "0 0 5px", fontFamily: "var(--font-serif)", fontWeight: 400, fontSize: 18 }}>Nothing assigned to you yet.</h3>
+              <p style={{ margin: "0 0 14px", fontSize: 12.5, color: "var(--sw-text-soft)", maxWidth: "62ch" }}>
+                When someone assigns you work it lands here, and you&apos;ll get it in your
+                daily email too. In the meantime you can start something yourself, or take
+                a look at what the rest of the company is working on.
+              </p>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button onClick={() => setShowQuickAdd(true)} style={{ padding: "8px 16px", borderRadius: 999, border: "none", background: "var(--crimson)", color: "#fff", fontSize: 12.5, fontWeight: 400, cursor: "pointer" }}>
+                  Create your first task
+                </button>
+                <button onClick={goAll} style={{ padding: "8px 16px", borderRadius: 999, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", color: "var(--sw-text-soft)", fontSize: 12.5, cursor: "pointer" }}>
+                  Browse all work
+                </button>
+              </div>
+            </section>
+          )}
+
           {(homePage === "all" || homePage === "personal") && taskTable}
 
           {homePage === "myweek" && (

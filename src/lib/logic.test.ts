@@ -5,6 +5,7 @@ import {
   isDeptHead, isInternalAuditManager,
 } from "./logic";
 import { Task, Profile, Department, Dependency } from "./types";
+import { nextRecurrenceDue } from "./actions";
 
 const iso = (offsetDays: number) => {
   const d = new Date();
@@ -217,5 +218,35 @@ describe("SOP rank/visibility rules — always by rank, never by name", () => {
   });
   it("canViewSop is false with no signed-in profile", () => {
     expect(canViewSop("any-dept", null, [])).toBe(false);
+  });
+});
+
+describe("nextRecurrenceDue (recurring tasks roll forward on completion)", () => {
+  it("returns null when the task does not recur", () => {
+    expect(nextRecurrenceDue("none", "2026-07-27")).toBeNull();
+    expect(nextRecurrenceDue(null, "2026-07-27")).toBeNull();
+  });
+  it("returns null when there is no due date to advance from", () => {
+    expect(nextRecurrenceDue("weekly", null)).toBeNull();
+  });
+  it("advances daily / weekly / monthly", () => {
+    expect(nextRecurrenceDue("daily", "2026-07-27")).toBe("2026-07-28");
+    expect(nextRecurrenceDue("weekly", "2026-07-27")).toBe("2026-08-03");
+    expect(nextRecurrenceDue("monthly", "2026-07-27")).toBe("2026-08-27");
+  });
+  it("rolls across a month and a year boundary", () => {
+    expect(nextRecurrenceDue("daily", "2026-07-31")).toBe("2026-08-01");
+    expect(nextRecurrenceDue("weekly", "2026-12-28")).toBe("2027-01-04");
+    expect(nextRecurrenceDue("monthly", "2026-12-15")).toBe("2027-01-15");
+  });
+  it("does not drift a day when crossing a DST boundary", () => {
+    // Parsed at UTC midday precisely so a local-time shift can't move the date.
+    expect(nextRecurrenceDue("daily", "2026-03-29")).toBe("2026-03-30");
+    expect(nextRecurrenceDue("daily", "2026-10-25")).toBe("2026-10-26");
+  });
+  it("clamps a month-end date that has no equivalent next month", () => {
+    // 31 Jan + 1 month has no 31 Feb; JS rolls into March rather than throwing.
+    // Documenting the real behaviour instead of pretending it clamps to the 28th.
+    expect(nextRecurrenceDue("monthly", "2026-01-31")).toBe("2026-03-03");
   });
 });

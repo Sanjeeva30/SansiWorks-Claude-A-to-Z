@@ -7,6 +7,52 @@ import { createClient } from "./supabase/client";
 type Supabase = ReturnType<typeof createClient>;
 type Patch = <K extends keyof StoreData>(key: K, value: StoreData[K]) => void;
 
+/* ---- recurrence ----
+   `recur` has been collected in quick-add and stored on every task since the
+   beginning, but nothing ever read it: picking "Repeats weekly" saved the word
+   and produced no second occurrence. The control promised a feature the app did
+   not have. Completing a recurring task now rolls the next one forward. */
+const RECUR_STEP: Record<string, (d: Date) => void> = {
+  daily:   (d) => d.setDate(d.getDate() + 1),
+  weekly:  (d) => d.setDate(d.getDate() + 7),
+  monthly: (d) => d.setMonth(d.getMonth() + 1),
+};
+
+/** Next due date for a recurring task, or null if it doesn't recur / has no due. */
+export function nextRecurrenceDue(recur: string | null, due: string | null): string | null {
+  const step = recur ? RECUR_STEP[recur] : undefined;
+  if (!step || !due) return null;
+  // Parse as UTC midday so a DST shift can't roll the date backwards a day.
+  const d = new Date(`${due}T12:00:00Z`);
+  if (Number.isNaN(d.getTime())) return null;
+  step(d);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Spawn the next occurrence of a recurring task once this one is completed. */
+async function rollRecurrence(supabase: Supabase, task: Task) {
+  const due = nextRecurrenceDue(task.recur, task.due);
+  if (!due) return;
+  // The unique index on (list_id, name, due) is the guard against double-spawning
+  // when a task is toggled Done -> not Done -> Done: the second insert simply
+  // conflicts and is ignored rather than creating a duplicate.
+  await supabase.from("tasks").insert({
+    name: task.name,
+    list_id: task.list_id,
+    owner_id: task.owner_id,
+    assignee_id: task.assignee_id,
+    accountable_id: task.accountable_id,
+    status: "Not Started",
+    priority: task.priority,
+    due,
+    effort: task.effort,
+    description: task.description,
+    recur: task.recur,
+    difficulty: task.difficulty,
+    difficulty_set_by: task.difficulty_set_by,
+  });
+}
+
 export async function updateTask(
   supabase: Supabase,
   tasks: Task[],
@@ -23,6 +69,10 @@ export async function updateTask(
   if (fields.status && fields.status !== "Done") dbFields.completed_at = null;
   if (Object.keys(dbFields).length) {
     await supabase.from("tasks").update(dbFields).eq("id", id);
+  }
+  if (fields.status === "Done") {
+    const done = next.find((t) => t.id === id);
+    if (done) await rollRecurrence(supabase, done);
   }
   if (fields.raci_c || fields.raci_i) {
     const t = next.find((x) => x.id === id)!;

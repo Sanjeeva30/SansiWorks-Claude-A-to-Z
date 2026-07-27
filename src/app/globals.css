@@ -266,7 +266,16 @@ html, body { max-width: 100%; overflow-x: hidden; }
 
 .sw-grid-2 { display: grid; grid-template-columns: 1fr 1fr; }
 .sw-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); }
+/* A 5-up metric row stepped 5 -> 3 -> 2 -> 1 at fixed breakpoints, which left an
+   orphan card and dead space at tablet widths (at an 820px viewport the content
+   column is ~608px and it dropped to 2-up). Below the width where five cards
+   still fit, auto-fit packs them by available space instead of stepping.
+   Five explicit columns stay the rule above that: auto-fit alone produced SIX
+   tracks for five cards on a wide screen, leaving an empty slot. */
 .sw-grid-5 { display: grid; grid-template-columns: repeat(5, 1fr); }
+@container content (max-width: 900px) {
+  .sw-grid-5 { grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); }
+}
 .sw-grid-label { display: grid; grid-template-columns: 96px 1fr; }
 .sw-table-row5 { display: grid; grid-template-columns: 1fr repeat(4, 108px); }
 
@@ -299,7 +308,6 @@ html, body { max-width: 100%; overflow-x: hidden; }
 
 /* Five metric columns get cramped before three do. */
 @container content (max-width: 860px) {
-  .sw-grid-5 { grid-template-columns: repeat(3, 1fr) !important; }
 }
 
 /* small phones: table-like rows collapse to stacked cards */
@@ -309,7 +317,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
   .sw-hide-mobile { display: none !important; }
   /* gantt: person column narrows so the timeline gets the room */
   :root { --sw-gantt-name: 130px; }
-  .sw-grid-3, .sw-grid-5 { grid-template-columns: 1fr 1fr !important; }
+  .sw-grid-3 { grid-template-columns: 1fr 1fr !important; }
   .sw-table-row5 {
     grid-template-columns: 1fr !important;
     gap: 4px !important;
@@ -376,7 +384,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
   /* ticket numbers (SW-123) are the least useful column on a task
      row — drop them so the task name gets the room */
   .sw-ticket-no { display: none !important; }
-  .sw-grid-2, .sw-grid-3, .sw-grid-5 { grid-template-columns: 1fr !important; }
+  .sw-grid-2, .sw-grid-3 { grid-template-columns: 1fr !important; }
   .sw-grid-label { grid-template-columns: 1fr !important; gap: 3px !important; }
 }
 
@@ -402,9 +410,26 @@ html, body { max-width: 100%; overflow-x: hidden; }
 /* (superseded: these rules are now container-query driven above) */
 
 /* horizontally-scrolling surfaces (kanban, gantt, wide tables):
-   momentum scroll on iOS + a visible scroll affordance */
-.sw-hscroll {
+   momentum scroll on iOS + a visible scroll affordance.
+
+   The fade is painted with a background-attachment trick rather than an overlay
+   element: it is anchored to the scroll container's right edge and disappears
+   once the content is fully scrolled, so it reads as "there is more this way"
+   and never as a permanent decoration. */
+.sw-hscroll,
+.sw-calendar-scroll,
+.sw-table-scroll {
   -webkit-overflow-scrolling: touch;
+  background:
+    linear-gradient(to right, var(--sw-page) 30%, rgba(0,0,0,0)) left center,
+    linear-gradient(to left,  var(--sw-page) 30%, rgba(0,0,0,0)) right center,
+    radial-gradient(farthest-side at 0 50%, rgba(23,18,15,.14), rgba(0,0,0,0)) left center,
+    radial-gradient(farthest-side at 100% 50%, rgba(23,18,15,.14), rgba(0,0,0,0)) right center;
+  background-repeat: no-repeat;
+  background-size: 34px 100%, 34px 100%, 13px 100%, 13px 100%;
+  background-attachment: local, local, scroll, scroll;
+}
+.sw-hscroll {
   scroll-snap-type: x proximity;
 }
 .sw-hscroll > * { scroll-snap-align: start; }
