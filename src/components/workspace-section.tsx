@@ -25,8 +25,11 @@ const PREF_CATS: [string, string, string][] = [
   ["mentions", "Comments & mentions", ""],
   ["status", "Status changes on my tasks", ""],
   ["deadline", "Deadline reminders", ""],
-  ["announce", "Team announcements", ""],
 ];
+/* "Team announcements" was removed from here — there is no compose/broadcast
+   feature anywhere in the app to send one, so the preference could never
+   fire. Offering a toggle for something that can't happen is worse than not
+   offering it; re-add once an announcement feature actually exists. */
 const PREF_CHANNELS: [string, string][] = [
   ["instant", "Instant email"],
   ["digest", "Daily digest"],
@@ -69,7 +72,7 @@ export function WorkspaceSection() {
     notifications, prefs, approvals, invites, boardRequests, nominations, proposals, audit, features,
     patch, supabase, refresh,
   } = store;
-  const { workspacePage, setActiveTaskId, openProfile, pushToast, setShowPortal, setDocDetailId, openDetail, setSection, setWorkspacePage } = useUI();
+  const { workspacePage, setActiveTaskId, openProfile, pushToast, setShowPortal, setDocDetailId, openDetail, setSection, setWorkspacePage, confirm } = useUI();
 
   const [inboxFilter, setInboxFilter] = useState<"all" | "unread">("all");
   const [inboxDensity, setInboxDensity] = useState<"comfortable" | "compact">("comfortable");
@@ -890,6 +893,7 @@ export function WorkspaceSection() {
                                     {isBoardish && (
                                       <button
                                         onClick={async () => {
+                                          if (!(await confirm({ title: `Remove ${h!.name} as head of ${d.name}?`, message: "They'll lose head-level authority over this department immediately.", confirmLabel: "Remove", danger: true }))) return;
                                           patch("deptHeads", deptHeads.filter((x) => !(x.unit_id === d.id && x.profile_id === h!.id)));
                                           await supabase.from("org_unit_heads").delete().eq("unit_id", d.id).eq("profile_id", h!.id);
                                         }}
@@ -926,6 +930,7 @@ export function WorkspaceSection() {
                                     {m!.name}
                                     <button
                                       onClick={async () => {
+                                        if (!(await confirm({ title: `Remove ${m!.name} from ${d.name}?`, message: "This removes their cross-department membership here — their home department is unaffected.", confirmLabel: "Remove", danger: true }))) return;
                                         patch("deptMembers", deptMembers.filter((x) => !(x.department_id === d.id && x.profile_id === m!.id)));
                                         await supabase.from("org_unit_members").delete().eq("department_id", d.id).eq("profile_id", m!.id);
                                       }}

@@ -96,6 +96,11 @@ export async function GET(req: NextRequest) {
     const mine = prefsOf(pid);
     return mine.length > 0 && mine.every((p) => p.channel === "off" || p.channel === "inapp");
   };
+  /* The "Mentions & replies" and "Needs your attention" (deadline) sections
+     used to appear in every digest unconditionally — the Settings screen let
+     someone turn either one off and nothing in the digest actually respected
+     it. */
+  const categoryOff = (pid: string, category: string) => prefsOf(pid).find((p) => p.category === category)?.channel === "off";
 
   const isConversation = (reason: string | null) => {
     const r = (reason || "").toLowerCase();
@@ -131,10 +136,13 @@ export async function GET(req: NextRequest) {
     let subject = "";
     let inner = "";
     if (kind === "digest") {
-      const convoForMe = mentionsOf(person.id);
+      const deadlineOff = categoryOff(person.id, "deadline");
+      const mentionsOffForMe = categoryOff(person.id, "mentions");
+      const convoForMe = mentionsOffForMe ? [] : mentionsOf(person.id);
+      const dueSection = deadlineOff ? [] : [...overdue, ...dueToday];
       // Someone with no tasks but a waiting @mention used to be skipped here and
       // never told. A pending mention is reason enough to send.
-      if (!overdue.length && !dueToday.length && mine.length === 0 && !convoForMe.length) continue;
+      if (!dueSection.length && mine.length === 0 && !convoForMe.length) continue;
       subject = `Your day at Sansico — ${new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}`;
       const flag = flagOf.get(person.name);
       inner = `
@@ -143,8 +151,9 @@ export async function GET(req: NextRequest) {
           ${overdue.length} overdue, ${dueToday.length} due today, ${mine.length} open in total.
         </div>
         ${flag ? `<div style="display:flex;gap:8px;align-items:flex-start;background:rgba(122,13,32,0.06);border:1px solid #E5DFD8;border-radius:11px;padding:11px 14px;font-size:12px;line-height:1.5;margin-bottom:18px;color:#4A423D;"><span style="color:#7A0D20;">✦</span><span><b>Sansi flags:</b> ${flag}</span></div>` : ""}
+        ${!deadlineOff ? `
         <h4 style="margin:0 0 8px;font-size:11px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#9A918A;">Needs your attention</h4>
-        ${[...overdue, ...dueToday].slice(0, 5).map((t) => row(t.name, t.due! < today ? `overdue since ${t.due}` : "due today")).join("") || `<p style="font-size:12.5px;color:#9A918A;">Nothing urgent — clean slate.</p>`}
+        ${dueSection.slice(0, 5).map((t) => row(t.name, t.due! < today ? `overdue since ${t.due}` : "due today")).join("") || `<p style="font-size:12.5px;color:#9A918A;">Nothing urgent — clean slate.</p>`}` : ""}
         ${convoForMe.length ? `
         <h4 style="margin:22px 0 8px;font-size:11px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#9A918A;">Mentions &amp; replies</h4>
         ${convoForMe.slice(0, 5).map((n) => `<div style="padding:8px 0;border-bottom:1px solid #E5DFD8;font-size:12.5px;line-height:1.5;">${escapeHtml(n.body)} <span style="color:#9A918A;font-size:11px;">· ${(n.reason || "").toLowerCase() === "mention" ? "mentioned you" : "new comment"}</span></div>`).join("")}

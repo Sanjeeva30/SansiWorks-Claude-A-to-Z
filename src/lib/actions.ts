@@ -60,6 +60,7 @@ export async function updateTask(
   id: string,
   fields: Partial<Task>
 ) {
+  const prevTask = tasks.find((t) => t.id === id);
   const next = tasks.map((t) => (t.id === id ? { ...t, ...fields } : t));
   patch("tasks", next);
   const dbFields: Record<string, unknown> = { ...fields };
@@ -82,6 +83,24 @@ export async function updateTask(
       ...t.raci_i.map((p) => ({ task_id: id, profile_id: p, role: "I" })),
     ];
     if (rows.length) await supabase.from("task_raci").insert(rows);
+  }
+
+  /* This is the ONLY place a task's assignee/status/blocked flag changes after
+     creation (task-detail and list-section both funnel here), so it's the one
+     place instant alerts for reassignment, status changes, and blocked tasks
+     can be wired without duplicating the check at every call site. Creation's
+     own "assigned" alert lives in createTask() below — reassigning an existing
+     task used to notify nobody at all. */
+  if (prevTask) {
+    if (fields.assignee_id !== undefined && fields.assignee_id !== prevTask.assignee_id) {
+      fetch("/api/notify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: "assigned", taskId: id }) }).catch(() => {});
+    }
+    if (fields.blocked === true && prevTask.blocked !== true) {
+      fetch("/api/notify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: "blocked", taskId: id }) }).catch(() => {});
+    }
+    if (fields.status && fields.status !== prevTask.status) {
+      fetch("/api/notify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: "status_changed", taskId: id, newStatus: fields.status }) }).catch(() => {});
+    }
   }
 }
 

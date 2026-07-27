@@ -14,6 +14,7 @@ import { EntityDetailModal, DocDetailModal } from "@/components/entity-detail-mo
 import { CommandPalette, PublicPortal } from "@/components/palette-portal";
 import { OnboardingChecklist } from "@/components/onboarding";
 import { ReminderEngine } from "@/components/reminders";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 
 function AppShell() {
   const { section, mobileNavOpen, setMobileNavOpen } = useUI();
@@ -57,6 +58,7 @@ function AppShell() {
       <OnboardingChecklist />
       <ReminderEngine />
       <Toasts />
+      <ConfirmDialog />
     </div>
   );
 }

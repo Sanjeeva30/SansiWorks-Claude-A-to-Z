@@ -90,6 +90,23 @@ interface UIState {
   setDocDetailId: (id: string | null) => void;
   mobileNavOpen: boolean;
   setMobileNavOpen: (v: boolean) => void;
+  /* Every destructive action in the app should route through this instead of
+     firing immediately — a native window.confirm() breaks the app's own
+     styling/theme and can't be Escape/focus-trap consistent with everything
+     else here. Resolves true on confirm, false on cancel/Escape/backdrop
+     click; awaited from a plain onClick, no extra component needed at the
+     call site. */
+  confirmRequest: ConfirmOptions | null;
+  confirm: (opts: ConfirmOptions) => Promise<boolean>;
+  resolveConfirm: (v: boolean) => void;
+}
+
+export interface ConfirmOptions {
+  title: string;
+  message: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  danger?: boolean;
 }
 
 const Ctx = createContext<UIState | null>(null);
@@ -176,10 +193,24 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
   const [detailPopup, setDetailPopup] = useState<{ type: string; id: string } | null>(null);
   const [docDetailId, setDocDetailId] = useState<string | null>(null);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [confirmRequest, setConfirmRequest] = useState<ConfirmOptions | null>(null);
+  const confirmResolver = useRef<((v: boolean) => void) | null>(null);
   const openDetail = useCallback((type: string, id: string) => setDetailPopup({ type, id }), []);
   const closeDetail = useCallback(() => setDetailPopup(null), []);
   const toastSeq = useRef(0);
   const escStack = useRef(new Map<string, () => void>());
+
+  const confirm = useCallback((opts: ConfirmOptions) => {
+    return new Promise<boolean>((resolve) => {
+      confirmResolver.current = resolve;
+      setConfirmRequest(opts);
+    });
+  }, []);
+  const resolveConfirm = useCallback((v: boolean) => {
+    confirmResolver.current?.(v);
+    confirmResolver.current = null;
+    setConfirmRequest(null);
+  }, []);
 
   // refs kept in sync each render so navigation callbacks never read stale data
   const routeRef = useRef(route);
@@ -290,6 +321,7 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       if (e.key === "Escape") {
+        if (confirmResolver.current) { resolveConfirm(false); return; }
         // close in priority order
         setShowPalette((v) => {
           if (v) return false;
@@ -328,6 +360,7 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
         quickAddStatus, setQuickAddStatus, showPalette, setShowPalette,
         metricModal, setMetricModal, showPortal, setShowPortal, escStack,
         detailPopup, openDetail, closeDetail, docDetailId, setDocDetailId, mobileNavOpen, setMobileNavOpen,
+        confirmRequest, confirm, resolveConfirm,
       }}
     >
       {children}

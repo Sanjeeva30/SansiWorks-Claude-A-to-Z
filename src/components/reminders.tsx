@@ -17,7 +17,7 @@ const SNOOZES: { label: string; minutes: number | "tomorrow" }[] = [
 export function ReminderEngine() {
   const store = useStore();
   const { reminders, tasks, subtasks, patch, supabase } = store;
-  const { setActiveTaskId } = useUI();
+  const { setActiveTaskId, confirm } = useUI();
   const [snoozeFor, setSnoozeFor] = useState<string | null>(null);
   const [editFor, setEditFor] = useState<string | null>(null);
   const [editVal, setEditVal] = useState("");
@@ -95,7 +95,10 @@ export function ReminderEngine() {
                 )}
                 <button onClick={() => setSnoozeFor(r.id)} style={{ border: "1px solid var(--sw-hair)", background: "none", borderRadius: 999, padding: "5px 13px", fontSize: 11, cursor: "pointer", color: "var(--sw-text)" }}>Snooze</button>
                 <button onClick={() => { setEditFor(r.id); setEditVal(r.remind_at.slice(0, 16)); }} style={{ border: "1px solid var(--sw-hair)", background: "none", borderRadius: 999, padding: "5px 13px", fontSize: 11, cursor: "pointer", color: "var(--sw-text)" }}>Edit</button>
-                <button onClick={() => deleteReminder(supabase, store, patch, r.id)} style={{ border: "none", background: "none", color: "var(--sw-muted)", fontSize: 11, cursor: "pointer", padding: "5px 6px" }}>Delete</button>
+                <button
+                  onClick={async () => { if (await confirm({ title: "Delete this reminder?", message: "This can't be undone.", confirmLabel: "Delete", danger: true })) deleteReminder(supabase, store, patch, r.id); }}
+                  style={{ border: "none", background: "none", color: "var(--sw-muted)", fontSize: 11, cursor: "pointer", padding: "5px 6px" }}
+                >Delete</button>
               </div>
             )}
           </div>

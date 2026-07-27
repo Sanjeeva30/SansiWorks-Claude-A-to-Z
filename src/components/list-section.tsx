@@ -25,7 +25,7 @@ export function ListSection() {
   } = store;
   const {
     listPage, activeList, setActiveTaskId, setShowQuickAdd, setQuickAddStatus,
-    openProfile, pushToast,
+    openProfile, pushToast, confirm,
   } = useUI();
 
   const [view, setView] = useState<"table" | "board" | "calendar" | "gantt">("table");
@@ -254,7 +254,12 @@ export function ListSection() {
               <span key={v.id} style={{ display: "flex", alignItems: "center", gap: 6, border: "1px solid var(--sw-hair)", borderRadius: 999, background: "var(--sw-card)", padding: "4px 5px 4px 12px" }}>
                 <button onClick={() => applySavedView(v.config)} style={{ border: "none", background: "none", color: "var(--sw-text)", fontSize: 11.5, fontWeight: 400, cursor: "pointer", padding: 0 }}>{v.name}</button>
                 <button
-                  onClick={async (e) => { e.stopPropagation(); await supabase.from("saved_views").delete().eq("id", v.id); patch("savedViews", savedViews.filter((x) => x.id !== v.id)); }}
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    if (!(await confirm({ title: `Delete "${v.name}"?`, message: "This saved view can't be recovered once deleted.", confirmLabel: "Delete", danger: true }))) return;
+                    await supabase.from("saved_views").delete().eq("id", v.id);
+                    patch("savedViews", savedViews.filter((x) => x.id !== v.id));
+                  }}
                   title="Delete view"
                   style={{ border: "none", background: "var(--sw-hover)", width: 17, height: 17, borderRadius: 99, cursor: "pointer", fontSize: 9, color: "var(--sw-muted)", padding: 0 }}
                 >
@@ -527,7 +532,11 @@ export function ListSection() {
                   <div style={{ fontSize: 11, color: "var(--sw-muted)" }}>{TYPE_LABELS[f.type]}</div>
                 </span>
                 <button
-                  onClick={async () => { await supabase.from("custom_fields").delete().eq("id", f.id); patch("customFields", customFields.filter((x) => x.id !== f.id)); }}
+                  onClick={async () => {
+                    if (!(await confirm({ title: `Delete field "${f.name}"?`, message: "Every task in this list loses its value for this field. This can't be undone.", confirmLabel: "Delete field", danger: true }))) return;
+                    await supabase.from("custom_fields").delete().eq("id", f.id);
+                    patch("customFields", customFields.filter((x) => x.id !== f.id));
+                  }}
                   style={{ border: "none", background: "none", color: "var(--sw-on-red)", fontSize: 11.5, fontWeight: 400, cursor: "pointer" }}
                 >
                   Remove

@@ -29,7 +29,7 @@ const label: React.CSSProperties = { fontSize: 12, fontWeight: 400, color: "var(
 
 // Task detail slide-over (Details / Subtasks / Activity / Files tabs)
 export function TaskDetailSlideOver() {
-  const { activeTaskId, setActiveTaskId, pushToast, openProfile } = useUI();
+  const { activeTaskId, setActiveTaskId, pushToast, openProfile, confirm } = useUI();
   const store = useStore();
   // This slide-over is mounted on every screen but only renders when a task is
   // open, so the deferred pull is gated on that — otherwise it would fire on
@@ -77,6 +77,7 @@ export function TaskDetailSlideOver() {
     if (failures) pushToast(`${failures} file${failures > 1 ? "s" : ""} failed to upload`);
   };
   const handleDelete = async (a: Attachment) => {
+    if (!(await confirm({ title: `Delete "${a.name}"?`, message: "This file can't be recovered once deleted.", confirmLabel: "Delete", danger: true }))) return;
     setAttachments((cur) => cur.filter((x) => x.id !== a.id));
     await deleteAttachment(supabase, a);
   };
@@ -405,7 +406,11 @@ export function TaskDetailSlideOver() {
                     <DifficultyBadge value={s.difficulty} />
                     {who && <span title={who.name} style={{ width: 18, height: 18, borderRadius: 99, background: who.color, color: readableTextOn(who.color), fontSize: 7.5, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>{initials(who.name)}</span>}
                     <button onClick={() => setExpandedSub(expandedSub === s.id ? null : s.id)} title="RACI & reminder" style={{ border: "none", background: expandedSub === s.id ? "var(--sw-hover)" : "none", borderRadius: 6, color: "var(--sw-muted)", cursor: "pointer", padding: "2px 5px", fontSize: 11, lineHeight: 1 }}>⋯</button>
-                    <button onClick={() => deleteSubtask(supabase, store, patch, s.id)} title="Delete subtask" style={{ border: "none", background: "none", color: "var(--sw-muted)", cursor: "pointer", padding: 2, display: "flex" }}><IconX size={10} /></button>
+                    <button
+                      onClick={async () => { if (await confirm({ title: `Delete "${s.name}"?`, message: "This can't be undone.", confirmLabel: "Delete", danger: true })) deleteSubtask(supabase, store, patch, s.id); }}
+                      title="Delete subtask"
+                      style={{ border: "none", background: "none", color: "var(--sw-muted)", cursor: "pointer", padding: 2, display: "flex" }}
+                    ><IconX size={10} /></button>
                   </div>
                   {expandedSub === s.id && (
                     <div style={{ margin: "2px 0 8px 24px", padding: "10px 12px", border: "1px solid var(--sw-hair)", borderRadius: 10, background: "var(--sw-hover)", display: "flex", flexDirection: "column", gap: 8 }}>

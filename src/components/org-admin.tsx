@@ -40,7 +40,7 @@ export function OrgAdmin({ tab }: { tab: "organisation" | "permissions" }) {
 
   const { me, profiles, departments, deptHeads, assignments, permissionTemplates, levels, supabase, patch, refresh } = store;
 
-  const { pushToast, openDetail } = useUI();
+  const { pushToast, openDetail, confirm } = useUI();
   const canManage = isBoardish(me);
 
   async function recomputeColors() {
@@ -91,9 +91,11 @@ export function OrgAdmin({ tab }: { tab: "organisation" | "permissions" }) {
     if (me) await logAudit(supabase, me.id, `added ${profiles.find((p) => p.id === profileId)?.name || "someone"} as head of`, unitName(unitId));
   }
   async function removeHead(unitId: string, profileId: string) {
+    const person = profiles.find((p) => p.id === profileId)?.name || "this person";
+    if (!(await confirm({ title: `Remove ${person} as head of ${unitName(unitId)}?`, message: "They'll lose head-level authority over this unit immediately.", confirmLabel: "Remove", danger: true }))) return;
     patch("deptHeads", deptHeads.filter((h) => !(h.unit_id === unitId && h.profile_id === profileId)));
     await supabase.from("org_unit_heads").delete().eq("unit_id", unitId).eq("profile_id", profileId);
-    if (me) await logAudit(supabase, me.id, `removed ${profiles.find((p) => p.id === profileId)?.name || "someone"} as head of`, unitName(unitId));
+    if (me) await logAudit(supabase, me.id, `removed ${person} as head of`, unitName(unitId));
   }
 
   async function createAssignment() {
@@ -111,9 +113,12 @@ export function OrgAdmin({ tab }: { tab: "organisation" | "permissions" }) {
   }
   async function deleteAssignment(id: string) {
     const a = assignments.find((x) => x.id === id);
+    if (!a) return;
+    const person = profiles.find((p) => p.id === a.profile_id)?.name || "this person";
+    if (!(await confirm({ title: `Remove "${a.function_name}" from ${person}?`, message: "This assignment can be re-added later, but not undone automatically.", confirmLabel: "Remove", danger: true }))) return;
     patch("assignments", assignments.filter((a) => a.id !== id));
     await supabase.from("assignments").delete().eq("id", id);
-    if (me && a) await logAudit(supabase, me.id, `removed assignment: ${profiles.find((p) => p.id === a.profile_id)?.name || "someone"} as ${a.function_name}`, unitName(a.scope_unit_id) || "org-wide");
+    if (me) await logAudit(supabase, me.id, `removed assignment: ${person} as ${a.function_name}`, unitName(a.scope_unit_id) || "org-wide");
   }
 
   async function createTemplate() {
@@ -131,8 +136,15 @@ export function OrgAdmin({ tab }: { tab: "organisation" | "permissions" }) {
   }
   async function deleteTemplate(id: string) {
     const t = permissionTemplates.find((x) => x.id === id);
+    if (!t) return;
+    const inUse = profiles.filter((p) => p.template_id === id).length;
+    if (!(await confirm({
+      title: `Delete "${t.name}"?`,
+      message: inUse ? `${inUse} ${inUse === 1 ? "person is" : "people are"} currently using this template — they'll fall back to their level's default permissions.` : "This can't be undone.",
+      confirmLabel: "Delete template", danger: true,
+    }))) return;
     await supabase.from("permission_templates").delete().eq("id", id);
-    if (me && t) await logAudit(supabase, me.id, "deleted permission template", t.name);
+    if (me) await logAudit(supabase, me.id, "deleted permission template", t.name);
     await refresh();
   }
   async function assignTemplate(profileId: string, templateId: string) {

@@ -40,6 +40,61 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
+  if (body.kind === "blocked" && body.taskId) {
+    const [{ data: task }, { data: actor }] = await Promise.all([
+      supabase.from("tasks").select("id,name,priority,due,assignee_id").eq("id", body.taskId).single(),
+      supabase.from("profiles").select("name").eq("id", auth.user.id).single(),
+    ]);
+    if (!task || !task.assignee_id) return NextResponse.json({ ok: false });
+    const { data: person } = await supabase.from("profiles").select("id,name,email").eq("id", task.assignee_id).single();
+    if (!person) return NextResponse.json({ ok: false });
+    await supabase.from("notifications").insert({
+      profile_id: person.id, task_id: task.id,
+      body: `${actor?.name || "Someone"} marked "${task.name}" as blocked`, reason: "Blocked",
+    });
+    const { data: pref } = await supabase.from("notification_prefs").select("channel").eq("profile_id", person.id).eq("category", "blocked").single();
+    if ((pref?.channel || "instant") === "instant") {
+      const html = wrapEmailHtml(`
+        <p style="margin:0 0 4px;font-size:12px;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:#F3263E;">Blocked</p>
+        <h2 style="font-family:Georgia,serif;font-weight:400;font-size:22px;margin:0 0 14px;">Your task is <em>stuck</em>.</h2>
+        <div style="border:1.5px solid #E5DFD8;border-radius:12px;padding:15px 17px;margin-bottom:14px;">
+          <div style="font-size:14px;margin-bottom:4px;">${task.name}</div>
+          <div style="font-size:11.5px;color:#9A918A;">${task.priority}${task.due ? ` · due ${task.due}` : ""} · flagged by ${actor?.name || "a teammate"}</div>
+        </div>
+        <a href="${req.nextUrl.origin}" style="display:inline-block;background:#7A0D20;color:#fff;border-radius:999px;padding:8px 20px;font-size:12px;text-decoration:none;">Open in SansiWorks →</a>
+        <p style="margin:16px 0 0;font-size:10.5px;color:#9A918A;">You're receiving this instantly because 'My task blocked or marked Stuck' is set to Instant email in your settings.</p>`, "alert");
+      await sendEmail({ email: person.email, name: person.name }, `Blocked: ${task.name}`, html);
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  if (body.kind === "status_changed" && body.taskId && body.newStatus) {
+    const [{ data: task }, { data: actor }] = await Promise.all([
+      supabase.from("tasks").select("id,name,priority,assignee_id").eq("id", body.taskId).single(),
+      supabase.from("profiles").select("name").eq("id", auth.user.id).single(),
+    ]);
+    if (!task || !task.assignee_id || task.assignee_id === auth.user.id) return NextResponse.json({ ok: false });
+    const { data: person } = await supabase.from("profiles").select("id,name,email").eq("id", task.assignee_id).single();
+    if (!person) return NextResponse.json({ ok: false });
+    await supabase.from("notifications").insert({
+      profile_id: person.id, task_id: task.id,
+      body: `${actor?.name || "Someone"} moved "${task.name}" to ${body.newStatus}`, reason: "Status",
+    });
+    const { data: pref } = await supabase.from("notification_prefs").select("channel").eq("profile_id", person.id).eq("category", "status").single();
+    if ((pref?.channel || "instant") === "instant") {
+      const html = wrapEmailHtml(`
+        <h2 style="font-family:Georgia,serif;font-weight:400;font-size:22px;margin:0 0 14px;">Status <em>updated</em>.</h2>
+        <div style="border:1.5px solid #E5DFD8;border-radius:12px;padding:15px 17px;margin-bottom:14px;">
+          <div style="font-size:14px;margin-bottom:4px;">${task.name}</div>
+          <div style="font-size:11.5px;color:#9A918A;">Now ${body.newStatus} · changed by ${actor?.name || "a teammate"}</div>
+        </div>
+        <a href="${req.nextUrl.origin}" style="display:inline-block;background:#7A0D20;color:#fff;border-radius:999px;padding:8px 20px;font-size:12px;text-decoration:none;">Open in SansiWorks →</a>
+        <p style="margin:16px 0 0;font-size:10.5px;color:#9A918A;">You're receiving this instantly because 'Status changes on my tasks' is set to Instant email in your settings.</p>`, "alert");
+      await sendEmail({ email: person.email, name: person.name }, `${task.name} is now ${body.newStatus}`, html);
+    }
+    return NextResponse.json({ ok: true });
+  }
+
   if (body.kind === "approval_requested" && body.approvalId) {
     const [{ data: approval }, { data: actor }] = await Promise.all([
       supabase.from("approvals").select("id,task_id,detail,requested_due,prev_due").eq("id", body.approvalId).single(),
