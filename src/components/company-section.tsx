@@ -82,6 +82,17 @@ export function CompanySection() {
 
   const goEverything = () => { setSection("list"); setListPage("everything"); };
 
+  /* Executive cards drill down in place rather than navigating to Everything —
+     the point of a dashboard number is to see what composes it without losing
+     the dashboard. "View all" in the sheet keeps the full list one tap away. */
+  const execDrill = (title: string, rows: Task[], subtitle?: string) => () =>
+    setMetricModal({
+      title,
+      subtitle,
+      taskIds: [...rows].sort((a, b) => (a.due || "9999").localeCompare(b.due || "9999")).map((t) => t.id),
+      viewAll: { label: "Open the full task list →", run: goEverything },
+    });
+
   /* trend: real 12-week series per metric. `upIsGood` colours the delta chip by
      meaning, not by direction — a falling overdue count is good news. `open` is
      deliberately neutral: more open work is neither good nor bad on its own. */
@@ -89,10 +100,15 @@ export function CompanySection() {
     value: string; label: string; color: string; nav: () => void;
     trend: TrendKind; upIsGood: boolean | null; unit?: string;
   }[] = [
-    { value: String(openTasks.length), label: "Open tasks", color: "var(--sw-text)", nav: goEverything, trend: "open", upIsGood: null },
-    { value: String(overdueAll.length), label: "Overdue", color: "var(--sw-on-red)", nav: goEverything, trend: "overdue", upIsGood: false },
-    { value: String(criticalCount), label: "Critical priority", color: "var(--sw-on-crimson)", nav: goEverything, trend: "critical", upIsGood: false },
-    { value: `${onTimeRate}%`, label: "On-time rate", color: "var(--sw-on-green)", unit: "%", upIsGood: true, trend: "onTime", nav: () => setMetricModal({ title: "On-time rate — recent completions", taskIds: tasks.filter((t) => t.status === "Done").slice(-8).map((t) => t.id) }) },
+    { value: String(openTasks.length), label: "Open tasks", color: "var(--sw-text)", trend: "open", upIsGood: null,
+      nav: execDrill("Open tasks", openTasks, "Every task across the company that isn't done") },
+    { value: String(overdueAll.length), label: "Overdue", color: "var(--sw-on-red)", trend: "overdue", upIsGood: false,
+      nav: execDrill("Overdue", overdueAll, "Past their due date and still open") },
+    { value: String(criticalCount), label: "Critical priority", color: "var(--sw-on-crimson)", trend: "critical", upIsGood: false,
+      nav: execDrill("Critical priority", openTasks.filter((t) => t.priority === "Critical"), "Open work marked Critical") },
+    { value: `${onTimeRate}%`, label: "On-time rate", color: "var(--sw-on-green)", unit: "%", upIsGood: true, trend: "onTime",
+      nav: execDrill("On-time rate", tasks.filter((t) => t.status === "Done" && t.completed_at && t.due).slice(-12),
+        `${onTimeRate}% of completed work met its due date — most recent completions`) },
   ];
 
   // Predicted late (at-risk with reasons per design)

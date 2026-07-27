@@ -4,7 +4,7 @@ import { useStore } from "@/lib/store";
 import { useUI } from "@/lib/ui";
 import { STATUS_COLORS, PRIORITY_COLORS, STATUSES, Task, initials } from "@/lib/types";
 import { iso, fmtShort, fmtFull, todayIso } from "@/lib/dates";
-import { atRiskTasks, isOpen, tasksOfPerson, workloadPct, efficiencyScore, departmentRisk, upcomingBirthdays } from "@/lib/logic";
+import { atRiskTasks, isOpen, isOverdue, tasksOfPerson, workloadPct, efficiencyScore, departmentRisk, upcomingBirthdays } from "@/lib/logic";
 import { isHeadRank } from "@/lib/colors";
 import { FilterState, EMPTY_FILTERS, applyFilters } from "@/lib/search";
 import { TopIcons, Avatar } from "./shared";
@@ -19,7 +19,7 @@ export function HomeSection() {
   const { me, tasks, lists, spaces, profiles, notifications, departments, deptMembers, levels } = store;
   const {
     homePage, setHomePage, setShowQuickAdd, setActiveTaskId,
-    setCompanyPage, setWorkspacePage, openProfile,
+    setCompanyPage, setWorkspacePage, openProfile, setMetricModal, setActiveList,
   } = useUI();
   const [statusTab, setStatusTab] = useState("Not Started");
   const [density, setDensity] = useState<"comfortable" | "compact">("comfortable");
@@ -53,12 +53,47 @@ export function HomeSection() {
 
   const goAll = () => setHomePage("all");
 
+  /* Every metric card opens a drill-down sheet — none of them navigate. Clicking
+     a number should show you WHICH items make up that number, in place; jumping
+     to another screen loses your context and (on a phone) your scroll position.
+     The full-page route is still one tap away via the sheet's "View all" footer. */
+  const byDue = (a: Task, b: Task) => (a.due || "9999").localeCompare(b.due || "9999");
+  const drill = (title: string, rows: Task[], subtitle?: string) => () =>
+    setMetricModal({
+      title,
+      subtitle,
+      taskIds: [...rows].sort(byDue).map((t) => t.id),
+      viewAll: { label: "View all my work →", run: goAll },
+    });
+
   const metrics = [
-    { icon: <IconSquare />, label: "My open tasks", value: myOpen.length, tint: "var(--sw-hover)", nav: goAll },
-    { icon: <IconClock />, label: "Due this week", value: dueThisWeek.length, tint: "rgba(34,64,158,0.12)", nav: goAll },
-    { icon: <IconFlag />, label: "At risk", value: myAtRisk.length, tint: "rgba(243,38,62,0.12)", nav: goAll },
-    { icon: <IconCheckSquare />, label: "Completed this week", value: completedThisWeek.length, tint: "rgba(13,79,49,0.12)", nav: goAll },
-    { icon: <IconGrid />, label: "Projects active", value: activeProjects, tint: "var(--sw-hover)", nav: () => setCompanyPage("executive") },
+    { icon: <IconSquare />, label: "My open tasks", value: myOpen.length, tint: "var(--sw-hover)",
+      nav: drill("My open tasks", myOpen, "Everything assigned to you that isn't done") },
+    { icon: <IconClock />, label: "Due this week", value: dueThisWeek.length, tint: "rgba(34,64,158,0.12)",
+      nav: drill("Due this week", dueThisWeek, "Your work with a due date in the next 7 days") },
+    { icon: <IconFlag />, label: "At risk", value: myAtRisk.length, tint: "rgba(243,38,62,0.12)",
+      nav: drill("At risk", myAtRisk.map((r) => r.task), "Overdue, stuck, or due soon with a heavy load") },
+    { icon: <IconCheckSquare />, label: "Completed this week", value: completedThisWeek.length, tint: "rgba(13,79,49,0.12)",
+      nav: drill("Completed this week", completedThisWeek, "Finished in the last 7 days") },
+    // Not a task list — drills into the projects themselves, each row opening that list.
+    { icon: <IconGrid />, label: "Projects active", value: activeProjects, tint: "var(--sw-hover)",
+      nav: () => setMetricModal({
+        title: "Active projects",
+        subtitle: "Lists with at least one task still open",
+        rows: lists
+          .filter((l) => tasks.some((t) => t.list_id === l.id && isOpen(t)))
+          .map((l) => {
+            const openCount = tasks.filter((t) => t.list_id === l.id && isOpen(t)).length;
+            const overdueCount = tasks.filter((t) => t.list_id === l.id && isOverdue(t)).length;
+            return {
+              id: l.id,
+              label: l.name,
+              sub: spaces.find((sp) => sp.id === l.space_id)?.name || undefined,
+              meta: `${openCount} open${overdueCount ? ` · ${overdueCount} overdue` : ""}`,
+              open: () => setActiveList({ spaceId: l.space_id, listId: l.id }),
+            };
+          }),
+      }) },
   ];
 
   const listPathOf = (t: Task) => {

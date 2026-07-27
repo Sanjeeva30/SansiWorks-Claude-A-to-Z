@@ -59,8 +59,24 @@ interface UIState {
   setQuickAddStatus: (s: string) => void;
   showPalette: boolean;
   setShowPalette: (v: boolean) => void;
-  metricModal: { title: string; taskIds: string[] } | null;
-  setMetricModal: (m: { title: string; taskIds: string[] } | null) => void;
+  /* Drill-down sheet. `taskIds` covers the common case; `rows` lets a card whose
+     subject isn't a task (projects, departments) drill down too, each row
+     carrying its own open action. `viewAll` keeps the full-page route reachable
+     from inside the sheet instead of hijacking the card click. */
+  metricModal: {
+    title: string;
+    subtitle?: string;
+    taskIds?: string[];
+    rows?: { id: string; label: string; meta?: string; sub?: string; open?: () => void }[];
+    viewAll?: { label: string; run: () => void };
+  } | null;
+  setMetricModal: (m: {
+    title: string;
+    subtitle?: string;
+    taskIds?: string[];
+    rows?: { id: string; label: string; meta?: string; sub?: string; open?: () => void }[];
+    viewAll?: { label: string; run: () => void };
+  } | null) => void;
   showPortal: boolean;
   setShowPortal: (v: boolean) => void;
   escStack: React.MutableRefObject<Map<string, () => void>>;
@@ -149,7 +165,13 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [quickAddStatus, setQuickAddStatus] = useState("Not Started");
   const [showPalette, setShowPalette] = useState(false);
-  const [metricModal, setMetricModal] = useState<{ title: string; taskIds: string[] } | null>(null);
+  const [metricModal, setMetricModal] = useState<{
+    title: string;
+    subtitle?: string;
+    taskIds?: string[];
+    rows?: { id: string; label: string; meta?: string; sub?: string; open?: () => void }[];
+    viewAll?: { label: string; run: () => void };
+  } | null>(null);
   const [showPortal, setShowPortal] = useState(false);
   const [detailPopup, setDetailPopup] = useState<{ type: string; id: string } | null>(null);
   const [docDetailId, setDocDetailId] = useState<string | null>(null);

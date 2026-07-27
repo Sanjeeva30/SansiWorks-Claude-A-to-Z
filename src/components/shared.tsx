@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useStore } from "@/lib/store";
 import { useUI } from "@/lib/ui";
 import { initials, Profile, STATUS_COLORS } from "@/lib/types";
-import { relTime, fmtShort } from "@/lib/dates";
+import { relTime, fmtShort, todayIso } from "@/lib/dates";
 import { readableTextOn } from "@/lib/colors";
 import { efficiencyScore, tasksOfPerson, isOpen, isOverdue, onTimeStats, EFFICIENCY_EXPLAINER } from "@/lib/logic";
 import { IconBell, IconMoon, IconSparkle, IconSun, IconWhatsApp, IconX } from "./icons";
@@ -502,33 +502,106 @@ export function ProfileModal() {
 /* ---------- Metric detail modal (shared) ---------- */
 export function MetricModal() {
   const { metricModal, setMetricModal, setActiveTaskId } = useUI();
-  const { tasks } = useStore();
+  const { tasks, profiles, lists, spaces } = useStore();
   const trapRef = useFocusTrap(!!metricModal);
   if (!metricModal) return null;
-  const rows = tasks.filter((t) => metricModal.taskIds.includes(t.id));
+
+  const close = () => setMetricModal(null);
+  const ids = metricModal.taskIds || [];
+  // Preserve the order the caller passed rather than the store's order — a card
+  // that drills into "most overdue first" should open showing that order.
+  const taskRows = ids
+    .map((id) => tasks.find((t) => t.id === id))
+    .filter((t): t is NonNullable<typeof t> => !!t);
+
+  const pathOf = (t: { list_id: string | null }) => {
+    if (!t.list_id) return "Personal";
+    const l = lists.find((x) => x.id === t.list_id);
+    const sp = spaces.find((x) => x.id === l?.space_id);
+    return [sp?.name, l?.name].filter(Boolean).join(" / ") || "—";
+  };
+  const nameOf = (pid: string | null) => profiles.find((p) => p.id === pid)?.name.split(" ")[0] || null;
+
+  const custom = metricModal.rows || [];
+  const count = taskRows.length + custom.length;
+
   return (
     <div
+      className="sw-sheet-scrim"
       style={{ position: "fixed", inset: 0, background: "rgba(23,18,15,0.45)", backdropFilter: "blur(2px)", zIndex: 58, display: "flex", alignItems: "center", justifyContent: "center" }}
-      onClick={() => setMetricModal(null)}
+      onClick={close}
     >
-      <div ref={trapRef} role="dialog" aria-modal="true" aria-label={metricModal.title} onClick={(e) => e.stopPropagation()} className="sw-modal-card" style={{ width: 460, maxWidth: "92vw", maxHeight: "80vh", overflowY: "auto", background: "var(--sw-card)", borderRadius: 16, boxShadow: "0 30px 90px rgba(23,18,15,0.35)", padding: "22px 24px", animation: "swModalIn .18s ease" }}>
-        <div style={{ display: "flex", alignItems: "center", marginBottom: 14 }}>
-          <h3 style={{ margin: 0, fontSize: 15.5, fontWeight: 400, flex: 1 }}>{metricModal.title}</h3>
-          <button onClick={() => setMetricModal(null)} aria-label="Close" style={{ border: "none", background: "var(--sw-hover)", width: 26, height: 26, borderRadius: 99, cursor: "pointer", fontSize: 13, color: "var(--sw-text-soft)" }}><IconX /></button>
+      <div
+        ref={trapRef} role="dialog" aria-modal="true" aria-label={metricModal.title}
+        onClick={(e) => e.stopPropagation()}
+        className="sw-sheet"
+        style={{ width: 480, maxWidth: "92vw", maxHeight: "80vh", display: "flex", flexDirection: "column", background: "var(--sw-card)", borderRadius: 16, boxShadow: "0 30px 90px rgba(23,18,15,0.35)", animation: "swModalIn .18s ease" }}
+      >
+        {/* Grabber: only visible in the phone bottom-sheet layout, where it signals
+            the panel is dismissible by tapping away. */}
+        <div className="sw-sheet-grabber" aria-hidden="true" />
+
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "18px 20px 12px" }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <h3 style={{ margin: 0, fontSize: 15.5, fontWeight: 400 }}>{metricModal.title}</h3>
+            <p style={{ margin: "3px 0 0", fontSize: 11.5, color: "var(--sw-muted)" }}>
+              {metricModal.subtitle || `${count} ${count === 1 ? "item" : "items"}`}
+            </p>
+          </div>
+          <button onClick={close} aria-label="Close" style={{ border: "none", background: "var(--sw-hover)", width: 30, height: 30, borderRadius: 99, cursor: "pointer", fontSize: 13, color: "var(--sw-text-soft)", flex: "none" }}><IconX /></button>
         </div>
-        {rows.map((t) => (
-          <button
-            key={t.id}
-            className="sw-row"
-            onClick={() => { setMetricModal(null); setActiveTaskId(t.id); }}
-            style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left", padding: "9px 2px", border: "none", borderBottom: "1px solid var(--sw-hair)", background: "none", cursor: "pointer" }}
-          >
-            <span style={{ width: 7, height: 7, borderRadius: 99, background: STATUS_COLORS[t.status], flex: "none" }} />
-            <span style={{ flex: 1, fontSize: 12.5, color: "var(--sw-text)" }}>{t.name}</span>
-            <span style={{ fontSize: 11.5, color: "var(--sw-muted)" }}>{t.due ? fmtShort(t.due) : ""}</span>
-          </button>
-        ))}
-        {!rows.length && <p style={{ margin: 0, fontSize: 12, color: "var(--sw-muted)" }}>Nothing to show.</p>}
+
+        <div style={{ flex: 1, overflowY: "auto", padding: "0 20px" }}>
+          {taskRows.map((t) => (
+            <button
+              key={t.id}
+              className="sw-row"
+              onClick={() => { close(); setActiveTaskId(t.id); }}
+              style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left", padding: "11px 4px", border: "none", borderBottom: "1px solid var(--sw-hair)", background: "none", cursor: "pointer" }}
+            >
+              <span style={{ width: 7, height: 7, borderRadius: 99, background: STATUS_COLORS[t.status], flex: "none" }} />
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: "block", fontSize: 12.5, color: "var(--sw-text)" }}>{t.name}</span>
+                {/* Context line — a bare list of names isn't a drill-down. */}
+                <span style={{ display: "block", fontSize: 11, color: "var(--sw-muted)", marginTop: 2 }}>
+                  {[pathOf(t), nameOf(t.assignee_id), t.priority].filter(Boolean).join(" · ")}
+                </span>
+              </span>
+              <span style={{ fontSize: 11.5, color: t.due && t.due < todayIso() && t.status !== "Done" ? "var(--sw-on-red)" : "var(--sw-muted)", flex: "none" }}>
+                {t.due ? fmtShort(t.due) : ""}
+              </span>
+            </button>
+          ))}
+
+          {custom.map((r) => (
+            <button
+              key={r.id}
+              className="sw-row"
+              onClick={() => { close(); r.open?.(); }}
+              disabled={!r.open}
+              style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left", padding: "11px 4px", border: "none", borderBottom: "1px solid var(--sw-hair)", background: "none", cursor: r.open ? "pointer" : "default" }}
+            >
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: "block", fontSize: 12.5, color: "var(--sw-text)" }}>{r.label}</span>
+                {r.sub && <span style={{ display: "block", fontSize: 11, color: "var(--sw-muted)", marginTop: 2 }}>{r.sub}</span>}
+              </span>
+              {r.meta && <span style={{ fontSize: 11.5, color: "var(--sw-muted)", flex: "none" }}>{r.meta}</span>}
+            </button>
+          ))}
+
+          {!count && <p style={{ margin: "4px 0 0", fontSize: 12.5, color: "var(--sw-muted)" }}>Nothing to show here right now.</p>}
+        </div>
+
+        {metricModal.viewAll && (
+          <div style={{ padding: "12px 20px", borderTop: "1px solid var(--sw-hair)" }}>
+            <button
+              onClick={() => { const go = metricModal.viewAll!.run; close(); go(); }}
+              style={{ width: "100%", padding: "10px 14px", borderRadius: 999, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", color: "var(--sw-text-soft)", fontSize: 12.5, cursor: "pointer" }}
+            >
+              {metricModal.viewAll.label}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -409,6 +409,40 @@ html, body { max-width: 100%; overflow-x: hidden; }
 
 /* (superseded: these rules are now container-query driven above) */
 
+/* ---- drill-down sheet ----
+   Metric cards open this instead of navigating, so it has to be comfortable on a
+   phone held one-handed. Above 640px it is a centred dialog. At or below, it
+   becomes a bottom sheet: anchored to the thumb, sized to its content rather than
+   forced full-screen (most drill-downs are a handful of rows, and a full-screen
+   takeover for four items feels like a page change — which is exactly what we're
+   avoiding). Safe-area padding keeps the last row clear of the home indicator. */
+.sw-sheet-grabber { display: none; }
+
+@media (max-width: 640px) {
+  .sw-sheet-scrim {
+    align-items: flex-end !important;
+    justify-content: stretch !important;
+  }
+  .sw-sheet {
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: 85dvh !important;
+    border-radius: 18px 18px 0 0 !important;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    animation: swSheetUp .2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  }
+  .sw-sheet-grabber {
+    display: block;
+    width: 36px;
+    height: 4px;
+    border-radius: 99px;
+    background: var(--sw-hair);
+    margin: 8px auto 0;
+    flex: none;
+  }
+}
+@keyframes swSheetUp { from { transform: translateY(14px); opacity: 0; } to { transform: none; opacity: 1; } }
+
 /* horizontally-scrolling surfaces (kanban, gantt, wide tables):
    momentum scroll on iOS + a visible scroll affordance.
 
