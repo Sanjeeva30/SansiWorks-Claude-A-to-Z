@@ -1,7 +1,7 @@
 # SansiWorks — Session Handoff
 
 > Kept current at every major milestone so any fresh session (or fresh context window)
-> can pick up without re-deriving state. Last updated: **2026-07-27** (auth QA).
+> can pick up without re-deriving state. Last updated: **2026-07-27** (real-invite security incident).
 
 ## What this project is
 1:1 rebuild of the SansiWorks design (Sansico Group PM workspace) on Next.js 16 + Supabase
@@ -128,6 +128,35 @@ Two flows were not merely rough — they were broken or acted on the wrong accou
 3. **Leaked Password Protection** — still off (flagged since the first audit).
 4. **`EMAIL_FROM`** env var: sender still falls back to a personal Gmail, which
    cannot align SPF/DKIM with sansico.com. Set to e.g. `noreply@sansico.com`.
+
+## Real-invite security incident (2026-07-27)
+A real invite (not a test seed) was sent to `sanjeeva_gunawardena@yahoo.com`, invited
+at `l6` (Staff). After accepting, that account could see and enter the full Admin
+console — traced to a client-side-only gap: the sidebar's "Admin console" button and
+the panel's own render were gated on nothing but local nav state, not role. Fixed by
+gating all three surfaces (sidebar link, command palette entry, and the panel's actual
+render — not just the button) on `is_super || level_id in (l1,l2,l2r,l3)`. Confirmed via
+DB query the account was never really `is_super`/elevated — it could only *see* the
+panel, not silently gain real rights, **except** for one thing it did use: the
+`profiles` table's UPDATE policy allowed `id = auth.uid()` (self-updates) with **no
+`WITH CHECK` clause**, meaning any authenticated user could have set `is_super = true`
+on themselves directly via the Supabase client. Closed with a `BEFORE UPDATE` trigger
+(`prevent_self_privilege_escalation`) that reverts `is_super`/`level_id` changes unless
+the acting session is already an admin — DB-level, applied directly in Supabase, not
+dependent on app code. Also tightened `invites` SELECT from `USING(true)` (any
+authenticated user could read every pending invite's token company-wide) to admin-only;
+invite acceptance uses `SECURITY DEFINER` RPCs that bypass RLS, so nothing depended on
+the open read. Also found: the same "optimistic UI + audit_log write regardless of
+whether the DB update actually succeeded" pattern (see the invite-toast bug above)
+existed on the "Make super admin" toggle too — now checks the real Supabase result
+before patching local state or writing to `audit_log`, and the button itself is now
+restricted to `me.is_super` (previously any admin-tab-visible user, including a plain
+Department Head, could grant super-admin to someone else).
+**Lesson for future admin-surface work: a client-side-only gate is not a gate.** Every
+new admin action needs (1) a role check before the button renders, (2) the mutation
+itself checked/gated (RLS `WITH CHECK`, or a trigger for column-level rules RLS can't
+express), and (3) the audit/success-toast conditioned on the real DB result — not
+assumed.
 
 ### Known, not yet fixed
 - Invites always use the sender's own `department_id` — no department picker, so
