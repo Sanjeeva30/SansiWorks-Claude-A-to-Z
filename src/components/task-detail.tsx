@@ -31,6 +31,12 @@ const label: React.CSSProperties = { fontSize: 12, fontWeight: 400, color: "var(
 export function TaskDetailSlideOver() {
   const { activeTaskId, setActiveTaskId, pushToast, openProfile } = useUI();
   const store = useStore();
+  // This slide-over is mounted on every screen but only renders when a task is
+  // open, so the deferred pull is gated on that — otherwise it would fire on
+  // sign-in and defeat the split.
+  const { ensureDeferred } = store;
+  useEffect(() => { if (activeTaskId) ensureDeferred(); }, [activeTaskId, ensureDeferred]);
+
   const { me, tasks, profiles, levels, lists, spaces, activity, subtasks, deps, approvals, comments, patch, supabase } = store;
   const [tab, setTab] = useState<"details" | "activity" | "files" | "comments">("details");
   const [commentDraft, setCommentDraft] = useState("");

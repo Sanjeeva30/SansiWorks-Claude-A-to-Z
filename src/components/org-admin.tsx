@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useStore } from "@/lib/store";
 import { useUI } from "@/lib/ui";
 import { OrgUnitType, ORG_UNIT_TYPES, PermissionTemplate } from "@/lib/types";
@@ -33,6 +33,11 @@ function isBoardish(me: { is_super?: boolean; level_id?: string } | null) {
 
 export function OrgAdmin({ tab }: { tab: "organisation" | "permissions" }) {
   const store = useStore();
+  // Admin/drill-down tables are not part of the sign-in payload; pull them on
+  // first use so the initial load stays lean.
+  const { ensureDeferred } = useStore();
+  useEffect(() => { ensureDeferred(); }, [ensureDeferred]);
+
   const { me, profiles, departments, deptHeads, assignments, permissionTemplates, levels, supabase, patch, refresh } = store;
 
   const { pushToast, openDetail } = useUI();

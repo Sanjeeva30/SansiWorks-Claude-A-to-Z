@@ -7,17 +7,96 @@ import {
   Reminder, Subtask, Task, TaskActivity, Template,
 } from "./types";
 
-// Every table the app reads, kept live via one Realtime channel (see below) —
-// any insert/update/delete anywhere refetches the whole store (a full sync,
-// not a per-row patch: simpler and safer than hand-writing ~30 reducers, at
-// the cost of a refetch instead of a surgical update on every change).
-const REALTIME_TABLES = [
-  "profiles", "levels", "org_units", "org_unit_heads", "org_unit_members", "assignments", "permission_templates",
-  "spaces", "lists", "tasks", "task_raci", "subtasks", "reminders", "task_dependencies", "task_activity",
-  "docs", "doc_versions", "forms", "form_submissions", "notifications", "notification_prefs",
-  "approvals", "invites", "board_requests", "nominations", "dept_proposals", "audit_log",
-  "templates", "custom_fields", "automations", "features", "saved_views", "pins", "comments",
+/* ============================================================================
+   Sync strategy
+
+   This used to load all ~34 tables on sign-in and, on ANY realtime event from
+   ANY table, refetch all 34 again. Measured: a single row change fanned out to
+   34 queries pulling the whole database. That is fine at 18 users and becomes
+   the scale ceiling well before 100 — every user's edit costs every connected
+   client a full re-read of everything.
+
+   Two changes:
+
+   1. ROW-LEVEL SYNC. A realtime event now patches just the row it describes
+      (ROW_SYNC below). Only a handful of tables that feed derived shapes —
+      raci arrays folded into tasks, key/value maps, composite-key join tables —
+      still fall back to a debounced full refresh, and those change rarely.
+
+   2. DEFERRED BUNDLE. Admin and drill-down tables (audit_log alone was 2000
+      rows on every load) no longer load at sign-in. A screen that needs them
+      calls ensureDeferred() in an effect and gets them on first use.
+   ========================================================================== */
+
+/** Tables whose realtime events can be applied surgically to one store array. */
+type RowSpec = {
+  key: keyof StoreData;
+  /** Row belongs to a single user — ignore other people's rows even if RLS lets one through. */
+  own?: boolean;
+  /** Keeps the array in the same order the initial query used. */
+  sort?: (a: Record<string, unknown>, b: Record<string, unknown>) => number;
+  /** Upper bound so a long-lived tab can't grow an append-only feed forever. */
+  cap?: number;
+};
+
+const byDueAsc = (a: Record<string, unknown>, b: Record<string, unknown>) => {
+  const x = a.due as string | null, y = b.due as string | null;
+  if (!x && !y) return 0;
+  if (!x) return 1;            // nulls last, matching the initial query
+  if (!y) return -1;
+  return x < y ? -1 : x > y ? 1 : 0;
+};
+const byCreatedDesc = (a: Record<string, unknown>, b: Record<string, unknown>) =>
+  String(b.created_at || "").localeCompare(String(a.created_at || ""));
+const bySortAsc = (a: Record<string, unknown>, b: Record<string, unknown>) =>
+  Number(a.sort ?? 0) - Number(b.sort ?? 0);
+
+const ROW_SYNC: Record<string, RowSpec> = {
+  tasks:              { key: "tasks", sort: byDueAsc },
+  subtasks:           { key: "subtasks", sort: bySortAsc },
+  task_dependencies:  { key: "deps" },
+  task_activity:      { key: "activity", sort: byCreatedDesc, cap: 200 },
+  docs:               { key: "docs" },
+  doc_versions:       { key: "docVersions" },
+  forms:              { key: "forms" },
+  form_submissions:   { key: "formSubmissions" },
+  approvals:          { key: "approvals", sort: byCreatedDesc, cap: 300 },
+  comments:           { key: "comments" },
+  profiles:           { key: "profiles" },
+  levels:             { key: "levels" },
+  org_units:          { key: "departments" },
+  assignments:        { key: "assignments" },
+  permission_templates: { key: "permissionTemplates" },
+  spaces:             { key: "spaces", sort: bySortAsc },
+  lists:              { key: "lists", sort: bySortAsc },
+  invites:            { key: "invites", sort: byCreatedDesc },
+  board_requests:     { key: "boardRequests" },
+  nominations:        { key: "nominations" },
+  dept_proposals:     { key: "proposals" },
+  audit_log:          { key: "audit", sort: byCreatedDesc, cap: 2000 },
+  templates:          { key: "templates" },
+  custom_fields:      { key: "customFields" },
+  automations:        { key: "automations" },
+  notifications:      { key: "notifications", own: true, sort: byCreatedDesc, cap: 100 },
+  reminders:          { key: "reminders", own: true },
+  pins:               { key: "pins", own: true, sort: bySortAsc },
+  saved_views:        { key: "savedViews", own: true },
+};
+
+/* Not row-syncable, so they still trigger a debounced full refresh:
+   - task_raci        → folded into tasks[].raci_c / raci_i, not its own array
+   - notification_prefs, features → key/value maps, not id-keyed arrays
+   - org_unit_heads, org_unit_members → composite keys, no id column
+   All are low-frequency (org structure and settings), so a refresh is fine. */
+const FULL_REFRESH_TABLES = [
+  "task_raci", "notification_prefs", "features", "org_unit_heads", "org_unit_members",
 ];
+
+/** Loaded only when a screen actually needs them. */
+const DEFERRED_KEYS = [
+  "audit", "invites", "boardRequests", "nominations", "proposals", "permissionTemplates",
+  "templates", "customFields", "automations", "docVersions", "formSubmissions",
+] as const;
 
 export interface StoreData {
   me: Profile | null;
@@ -58,6 +137,10 @@ export interface StoreData {
 
 interface StoreCtx extends StoreData {
   loading: boolean;
+  /** True once the deferred bundle has arrived, so screens can show a loading state. */
+  deferredReady: boolean;
+  /** Call from an effect on any screen that reads admin/drill-down tables. */
+  ensureDeferred: () => void;
   refresh: () => Promise<void>;
   patch: <K extends keyof StoreData>(key: K, value: StoreData[K]) => void;
   supabase: ReturnType<typeof createClient>;
@@ -84,17 +167,21 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [supabase] = useState(() => createClient());
   const [data, setData] = useState<StoreData>(EMPTY);
   const [loading, setLoading] = useState(true);
+  const [deferredReady, setDeferredReady] = useState(false);
+  const uidRef = useRef<string | null>(null);
+  const deferredWanted = useRef(false);
 
+  /* ---- core load: everything the main screens render from ---- */
   const refresh = useCallback(async () => {
     const { data: auth } = await supabase.auth.getUser();
     const uid = auth.user?.id;
     if (!uid) return;
+    uidRef.current = uid;
 
     const [
-      profiles, levels, departments, deptHeads, deptMembers, assignments, permissionTemplates, spaces, lists,
-      tasks, raci, subtasks, reminders, deps, activity, docs, docVersions, forms, formSubmissions, notifications, prefs,
-      approvals, invites, boardRequests, nominations, proposals, audit,
-      templates, customFields, automations, features, savedViews, pins, comments,
+      profiles, levels, departments, deptHeads, deptMembers, assignments, spaces, lists,
+      tasks, raci, subtasks, reminders, deps, activity, docs, forms, notifications, prefs,
+      approvals, features, savedViews, pins, comments,
     ] = await Promise.all([
       supabase.from("profiles").select("*").order("name"),
       supabase.from("levels").select("*").order("sort"),
@@ -102,7 +189,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       supabase.from("org_unit_heads").select("*"),
       supabase.from("org_unit_members").select("*"),
       supabase.from("assignments").select("*"),
-      supabase.from("permission_templates").select("*").order("name"),
       supabase.from("spaces").select("*").order("sort"),
       supabase.from("lists").select("*").order("sort"),
       supabase.from("tasks").select("*").order("due", { ascending: true, nullsFirst: false }),
@@ -112,20 +198,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       supabase.from("task_dependencies").select("*"),
       supabase.from("task_activity").select("*").order("created_at", { ascending: false }).limit(200),
       supabase.from("docs").select("*").order("created_at"),
-      supabase.from("doc_versions").select("*").order("version_number", { ascending: false }),
       supabase.from("forms").select("*").order("created_at"),
-      supabase.from("form_submissions").select("*").order("submitted_at", { ascending: false }),
       supabase.from("notifications").select("*").eq("profile_id", uid).order("created_at", { ascending: false }).limit(100),
       supabase.from("notification_prefs").select("*").eq("profile_id", uid),
       supabase.from("approvals").select("*").order("created_at", { ascending: false }).limit(300),
-      supabase.from("invites").select("*").order("created_at", { ascending: false }),
-      supabase.from("board_requests").select("*").eq("status", "pending"),
-      supabase.from("nominations").select("*").eq("status", "pending"),
-      supabase.from("dept_proposals").select("*").eq("status", "pending"),
-      supabase.from("audit_log").select("*").order("created_at", { ascending: false }).limit(2000),
-      supabase.from("templates").select("*").order("created_at"),
-      supabase.from("custom_fields").select("*").order("created_at"),
-      supabase.from("automations").select("*").order("created_at"),
       supabase.from("features").select("*"),
       supabase.from("saved_views").select("*").eq("profile_id", uid).order("created_at"),
       supabase.from("pins").select("*").eq("profile_id", uid).order("sort"),
@@ -152,7 +228,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     for (const f of features.data || []) featMap[f.key] = f.enabled;
 
     const allProfiles = (profiles.data || []) as Profile[];
-    setData({
+    setData((prev) => ({
+      ...prev, // keep any deferred tables already loaded
       me: allProfiles.find((p) => p.id === uid) || null,
       profiles: allProfiles,
       levels: (levels.data || []) as Level[],
@@ -160,7 +237,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       deptHeads: deptHeads.data || [],
       deptMembers: deptMembers.data || [],
       assignments: (assignments.data || []) as Assignment[],
-      permissionTemplates: (permissionTemplates.data || []) as PermissionTemplate[],
       spaces: (spaces.data || []) as Space[],
       lists: (lists.data || []) as List[],
       tasks: allTasks,
@@ -169,12 +245,41 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       deps: (deps.data || []) as Dependency[],
       activity: (activity.data || []) as TaskActivity[],
       docs: (docs.data || []) as Doc[],
-      docVersions: (docVersions.data || []) as DocVersion[],
       forms: (forms.data || []) as FormDef[],
-      formSubmissions: (formSubmissions.data || []) as FormSubmission[],
       notifications: (notifications.data || []) as Notification[],
       prefs: prefMap,
       approvals: (approvals.data || []) as Approval[],
+      features: featMap,
+      savedViews: savedViews.data || [],
+      pins: (pins.data || []) as Pin[],
+      comments: (comments.data || []) as Comment[],
+    }));
+    setLoading(false);
+  }, [supabase]);
+
+  /* ---- deferred load: admin console, doc history, form submissions ---- */
+  const loadDeferred = useCallback(async () => {
+    const [
+      permissionTemplates, docVersions, formSubmissions, invites,
+      boardRequests, nominations, proposals, audit, templates, customFields, automations,
+    ] = await Promise.all([
+      supabase.from("permission_templates").select("*").order("name"),
+      supabase.from("doc_versions").select("*").order("version_number", { ascending: false }),
+      supabase.from("form_submissions").select("*").order("submitted_at", { ascending: false }),
+      supabase.from("invites").select("*").order("created_at", { ascending: false }),
+      supabase.from("board_requests").select("*").eq("status", "pending"),
+      supabase.from("nominations").select("*").eq("status", "pending"),
+      supabase.from("dept_proposals").select("*").eq("status", "pending"),
+      supabase.from("audit_log").select("*").order("created_at", { ascending: false }).limit(2000),
+      supabase.from("templates").select("*").order("created_at"),
+      supabase.from("custom_fields").select("*").order("created_at"),
+      supabase.from("automations").select("*").order("created_at"),
+    ]);
+    setData((d) => ({
+      ...d,
+      permissionTemplates: (permissionTemplates.data || []) as PermissionTemplate[],
+      docVersions: (docVersions.data || []) as DocVersion[],
+      formSubmissions: (formSubmissions.data || []) as FormSubmission[],
       invites: (invites.data || []) as Invite[],
       boardRequests: (boardRequests.data || []) as BoardRequest[],
       nominations: (nominations.data || []) as Nomination[],
@@ -183,33 +288,83 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       templates: (templates.data || []).map((t) => ({ ...t, checklist: t.checklist || [] })) as Template[],
       customFields: (customFields.data || []) as CustomField[],
       automations: (automations.data || []) as Automation[],
-      features: featMap,
-      savedViews: savedViews.data || [],
-      pins: (pins.data || []) as Pin[],
-      comments: (comments.data || []) as Comment[],
-    });
-    setLoading(false);
+    }));
+    setDeferredReady(true);
   }, [supabase]);
+
+  const ensureDeferred = useCallback(() => {
+    if (deferredWanted.current) return;
+    deferredWanted.current = true;
+    loadDeferred();
+  }, [loadDeferred]);
 
   useEffect(() => {
     refresh();
   }, [refresh]);
 
-  // Live sync: one Realtime channel across every table the app reads. Any
-  // change from any user (or another of your own tabs) debounces a full
-  // refresh() — so the whole store stays live without per-table reducers.
+  /* ---- live sync ---- */
   const refreshRef = useRef(refresh);
   refreshRef.current = refresh;
+
   useEffect(() => {
-    const debounceMs = 400;
     let timer: ReturnType<typeof setTimeout> | null = null;
-    const scheduleRefresh = () => {
+    const scheduleFullRefresh = () => {
       if (timer) clearTimeout(timer);
-      timer = setTimeout(() => refreshRef.current(), debounceMs);
+      timer = setTimeout(() => refreshRef.current(), 400);
     };
+
+    /** Apply one realtime event to one array in the store. */
+    const applyRow = (table: string, evt: string, next: Record<string, unknown> | null, prevRow: Record<string, unknown> | null) => {
+      const spec = ROW_SYNC[table];
+      if (!spec) return;
+      const id = (next?.id ?? prevRow?.id) as string | undefined;
+      if (!id) return; // DELETE without a primary key — nothing safe to do
+
+      setData((d) => {
+        const current = d[spec.key] as unknown as Record<string, unknown>[];
+        if (!Array.isArray(current)) return d;
+
+        // A deferred table nobody has loaded yet: don't half-populate it, the
+        // eventual fetch will include this row anyway.
+        if ((DEFERRED_KEYS as readonly string[]).includes(spec.key as string) && !deferredWanted.current) return d;
+
+        if (evt === "DELETE") {
+          const after = current.filter((r) => r.id !== id);
+          return after.length === current.length ? d : { ...d, [spec.key]: after };
+        }
+        if (!next) return d;
+        if (spec.own && next.profile_id && next.profile_id !== uidRef.current) return d;
+
+        let row = next;
+        if (table === "tasks") {
+          // tasks[] carries raci arrays folded in from task_raci; realtime only
+          // gives the tasks row, so preserve what we already resolved.
+          const existing = current.find((r) => r.id === id) as Task | undefined;
+          row = { ...next, raci_c: existing?.raci_c ?? [], raci_i: existing?.raci_i ?? [] };
+        }
+
+        const idx = current.findIndex((r) => r.id === id);
+        let after = idx >= 0
+          ? current.map((r, i) => (i === idx ? row : r))
+          : [...current, row];
+        if (spec.sort) after = [...after].sort(spec.sort);
+        if (spec.cap && after.length > spec.cap) after = after.slice(0, spec.cap);
+        return { ...d, [spec.key]: after };
+      });
+    };
+
     let channel = supabase.channel("db-sync");
-    for (const table of REALTIME_TABLES) {
-      channel = channel.on("postgres_changes" as never, { event: "*", schema: "public", table }, scheduleRefresh);
+    for (const table of Object.keys(ROW_SYNC)) {
+      channel = channel.on(
+        "postgres_changes" as never,
+        { event: "*", schema: "public", table },
+        (payload: { eventType: string; new: Record<string, unknown> | null; old: Record<string, unknown> | null }) => {
+          applyRow(table, payload.eventType, payload.new, payload.old);
+        }
+      );
+    }
+    for (const table of FULL_REFRESH_TABLES) {
+      channel = channel.on("postgres_changes" as never, { event: "*", schema: "public", table }, scheduleFullRefresh);
     }
     channel.subscribe();
     return () => {
@@ -228,7 +383,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const liveMe = data.me ? data.profiles.find((p) => p.id === data.me!.id) || data.me : null;
 
   return (
-    <Ctx.Provider value={{ ...data, me: liveMe, loading, refresh, patch, supabase }}>
+    <Ctx.Provider value={{ ...data, me: liveMe, loading, deferredReady, ensureDeferred, refresh, patch, supabase }}>
       {children}
     </Ctx.Provider>
   );

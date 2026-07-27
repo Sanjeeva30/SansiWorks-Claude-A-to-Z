@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useStore } from "@/lib/store";
 import { useUI } from "@/lib/ui";
 import { initials, DocVersion } from "@/lib/types";
@@ -25,7 +25,9 @@ const row = (label: string, value: React.ReactNode) => (
    audit entries, invites, org units, forms. Escape/X dismissible, never navigates. */
 export function EntityDetailModal() {
   const { detailPopup, closeDetail, openProfile, setActiveTaskId } = useUI();
-  const { profiles, departments, deptHeads, assignments, levels, audit, invites, forms, lists, spaces, tasks } = useStore();
+  const { profiles, departments, deptHeads, assignments, levels, audit, invites, forms, lists, spaces, tasks, ensureDeferred } = useStore();
+  // audit + invites are deferred; fetch only once the modal is actually opened.
+  useEffect(() => { if (detailPopup) ensureDeferred(); }, [detailPopup, ensureDeferred]);
   const trapRef = useFocusTrap(!!detailPopup);
   if (!detailPopup) return null;
   const { type, id } = detailPopup;
@@ -170,7 +172,9 @@ const REVIEW_COLOR: Record<string, string> = { pending: "var(--sw-muted)", appro
    Internal Audit) actions and the "submit a revision" flow. */
 export function DocDetailModal() {
   const { docDetailId, setDocDetailId, openProfile } = useUI();
-  const { docs, docVersions, profiles, departments, deptHeads, me, supabase, patch } = useStore();
+  const { docs, docVersions, profiles, departments, deptHeads, me, supabase, patch, ensureDeferred } = useStore();
+  // doc_versions is deferred — the revision trail is only needed once open.
+  useEffect(() => { if (docDetailId) ensureDeferred(); }, [docDetailId, ensureDeferred]);
   const [note, setNote] = useState("");
   const [revisionFile, setRevisionFile] = useState<File | null>(null);
   const [plainFile, setPlainFile] = useState<File | null>(null);

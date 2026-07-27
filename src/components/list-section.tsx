@@ -1,5 +1,5 @@
 "use client";
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useStore } from "@/lib/store";
 import { useUI } from "@/lib/ui";
@@ -17,6 +17,8 @@ const TYPE_ABBR: Record<string, string> = { text: "Tx", number: "#", select: "Dd
 
 export function ListSection() {
   const store = useStore();
+  const { ensureDeferred } = store;
+
   const {
     me, tasks, lists, spaces, profiles, templates, customFields, automations,
     savedViews, subtasks, deps, patch, supabase,
@@ -38,6 +40,12 @@ export function ListSection() {
   const [showFields, setShowFields] = useState(false);
   const [showAutomations, setShowAutomations] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
+
+  // templates / custom_fields / automations are deferred — only the Fields,
+  // Automations and Templates panels read them, and none is open by default.
+  useEffect(() => {
+    if (showFields || showAutomations || showTemplates) ensureDeferred();
+  }, [showFields, showAutomations, showTemplates, ensureDeferred]);
   const [showCreateTemplate, setShowCreateTemplate] = useState(false);
   const [expandedTemplate, setExpandedTemplate] = useState<string | null>(null);
   const [newFieldName, setNewFieldName] = useState("");

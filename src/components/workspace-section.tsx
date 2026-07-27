@@ -1,5 +1,5 @@
 "use client";
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useStore } from "@/lib/store";
 import { useUI } from "@/lib/ui";
 import { initials, Doc, PRIORITY_COLORS } from "@/lib/types";
@@ -58,6 +58,11 @@ const pillBtn = (color: string): React.CSSProperties => ({ padding: "6px 12px", 
 
 export function WorkspaceSection() {
   const store = useStore();
+  // Admin/drill-down tables are not part of the sign-in payload; pull them on
+  // first use so the initial load stays lean.
+  const { ensureDeferred } = useStore();
+  useEffect(() => { ensureDeferred(); }, [ensureDeferred]);
+
   const {
     me, profiles, tasks, lists, spaces, departments, deptHeads, deptMembers, levels, docs, docVersions, forms, formSubmissions,
     notifications, prefs, approvals, invites, boardRequests, nominations, proposals, audit, features,
