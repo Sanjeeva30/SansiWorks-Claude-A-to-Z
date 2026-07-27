@@ -1,7 +1,7 @@
 # SansiWorks — Session Handoff
 
 > Kept current at every major milestone so any fresh session (or fresh context window)
-> can pick up without re-deriving state. Last updated: **2026-07-26**.
+> can pick up without re-deriving state. Last updated: **2026-07-27**.
 
 ## What this project is
 1:1 rebuild of the SansiWorks design (Sansico Group PM workspace) on Next.js 16 + Supabase
@@ -75,14 +75,27 @@ Audit artifact: private Claude artifact "SansiWorks — Full QA & Improvement Au
       name its scope. Verified: "what is at risk this week?" -> "Across the company,
       12 tasks..." naming the same criticals the Overview flags; personal questions
       still answer personally.
-- [ ] **7. Scoped queries + row-level realtime.** Client still loads all 35 tables
-      in full and refetches everything on any change. Hard scale ceiling before
-      the 30-user seed. (`notifications`/`audit_log` reads are now RLS-scoped,
-      which already trims the two worst leaks.) ~1-2 wks.
-- [ ] **8. UX pass.** People list now sorts by workload (done). Remaining: tablet
-      ~800px density, empty states, recurring tasks, scroll affordances.
-- [ ] **9. Comments/@mentions + mention emails** — biggest missing collaboration
-      loop; schema/table already exist.
+- [x] **7. Scale ceiling removed.** Measured first: sign-in issued 34 queries, and
+      ANY row changing anywhere refetched all 34 on every connected client. Now
+      row-level realtime patches (ROW_SYNC, 29 tables; only 5 derived/composite-key
+      tables still full-refresh) plus a deferred bundle of 11 admin/drill-down
+      tables behind `ensureDeferred()`. **34 -> 23 requests on load (1431 -> 725ms);
+      one row change 34 -> 0 requests.** Gotcha for future work: the task slide-over
+      and detail modals mount on every screen, so their deferred pulls must be keyed
+      to the *open* state or the split silently reverts.
+- [x] **8. UX pass.** Recurring tasks were a lie — `recur` was collected and stored
+      since day one and never read; completing one now rolls the next forward
+      (UTC-midday parsing so DST can't shift the date; the unique index guards
+      double-spawn; 6 tests). Metric row: 5 explicit cols, auto-fit below 900px
+      container (plain auto-fit gave 6 tracks for 5 cards). First-run card on Home
+      for people with nothing assigned. Scroll-edge cues on kanban/gantt/calendar.
+- [x] **9. Mentions reach email.** Comments/@mentions turned out already built;
+      the gap was email. Fixing it surfaced two more bugs: `digestOff` used
+      `[].every()` which is vacuously true, so **11 of 17 people were silently
+      opted out of all digests**, and anyone with no tasks was skipped even with a
+      mention waiting. Digest now has a Mentions & replies section, email is
+      opt-OUT, and `?dryRun=1` / `?html=<email>` let the digest be tested without
+      mailing the company (BREVO_API_KEY is live).
 
 ## Status: open
 - **Mention-digest-email gap** — @mention notifications don't reach the email digest. Approved to build.
