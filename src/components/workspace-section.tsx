@@ -740,16 +740,24 @@ export function WorkspaceSection() {
                         </div>
                         <div style={{ fontSize: 11, color: "var(--sw-muted)" }}>{u.email}</div>
                       </button>
-                      <button
-                        onClick={async () => {
-                          patch("profiles", profiles.map((p) => (p.id === u.id ? { ...p, is_super: !u.is_super } : p)));
-                          await supabase.from("profiles").update({ is_super: !u.is_super }).eq("id", u.id);
-                          if (me) { const { logAudit } = await import("@/lib/actions"); await logAudit(supabase, me.id, u.is_super ? "revoked super admin from" : "granted super admin to", u.name); }
-                        }}
-                        style={pillBtn("var(--sw-text-soft)")}
-                      >
-                        {u.is_super ? "Make member" : "Make super admin"}
-                      </button>
+                      {me?.is_super && (
+                        <button
+                          onClick={async () => {
+                            const nextSuper = !u.is_super;
+                            const { data, error } = await supabase.from("profiles").update({ is_super: nextSuper }).eq("id", u.id).select().single();
+                            if (error || !data) {
+                              pushToast(`Couldn't update ${u.name.split(" ")[0]} — ${error?.message || "the change didn't apply"}.`);
+                              return;
+                            }
+                            patch("profiles", profiles.map((p) => (p.id === u.id ? { ...p, is_super: nextSuper } : p)));
+                            const { logAudit } = await import("@/lib/actions");
+                            await logAudit(supabase, me.id, nextSuper ? "granted super admin to" : "revoked super admin from", u.name);
+                          }}
+                          style={pillBtn("var(--sw-text-soft)")}
+                        >
+                          {u.is_super ? "Make member" : "Make super admin"}
+                        </button>
+                      )}
                       <button onClick={() => pushToast(`${u.name.split(" ")[0]} suspended (demo)`)} style={pillBtn("var(--sw-on-red)")}>Suspend</button>
                     </div>
                   ))}
