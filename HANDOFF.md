@@ -98,8 +98,8 @@ Audit artifact: private Claude artifact "SansiWorks — Full QA & Improvement Au
       mailing the company (BREVO_API_KEY is live).
 
 ## Status: open
-- **Mention-digest-email gap** — @mention notifications don't reach the email digest. Approved to build.
-- Phase 4 (Sansi 2.0 info-finder, realtime multiplayer, comments/@mentions) — not started.
+- Phase 4 remainder: **Sansi 2.0 info-finder** and **realtime multiplayer presence**.
+  (Comments/@mentions and the mention-email gap are done — see roadmap 9.)
 - 30-user seed — explicitly deferred by user ("don't build the seed data now").
 - User's screenshot backlog (feedback given, plan pending user prioritization): drill-down
   everywhere, Sansi info-finder, efficiency ranking dashboard, collapse/expand-all spaces,
