@@ -71,9 +71,9 @@ export function OnboardingChecklist() {
               <div style={{ fontSize: 11, color: "var(--sw-muted)", fontWeight: 600 }}>{doneCount} of {items.length} complete</div>
             </div>
             <button
-              onClick={() => hasPhoto && setStage("closed")}
-              title={hasPhoto ? "Minimize" : "A profile photo is required before you can dismiss this"}
-              style={{ border: "none", background: "var(--sw-sidebar)", width: 24, height: 24, borderRadius: 99, cursor: hasPhoto ? "pointer" : "not-allowed", fontSize: 12, color: hasPhoto ? "var(--sw-text-soft)" : "var(--sw-hair)" }}
+              onClick={() => setStage("closed")}
+              title="Minimize"
+              style={{ border: "none", background: "var(--sw-sidebar)", width: 24, height: 24, borderRadius: 99, cursor: "pointer", fontSize: 12, color: "var(--sw-text-soft)" }}
             >✕</button>
           </div>
           <div style={{ height: 4, background: "var(--sw-hover)" }}>
@@ -91,7 +91,7 @@ export function OnboardingChecklist() {
                     </span>
                     <span style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 12.5, fontWeight: 700, color: isDone ? "var(--sw-muted)" : "var(--sw-text)", textDecoration: isDone ? "line-through" : "none" }}>{ci.label}</div>
-                      <div style={{ fontSize: 11, color: "var(--sw-muted)", marginTop: 1 }}>{isDone ? "Done — thanks!" : "Required · click the avatar to upload"}</div>
+                      <div style={{ fontSize: 11, color: "var(--sw-muted)", marginTop: 1 }}>{isDone ? "Done — thanks!" : "Optional · click the avatar to upload"}</div>
                     </span>
                   </div>
                 );
