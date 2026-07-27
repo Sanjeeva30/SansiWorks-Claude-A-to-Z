@@ -5,6 +5,12 @@ import { atRiskTasks, workloadPct } from "@/lib/logic";
 import type { Task, Profile } from "@/lib/types";
 import { timingSafeEqual } from "node:crypto";
 
+/* Comment bodies are user-authored text going into an HTML email — escape them
+   so a task title or comment containing markup can't break or inject into it. */
+function escapeHtml(v: string): string {
+  return v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
 /* Constant-time string compare so a caller can't discover CRON_SECRET one
    character at a time from response-timing differences. */
 function timingSafeEqualStr(a: string, b: string): boolean {
@@ -51,6 +57,11 @@ export async function GET(req: NextRequest) {
   if (!expected || !presented || !timingSafeEqualStr(presented, expected)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
+  /* dryRun builds every email exactly as a real run would but sends nothing and
+     returns a per-recipient summary. Needed to verify digest changes without
+     mailing the whole company, and useful for checking who a run would reach
+     before scheduling it. */
+  const dryRun = req.nextUrl.searchParams.get("dryRun") === "1";
   let kind = req.nextUrl.searchParams.get("kind") || "digest";
   // Vercel Hobby allows 2 crons: "morning" = daily digest, plus the Monday plan on Mondays.
   const isMonday = new Date().getUTCDay() === 1;
@@ -59,16 +70,39 @@ export async function GET(req: NextRequest) {
   const supabase = createAdminClient();
   const today = new Date().toISOString().slice(0, 10);
 
-  const [{ data: profiles }, { data: tasks }, { data: prefs }] = await Promise.all([
+  const [{ data: profiles }, { data: tasks }, { data: prefs }, { data: convo }] = await Promise.all([
     supabase.from("profiles").select("id,name,email,digest_time,capacity_points,level_id"),
     supabase.from("tasks").select("id,name,status,priority,due,list_id,assignee_id,effort,completed_at").neq("status", "Done"),
     supabase.from("notification_prefs").select("profile_id,category,channel"),
+    // Unread @mentions and comment replies. Without this the digest was built
+    // purely from tasks, so being mentioned reached you in-app and never by
+    // email — if you didn't open the app that day, you simply never found out.
+    // reason casing is inconsistent in the data ("mention" and "Mention"), so
+    // match case-insensitively rather than trusting one spelling.
+    supabase.from("notifications").select("profile_id,task_id,body,reason,read,created_at").eq("read", false),
   ]);
   if (!profiles || !tasks) return NextResponse.json({ error: "no data — is SUPABASE_SERVICE_ROLE_KEY set?" }, { status: 500 });
 
   const tasksOf = (pid: string) => tasks.filter((t) => t.assignee_id === pid);
-  const digestOff = (pid: string) =>
-    (prefs || []).filter((p) => p.profile_id === pid).every((p) => p.channel === "off" || p.channel === "inapp");
+
+  /* Email is opt-OUT. The previous rule was `.every(channel is off/inapp)`, and
+     [].every() is vacuously true — so anyone who had never opened notification
+     settings was silently treated as having disabled everything. On this data
+     that was 11 of 17 people receiving no digest at all, which nobody chose.
+     Now: suppressed only if the person HAS preferences and every one of them
+     is off or in-app. */
+  const prefsOf = (pid: string) => (prefs || []).filter((p) => p.profile_id === pid);
+  const digestOff = (pid: string) => {
+    const mine = prefsOf(pid);
+    return mine.length > 0 && mine.every((p) => p.channel === "off" || p.channel === "inapp");
+  };
+
+  const isConversation = (reason: string | null) => {
+    const r = (reason || "").toLowerCase();
+    return r === "mention" || r === "comment";
+  };
+  const mentionsOf = (pid: string) =>
+    (convo || []).filter((n) => n.profile_id === pid && isConversation(n.reason));
 
   // Proactive risk flags — one batched Gemini call for everyone at risk, only for the daily digest.
   const atRisk = kinds.includes("digest") ? atRiskTasks(tasks as unknown as Task[]) : [];
@@ -83,6 +117,7 @@ export async function GET(req: NextRequest) {
   const flagOf = await proactiveFlags(riskInput);
 
   let sent = 0;
+  const preview: { to: string; kind: string; subject: string; mentions: number; overdue: number; dueToday: number; html?: string }[] = [];
   for (kind of kinds)
   for (const person of profiles) {
     if (digestOff(person.id)) continue;
@@ -96,7 +131,10 @@ export async function GET(req: NextRequest) {
     let subject = "";
     let inner = "";
     if (kind === "digest") {
-      if (!overdue.length && !dueToday.length && mine.length === 0) continue;
+      const convoForMe = mentionsOf(person.id);
+      // Someone with no tasks but a waiting @mention used to be skipped here and
+      // never told. A pending mention is reason enough to send.
+      if (!overdue.length && !dueToday.length && mine.length === 0 && !convoForMe.length) continue;
       subject = `Your day at Sansico — ${new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}`;
       const flag = flagOf.get(person.name);
       inner = `
@@ -106,7 +144,11 @@ export async function GET(req: NextRequest) {
         </div>
         ${flag ? `<div style="display:flex;gap:8px;align-items:flex-start;background:rgba(122,13,32,0.06);border:1px solid #E5DFD8;border-radius:11px;padding:11px 14px;font-size:12px;line-height:1.5;margin-bottom:18px;color:#4A423D;"><span style="color:#7A0D20;">✦</span><span><b>Sansi flags:</b> ${flag}</span></div>` : ""}
         <h4 style="margin:0 0 8px;font-size:11px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#9A918A;">Needs your attention</h4>
-        ${[...overdue, ...dueToday].slice(0, 5).map((t) => row(t.name, t.due! < today ? `overdue since ${t.due}` : "due today")).join("") || `<p style="font-size:12.5px;color:#9A918A;">Nothing urgent — clean slate.</p>`}`;
+        ${[...overdue, ...dueToday].slice(0, 5).map((t) => row(t.name, t.due! < today ? `overdue since ${t.due}` : "due today")).join("") || `<p style="font-size:12.5px;color:#9A918A;">Nothing urgent — clean slate.</p>`}
+        ${convoForMe.length ? `
+        <h4 style="margin:22px 0 8px;font-size:11px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#9A918A;">Mentions &amp; replies</h4>
+        ${convoForMe.slice(0, 5).map((n) => `<div style="padding:8px 0;border-bottom:1px solid #E5DFD8;font-size:12.5px;line-height:1.5;">${escapeHtml(n.body)} <span style="color:#9A918A;font-size:11px;">· ${(n.reason || "").toLowerCase() === "mention" ? "mentioned you" : "new comment"}</span></div>`).join("")}
+        ${convoForMe.length > 5 ? `<p style="font-size:11.5px;color:#9A918A;margin:8px 0 0;">and ${convoForMe.length - 5} more waiting in your inbox.</p>` : ""}` : ""}`;
     } else if (kind === "plan") {
       const top3 = [...mine].filter((t) => t.due).sort((a, b) => a.due!.localeCompare(b.due!)).slice(0, 3);
       if (!top3.length) continue;
@@ -124,8 +166,20 @@ export async function GET(req: NextRequest) {
         ${slipped.length ? `<h4 style="margin:0 0 8px;font-size:11px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#9A918A;">Slipped this week</h4>${slipped.map((t) => row(t.name, `was due ${t.due}`)).join("")}` : `<p style="font-size:12.5px;color:#0D4F31;">Nothing slipped — great week.</p>`}`;
     }
     if (!inner) continue;
+    if (dryRun) {
+      preview.push({
+        to: person.email, kind, subject,
+        mentions: kind === "digest" ? mentionsOf(person.id).length : 0,
+        overdue: overdue.length, dueToday: dueToday.length,
+        // ?html=<email> returns the rendered body for one recipient, so a change
+        // to the template can be eyeballed without mailing anyone.
+        ...(req.nextUrl.searchParams.get("html") === person.email ? { html: wrapEmailHtml(inner) } : {}),
+      });
+      continue;
+    }
     const ok = await sendEmail({ email: person.email, name: person.name }, subject, wrapEmailHtml(inner));
     if (ok) sent++;
   }
+  if (dryRun) return NextResponse.json({ dryRun: true, kinds, wouldSend: preview.length, of: profiles.length, preview });
   return NextResponse.json({ kinds, sent, of: profiles.length });
 }
