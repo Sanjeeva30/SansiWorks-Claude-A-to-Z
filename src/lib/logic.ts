@@ -4,7 +4,7 @@
 // - Department efficiency = same formula, applied department-wide
 // - At-risk prediction = overdue OR (due ≤4 days AND (assignee has ≥5 open tasks OR assignee's on-time history <75%))
 // - Critical unblocker of the day = open task with the largest downstream dependency chain of other open tasks
-import { Task, Dependency, Profile, Department } from "./types";
+import { Task, Dependency, Profile, Department, Level } from "./types";
 import { todayIso } from "./dates";
 
 export const isOpen = (t: Task) => t.status !== "Done";
@@ -237,6 +237,22 @@ export const isGroupHead = (p: Profile | null) => p?.level_id === "l2";
 export const isRegionalGroupHead = (p: Profile | null) => p?.level_id === "l2r";
 export const isSeniorRank = (p: Profile | null) => isBoardOfDirectors(p) || isGroupHead(p) || isRegionalGroupHead(p);
 
+/* ---- flag-driven rank checks — read the levels table's own boolean columns
+   instead of hardcoding which level ids they apply to. A brand-new custom
+   level (built via Admin console -> Organization levels -> + Add level) only
+   gets real capability if these read its flags rather than a fixed id list —
+   the whole point of "custom" levels. Mirrors the matching Postgres RLS
+   helpers (app_is_dept_admin, app_is_multi_dept_admin, app_has_exec_visibility)
+   so a level's toggles mean the same thing in the UI as at the database. */
+function levelFlag(p: { is_super?: boolean; level_id?: string } | null, levels: Level[], key: keyof Level): boolean {
+  if (!p) return false;
+  if (p.is_super) return true;
+  return !!levels.find((l) => l.id === p.level_id)?.[key];
+}
+export const isMultiDeptAdmin = (p: { is_super?: boolean; level_id?: string } | null, levels: Level[]) => levelFlag(p, levels, "multi_dept_admin");
+export const isDeptAdmin = (p: { is_super?: boolean; level_id?: string } | null, levels: Level[]) => levelFlag(p, levels, "dept_admin");
+export const hasExecVisibility = (p: { is_super?: boolean; level_id?: string } | null, levels: Level[]) => levelFlag(p, levels, "exec_visibility");
+
 export function internalAuditDept(departments: Department[]): Department | undefined {
   return departments.find((d) => d.name === "Internal Audit");
 }
@@ -252,10 +268,13 @@ export function isInternalAuditManager(p: Profile | null, departments: Departmen
   return !!dept && !!p && isDeptHead(p.id, dept.id, deptHeads);
 }
 
-/** SOP visibility: owning department + Board + Group Heads + Regional Group Heads + Internal Audit (always, everywhere). Plain (non-SOP) docs are unrestricted. */
-export function canViewSop(deptId: string | null, me: Profile | null, departments: Department[]): boolean {
+/** SOP visibility: owning department + exec-visibility levels (Board/Group/Regional
+   Heads, or any custom level flagged the same way) + Internal Audit (always,
+   everywhere). Plain (non-SOP) docs are unrestricted. Mirrors app_can_read_doc()
+   in Postgres — that's the real enforcement; this is the matching UI filter. */
+export function canViewSop(deptId: string | null, me: Profile | null, departments: Department[], levels: Level[] = []): boolean {
   if (!me) return false;
-  if (isSeniorRank(me)) return true;
+  if (hasExecVisibility(me, levels)) return true;
   if (isInternalAudit(me, departments)) return true;
   return !!deptId && me.department_id === deptId;
 }

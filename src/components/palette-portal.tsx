@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "@/lib/store";
 import { useUI } from "@/lib/ui";
 import { searchWorkspace, scoreMatch, getRecentSearches, pushRecentSearch } from "@/lib/search";
+import { isDeptAdmin } from "@/lib/logic";
 
 /* ---------- Command palette: pages, actions, and workspace-wide search ---------- */
 export function CommandPalette() {
@@ -23,7 +24,7 @@ export function CommandPalette() {
     }
   }, [showPalette]);
 
-  const isAdmin = store.me?.is_super || (store.me?.level_id ? ["l1", "l2", "l2r", "l3"].includes(store.me.level_id) : false);
+  const isAdmin = isDeptAdmin(store.me, store.levels);
 
   const items = useMemo(() => {
     const q = query.trim();

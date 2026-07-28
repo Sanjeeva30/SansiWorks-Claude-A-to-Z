@@ -3,13 +3,14 @@ import React, { useEffect, useState } from "react";
 import { useStore } from "@/lib/store";
 import { useUI } from "@/lib/ui";
 import { initials } from "@/lib/types";
+import { isDeptAdmin } from "@/lib/logic";
 import { IconChevDown, IconStar } from "./icons";
 import { Avatar } from "./shared";
 
 const COLLAPSE_KEY = "sw-collapsed-spaces";
 
 export function Sidebar() {
-  const { me, spaces, lists, tasks, notifications, departments, pins, features, patch, supabase } = useStore();
+  const { me, spaces, lists, tasks, notifications, departments, pins, features, levels, patch, supabase } = useStore();
   // Spaces under a dormant (overseas) unit stay hidden until the admin turns that toggle on.
   const dormantUnitIds = new Set(departments.filter((d) => d.dormant).map((d) => d.id));
   const visibleSpaces = features.overseas_teams ? spaces : spaces.filter((s) => !s.department_id || !dormantUnitIds.has(s.department_id));
@@ -33,7 +34,7 @@ export function Sidebar() {
     try { localStorage.setItem(COLLAPSE_KEY, JSON.stringify(next)); } catch {}
   };
 
-  const isAdmin = me?.is_super || (me?.level_id ? ["l1", "l2", "l2r", "l3"].includes(me.level_id) : false);
+  const isAdmin = isDeptAdmin(me, levels);
 
   /* "member_can_create_board" used to be a toggle with nothing behind it —
      there was no board-creation UI at all, self-serve or request-based, so

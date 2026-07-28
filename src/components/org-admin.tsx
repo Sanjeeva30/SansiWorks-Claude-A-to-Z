@@ -5,6 +5,7 @@ import { useUI } from "@/lib/ui";
 import { OrgUnitType, ORG_UNIT_TYPES, PermissionTemplate } from "@/lib/types";
 import { colorForPerson } from "@/lib/colors";
 import { logAudit } from "@/lib/actions";
+import { isMultiDeptAdmin } from "@/lib/logic";
 import { IconX } from "./icons";
 
 const card: React.CSSProperties = { background: "var(--sw-card)", border: "1px solid var(--sw-hair)", borderRadius: 12, boxShadow: "var(--shadow-card)", padding: "16px 18px" };
@@ -27,10 +28,6 @@ export const ABILITIES: [string, string][] = [
   ["view_company_reports", "View company-wide reports"],
 ];
 
-function isBoardish(me: { is_super?: boolean; level_id?: string } | null) {
-  return !!me?.is_super || me?.level_id === "l1" || me?.level_id === "l2";
-}
-
 export function OrgAdmin({ tab }: { tab: "organisation" | "permissions" }) {
   const store = useStore();
   // Admin/drill-down tables are not part of the sign-in payload; pull them on
@@ -41,7 +38,7 @@ export function OrgAdmin({ tab }: { tab: "organisation" | "permissions" }) {
   const { me, profiles, departments, deptHeads, assignments, permissionTemplates, levels, supabase, patch, refresh } = store;
 
   const { pushToast, openDetail, confirm } = useUI();
-  const canManage = isBoardish(me);
+  const canManage = isMultiDeptAdmin(me, levels);
 
   async function recomputeColors() {
     const updates = profiles.map((p) => {

@@ -4,7 +4,7 @@ import {
   criticalUnblocker, workloadPct, canViewSop, isSeniorRank, isInternalAudit,
   isDeptHead, isInternalAuditManager,
 } from "./logic";
-import { Task, Profile, Department, Dependency } from "./types";
+import { Task, Profile, Department, Dependency, Level } from "./types";
 import { nextRecurrenceDue } from "./actions";
 
 const iso = (offsetDays: number) => {
@@ -207,14 +207,18 @@ describe("SOP rank/visibility rules — always by rank, never by name", () => {
     expect(isInternalAuditManager(successor, [audit], newHeads)).toBe(true);
   });
 
-  it("canViewSop: owning department, senior rank, and Internal Audit can all see it; an unrelated department cannot", () => {
+  it("canViewSop: owning department, exec-visibility levels, and Internal Audit can all see it; an unrelated department cannot", () => {
     const finance = dept({ name: "Finance & Shared Services" });
     const audit = dept({ name: "Internal Audit" });
     const other = dept({ name: "Sourcing & Trade" });
-    expect(canViewSop(finance.id, profile({ department_id: finance.id }), [finance, audit, other])).toBe(true);
-    expect(canViewSop(finance.id, profile({ level_id: "l1" }), [finance, audit, other])).toBe(true);
-    expect(canViewSop(finance.id, profile({ department_id: audit.id }), [finance, audit, other])).toBe(true);
-    expect(canViewSop(finance.id, profile({ department_id: other.id, level_id: "l6" }), [finance, audit, other])).toBe(false);
+    const levels: Level[] = [
+      { id: "l1", name: "Board of Directors", sort: 1, exec_visibility: true, multi_dept_admin: true, dept_admin: true, reassign_team: true, edit_dept_boards: true, edit_own_scope: true },
+      { id: "l6", name: "Staff", sort: 7, exec_visibility: false, multi_dept_admin: false, dept_admin: false, reassign_team: false, edit_dept_boards: false, edit_own_scope: true },
+    ];
+    expect(canViewSop(finance.id, profile({ department_id: finance.id }), [finance, audit, other], levels)).toBe(true);
+    expect(canViewSop(finance.id, profile({ level_id: "l1" }), [finance, audit, other], levels)).toBe(true);
+    expect(canViewSop(finance.id, profile({ department_id: audit.id }), [finance, audit, other], levels)).toBe(true);
+    expect(canViewSop(finance.id, profile({ department_id: other.id, level_id: "l6" }), [finance, audit, other], levels)).toBe(false);
   });
   it("canViewSop is false with no signed-in profile", () => {
     expect(canViewSop("any-dept", null, [])).toBe(false);

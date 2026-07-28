@@ -4,7 +4,7 @@ import { useStore } from "@/lib/store";
 import { useUI } from "@/lib/ui";
 import { initials, Doc, PRIORITY_COLORS } from "@/lib/types";
 import { relTime, fmtShort, todayIso } from "@/lib/dates";
-import { isOpen, isOverdue, onTimeStats, tasksOfPerson, canViewSop, isSeniorRank, isInternalAudit, isInternalAuditManager, isDeptHead, internalAuditDept } from "@/lib/logic";
+import { isOpen, isOverdue, onTimeStats, tasksOfPerson, canViewSop, isSeniorRank, isInternalAudit, isInternalAuditManager, isDeptHead, internalAuditDept, isMultiDeptAdmin, isDeptAdmin, hasExecVisibility } from "@/lib/logic";
 import { TopIcons } from "./shared";
 import { passwordMeetsRules } from "./auth-shell";
 import { IconX } from "./icons";
@@ -171,7 +171,7 @@ export function WorkspaceSection() {
 
   /* ------- docs ------- */
   const docsMapped = docs
-    .filter((d) => !d.is_sop || canViewSop(d.department_id, me, departments))
+    .filter((d) => !d.is_sop || canViewSop(d.department_id, me, departments, levels))
     .map((d) => {
       const owner = profiles.find((p) => p.id === d.owner_id);
       const reviewState = !d.review_date ? "none" : d.review_date < today ? "overdue" : new Date(d.review_date).getTime() - Date.now() < 21 * 86400000 ? "soon" : "ok";
@@ -282,22 +282,29 @@ export function WorkspaceSection() {
     ["invites", "Invites"], ["features", "Features"], ["audit", "Audit log"],
   ];
   const [expandedLevel, setExpandedLevel] = useState<string | null>(null);
+  const [addingLevel, setAddingLevel] = useState(false);
+  const [newLevelName, setNewLevelName] = useState("");
 
-  const isBoardish = me?.is_super || me?.level_id === "l1" || me?.level_id === "l2";
-  /* Who can choose the invite's department: Group Heads and above (l1, l2,
-     l2r — Regional Group Heads carry the same cross-department reach) plus
-     super admins. Everyone below (Department Heads and lower) can only ever
-     invite into their own department, so their picker stays locked to it. */
-  const canPickInviteDept = me?.is_super || (me?.level_id ? ["l1", "l2", "l2r"].includes(me.level_id) : false);
+  /* These read the levels table's own flags (multi_dept_admin / dept_admin /
+     exec_visibility) rather than a hardcoded id list, so a custom level built
+     via "+ Add level" gets the real capability its toggles promise, in the UI
+     and not just at the DB layer. Mirrors the matching Postgres RLS helpers
+     (app_is_multi_dept_admin / app_is_dept_admin / app_has_exec_visibility). */
+  const isBoardish = isMultiDeptAdmin(me, levels);
+  /* Who can choose the invite's department: exec-visibility levels (Board,
+     Group Heads, Regional Group Heads, or a custom level flagged the same
+     way) plus super admins. Everyone else can only ever invite into their own
+     department, so their picker stays locked to it. */
+  const canPickInviteDept = hasExecVisibility(me, levels);
   const inviteDeptValue = canPickInviteDept ? (inviteDept ?? me?.department_id ?? "") : (me?.department_id ?? "");
   /* Admin console access — same rank set the DB's admin_invites_* RLS policies
-     trust (is_super or l1/l2/l2r/l3). The old code only used this workspacePage
-     state to pick which nav item was highlighted, never to gate entry, so any
+     trust (dept_admin flag). The old code only used this workspacePage state
+     to pick which nav item was highlighted, never to gate entry, so any
      authenticated account — including a freshly accepted l6 Staff invite —
      could reach the full admin panel just by setting workspacePage to "admin"
      (via the sidebar button, command palette, or client state). Real data
      mutations were still blocked by RLS, but the panel itself was wide open. */
-  const isAdmin = me?.is_super || (me?.level_id ? ["l1", "l2", "l2r", "l3"].includes(me.level_id) : false);
+  const isAdmin = isDeptAdmin(me, levels);
 
   /* ------- digest preview data (live) ------- */
   const myTasks = me ? tasksOfPerson(tasks, me.id) : [];
@@ -804,9 +811,55 @@ export function WorkspaceSection() {
                   <section style={{ ...card, marginBottom: 14 }}>
                     <div style={{ display: "flex", alignItems: "center", marginBottom: 4 }}>
                       <h3 style={{ margin: 0, fontSize: 13, fontWeight: 400, flex: 1 }}>Organization levels</h3>
-                      <button onClick={() => pushToast("Custom levels arrive with the next update")} style={{ padding: "6px 13px", borderRadius: 999, border: "none", background: "var(--crimson)", color: "#fff", fontSize: 11.5, fontWeight: 400, cursor: "pointer" }}>+ Add level</button>
+                      {/* Redefining what a rank can do is more sensitive than routine
+                          department admin work, so the DB restricts it to super admins
+                          only (admin_levels_write) — tighter than the dept_admin flag
+                          that gates the rest of this tab. Match that here instead of
+                          showing controls that would fail. */}
+                      {me?.is_super && <button onClick={() => setAddingLevel(true)} style={{ padding: "6px 13px", borderRadius: 999, border: "none", background: "var(--crimson)", color: "#fff", fontSize: 11.5, fontWeight: 400, cursor: "pointer" }}>+ Add level</button>}
                     </div>
-                    <p style={{ margin: "0 0 12px", fontSize: 11.5, color: "var(--sw-muted)" }}>Levels seed a default permission template — they don&apos;t lock anyone in. Reorder, rename, or edit rights per level; assign people to a level below.</p>
+                    <p style={{ margin: "0 0 12px", fontSize: 11.5, color: "var(--sw-muted)" }}>
+                      {me?.is_super
+                        ? "Levels seed a default permission template — they don't lock anyone in. Rename or edit rights per level; assign people to a level below. New levels start with every right off — turn on what this rank should actually be able to do."
+                        : "Only super admins can add levels or change what a rank can do. You can still assign people to existing levels below."}
+                    </p>
+                    {me?.is_super && addingLevel && (
+                      <div style={{ border: "1px dashed var(--crimson)", borderRadius: 10, marginBottom: 8, padding: "12px 14px", display: "flex", gap: 8, alignItems: "center" }}>
+                        <input
+                          autoFocus
+                          value={newLevelName}
+                          onChange={(e) => setNewLevelName(e.target.value)}
+                          onKeyDown={(e) => e.key === "Escape" && setAddingLevel(false)}
+                          placeholder="Level name, e.g. Regional Auditor"
+                          style={{ flex: 1, height: 34, borderRadius: 8, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "0 12px", fontSize: 12.5, color: "var(--sw-text)", outline: "none" }}
+                        />
+                        <button
+                          onClick={async () => {
+                            const name = newLevelName.trim();
+                            if (!name || !me) return;
+                            const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "level";
+                            let id = slug;
+                            let n = 2;
+                            while (levels.some((l) => l.id === id)) { id = `${slug}-${n}`; n++; }
+                            const sort = Math.max(0, ...levels.map((l) => l.sort)) + 1;
+                            const { data, error } = await supabase.from("levels").insert({
+                              id, name, sort,
+                              exec_visibility: false, multi_dept_admin: false, dept_admin: false,
+                              reassign_team: false, edit_dept_boards: false, edit_own_scope: true,
+                            }).select().single();
+                            if (error || !data) { pushToast(`Couldn't create the level — ${error?.message || "unknown error"}.`); return; }
+                            patch("levels", [...levels, data]);
+                            const { logAudit } = await import("@/lib/actions");
+                            await logAudit(supabase, me.id, "created level", name);
+                            setNewLevelName("");
+                            setAddingLevel(false);
+                            setExpandedLevel(data.id);
+                          }}
+                          style={{ padding: "8px 16px", borderRadius: 999, border: "none", background: "var(--crimson)", color: "#fff", fontSize: 12, fontWeight: 400, cursor: "pointer" }}
+                        >Create</button>
+                        <button onClick={() => { setAddingLevel(false); setNewLevelName(""); }} style={{ padding: "8px 14px", borderRadius: 999, border: "1px solid var(--sw-hair)", background: "none", color: "var(--sw-text)", fontSize: 12, fontWeight: 400, cursor: "pointer" }}>Cancel</button>
+                      </div>
+                    )}
                     {levels.map((lv) => {
                       const expanded = expandedLevel === lv.id;
                       const userCount = profiles.filter((p) => p.level_id === lv.id).length;
@@ -815,7 +868,7 @@ export function WorkspaceSection() {
                           <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: "var(--sw-hover)" }}>
                             <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 400, color: "var(--sw-text)" }}>{lv.name}</span>
                             <span style={{ fontSize: 11, color: "var(--sw-muted)", fontWeight: 400 }}>{userCount} people</span>
-                            <button onClick={() => setExpandedLevel(expanded ? null : lv.id)} style={{ border: "none", background: "none", color: "var(--sw-text-soft)", fontSize: 11, fontWeight: 400, cursor: "pointer" }}>{expanded ? "Hide rights" : "Edit rights"}</button>
+                            {me?.is_super && <button onClick={() => setExpandedLevel(expanded ? null : lv.id)} style={{ border: "none", background: "none", color: "var(--sw-text-soft)", fontSize: 11, fontWeight: 400, cursor: "pointer" }}>{expanded ? "Hide rights" : "Edit rights"}</button>}
                           </div>
                           {expanded && (
                             <div style={{ padding: "12px 14px", display: "flex", flexWrap: "wrap", gap: "8px 20px" }}>
