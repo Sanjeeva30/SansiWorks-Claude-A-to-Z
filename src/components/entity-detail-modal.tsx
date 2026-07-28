@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from "react";
 import { useStore } from "@/lib/store";
 import { useUI } from "@/lib/ui";
-import { initials, DocVersion } from "@/lib/types";
+import { initials, DocVersion, DocVisibility, DOC_VISIBILITY } from "@/lib/types";
 import { relTime, fmtShort } from "@/lib/dates";
 import { isDeptHead, isInternalAuditManager, isInternalAudit, internalAuditDept } from "@/lib/logic";
 import { notify, logAudit, writeOrRevert } from "@/lib/actions";
@@ -196,6 +196,7 @@ export function DocDetailModal() {
   // Head review is gated to the reviewer chosen at submission; legacy versions
   // without one fall back to any head of the owning department.
   const iAmHead = !!me && (latest?.head_reviewer_id ? me.id === latest.head_reviewer_id : isDeptHead(me.id, d.department_id, deptHeads));
+  const canRetarget = !!me && (me.is_super || me.id === d.owner_id || iAmHead);
   const iAmAuditManager = isInternalAuditManager(me, departments, deptHeads);
   const iAmAudit = isInternalAudit(me, departments);
   const auditDept = internalAuditDept(departments);
@@ -349,6 +350,39 @@ export function DocDetailModal() {
         <div style={{ display: "flex", gap: 18, marginBottom: 16, fontSize: 11.5, color: "var(--sw-muted)", fontWeight: 400, flexWrap: "wrap" }}>
           <span>{d.type}</span><span>{d.category}</span><span>Version {versions.length || d.version}</span>
           {!d.is_sop && <span style={{ color: reviewColor }}>{review}</span>}
+        </div>
+
+        {/* Visibility was set at creation and then frozen — a doc filed to the
+            wrong audience could only be fixed in the database. Owner, heads and
+            super admins can retarget it here; everyone else sees the setting
+            read-only so it is at least legible. */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+          <span style={{ fontSize: 11.5, color: "var(--sw-muted)", flex: "none" }}>Who can read this</span>
+          {canRetarget ? (
+            <select
+              className="sw-select"
+              value={d.visibility || "department"}
+              onChange={async (e) => {
+                const visibility = e.target.value as DocVisibility;
+                const prev = docs;
+                patch("docs", docs.map((x) => (x.id === d.id ? { ...x, visibility } : x)));
+                const ok = await writeOrRevert(supabase.from("docs").update({ visibility }).eq("id", d.id), {
+                  toast: pushToast, what: "change who can read this", revert: () => patch("docs", prev),
+                });
+                if (ok && me) await logAudit(supabase, me.id, `set visibility to ${visibility} for`, d.title);
+              }}
+              style={{ height: 30, borderRadius: 8, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "0 10px", fontSize: 12, color: "var(--sw-text)" }}
+            >
+              {DOC_VISIBILITY.map((v) => <option key={v.value} value={v.value}>{v.label}</option>)}
+            </select>
+          ) : (
+            <span style={{ fontSize: 12, color: "var(--sw-text)" }}>
+              {DOC_VISIBILITY.find((v) => v.value === (d.visibility || "department"))?.label}
+            </span>
+          )}
+          <span style={{ fontSize: 11, color: "var(--sw-muted)", flex: 1, minWidth: 0 }}>
+            {DOC_VISIBILITY.find((v) => v.value === (d.visibility || "department"))?.help}
+          </span>
         </div>
         {openVersion && (
           <button onClick={() => downloadFile(openVersion.file_path)} style={{ display: "flex", alignItems: "center", gap: 9, width: "100%", padding: "11px 14px", borderRadius: 12, border: "none", background: "var(--crimson)", color: "#fff", fontSize: 13, fontWeight: 500, cursor: "pointer", marginBottom: 12, boxShadow: "0 8px 20px rgba(122,13,32,.25)" }}>

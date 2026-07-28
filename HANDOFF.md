@@ -214,10 +214,13 @@ audience needs its enforcement written and tested at the RLS layer *first*; the
 UI-level convenience filter is optional decoration on top, never a substitute.
 
 ### Known, not yet fixed
-- Invites always use the sender's own `department_id` — no department picker, so
-  an admin cannot invite into another department.
 - `sanjeeva.sansico@gmail.com` exists as a real test account from this audit
-  (password `InAppSansi2026!`). Delete it before go-live.
+  (password `InAppSansi2026!`). Delete it before go-live. **Kept deliberately
+  for now** — it is the only non-super account available for verifying
+  rank-scoped behaviour, and every scoping fix in this file was proved with it.
+- ~~Invites always use the sender's own `department_id`~~ — stale note. The
+  picker exists and is gated on `exec_visibility` (`canPickInviteDept`); it is
+  locked to your own department below that rank, which is the intended rule.
 
 ## Spaces/boards: create, archive, restore (2026-07-28)
 Root cause traced while fixing "space create doesn't exist": department creation
