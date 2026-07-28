@@ -4,7 +4,7 @@ import { useStore } from "@/lib/store";
 import { useUI } from "@/lib/ui";
 import { initials } from "@/lib/types";
 import { isDeptAdmin } from "@/lib/logic";
-import { IconChevDown, IconStar } from "./icons";
+import { IconChevDown, IconStar, IconTrash } from "./icons";
 import { Avatar } from "./shared";
 
 const COLLAPSE_KEY = "sw-collapsed-spaces";
@@ -18,12 +18,15 @@ export function Sidebar() {
     section, homePage, setHomePage, listPage, setListPage,
     companyPage, setCompanyPage, workspacePage, setWorkspacePage,
     activeList, setActiveList, openProfile, setShowPalette, pushToast,
-    mobileNavOpen, setMobileNavOpen,
+    mobileNavOpen, setMobileNavOpen, confirm,
   } = useUI();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [hoverList, setHoverList] = useState<string | null>(null);
+  const [hoverSpace, setHoverSpace] = useState<string | null>(null);
   const [addingBoardFor, setAddingBoardFor] = useState<string | null>(null);
   const [boardName, setBoardName] = useState("");
+  const [addingSpace, setAddingSpace] = useState(false);
+  const [newSpaceName, setNewSpaceName] = useState("");
 
   useEffect(() => {
     try { setCollapsed(JSON.parse(localStorage.getItem(COLLAPSE_KEY) || "{}")); } catch {}
@@ -58,6 +61,44 @@ export function Sidebar() {
     }
     setAddingBoardFor(null);
     setBoardName("");
+  };
+
+  /* Soft-delete, matching the pattern already used for tasks/docs — the row
+     stays in the DB (its tasks and history with it), just drops out of the
+     live store and the initial fetch filter. Unlike task archiving, a board
+     or an entire space is high-stakes enough (and low-volume enough) that
+     losing the in-app way back to it isn't acceptable, so both get a real
+     Restore path (Admin console -> Departments -> Archived spaces/boards). */
+  const archiveList = async (l: { id: string; name: string }) => {
+    if (!(await confirm({ title: `Archive "${l.name}"?`, message: "This board and its tasks stay intact — you can restore it from Admin console → Departments → Archived boards.", confirmLabel: "Archive", danger: true }))) return;
+    patch("lists", lists.filter((x) => x.id !== l.id));
+    await supabase.from("lists").update({ archived: true }).eq("id", l.id);
+  };
+  const archiveSpace = async (space: { id: string; name: string }) => {
+    const spaceLists = lists.filter((x) => x.space_id === space.id);
+    if (!(await confirm({
+      title: `Archive "${space.name}"?`,
+      message: spaceLists.length
+        ? `This hides all ${spaceLists.length} board${spaceLists.length === 1 ? "" : "s"} inside it too. Nothing is deleted — restore it from Admin console → Departments → Archived spaces.`
+        : "You can restore it from Admin console → Departments → Archived spaces.",
+      confirmLabel: "Archive", danger: true,
+    }))) return;
+    patch("spaces", spaces.filter((x) => x.id !== space.id));
+    patch("lists", lists.filter((x) => x.space_id !== space.id));
+    await supabase.from("spaces").update({ archived: true }).eq("id", space.id);
+  };
+  const createSpace = async () => {
+    const name = newSpaceName.trim();
+    if (!name || !me) return;
+    // Every department already gets one space automatically when created —
+    // this is for a second space within your own department (e.g. splitting
+    // "Sourcing & Trade" into separate spaces per sub-team).
+    const { data, error } = await supabase.from("spaces").insert({ name, color: me.color, department_id: me.department_id, sort: 99 }).select().single();
+    if (error || !data) { pushToast(`Couldn't create the space — ${error?.message || "unknown error"}.`); return; }
+    patch("spaces", [...spaces, data]);
+    setNewSpaceName("");
+    setAddingSpace(false);
+    pushToast(`"${name}" created`);
   };
   const unread = notifications.filter((n) => !n.read).length;
   const openCount = (listId: string) => tasks.filter((t) => t.list_id === listId && t.status !== "Done").length;
@@ -122,6 +163,15 @@ export function Sidebar() {
             <IconStar size={11} filled={pinned} />
           </button>
         )}
+        {isAdmin && hoverList === l.id && (
+          <button
+            onClick={(e) => { e.stopPropagation(); archiveList(l); }}
+            title="Archive board"
+            style={{ position: "absolute", right: 24, border: "none", background: "none", cursor: "pointer", color: "var(--sw-muted)", padding: 2, display: "flex" }}
+          >
+            <IconTrash size={11} />
+          </button>
+        )}
       </div>
     );
   };
@@ -169,23 +219,61 @@ export function Sidebar() {
 
         <div style={{ margin: "13px 0 4px", padding: "0 9px", display: "flex", alignItems: "center" }}>
           <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--sw-muted)", flex: 1 }}>Spaces</span>
+          {isAdmin && (
+            <button
+              onClick={() => { setAddingSpace(true); setNewSpaceName(""); }}
+              title="New space"
+              style={{ border: "none", background: "none", cursor: "pointer", fontSize: 13, color: "var(--sw-muted)", padding: "0 2px" }}
+            >
+              +
+            </button>
+          )}
         </div>
+        {addingSpace && (
+          <div style={{ display: "flex", gap: 4, padding: "3px 9px 7px" }}>
+            <input
+              autoFocus
+              value={newSpaceName}
+              onChange={(e) => setNewSpaceName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") createSpace(); if (e.key === "Escape") setAddingSpace(false); }}
+              placeholder="Space name…"
+              style={{ flex: 1, minWidth: 0, height: 24, borderRadius: 6, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", fontSize: 11, padding: "0 7px", color: "var(--sw-text)", outline: "none" }}
+            />
+            <button onClick={createSpace} title="Save" style={{ border: "none", background: "var(--crimson)", color: "#fff", borderRadius: 6, width: 22, height: 24, fontSize: 12, cursor: "pointer" }}>✓</button>
+          </div>
+        )}
         {visibleSpaces.map((space) => {
           const isCollapsed = !!collapsed[space.id];
           const spaceLists = lists.filter((l) => l.space_id === space.id);
           return (
-            <div key={space.id} style={{ marginBottom: 7 }}>
-              <button
-                onClick={() => toggleSpace(space.id)}
-                title={deptOf(space.department_id)?.name || ""}
-                style={{ display: "flex", alignItems: "center", gap: 7, width: "100%", padding: "4px 9px 3px", border: "none", background: "none", cursor: "pointer", textAlign: "left" }}
-              >
-                <span style={{ width: 6, height: 6, borderRadius: 99, background: space.color, flex: "none" }} />
-                <span style={{ fontSize: 11.5, fontWeight: 400, color: "var(--sw-text-soft)", flex: 1, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{space.name}</span>
-                <span style={{ color: "var(--sw-muted)", display: "flex", transform: isCollapsed ? "rotate(-90deg)" : "none", transition: "transform .12s" }}>
-                  <IconChevDown size={10} />
-                </span>
-              </button>
+            <div
+              key={space.id}
+              style={{ marginBottom: 7 }}
+              onMouseEnter={() => setHoverSpace(space.id)}
+              onMouseLeave={() => setHoverSpace(null)}
+            >
+              <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                <button
+                  onClick={() => toggleSpace(space.id)}
+                  title={deptOf(space.department_id)?.name || ""}
+                  style={{ display: "flex", alignItems: "center", gap: 7, width: "100%", padding: "4px 9px 3px", border: "none", background: "none", cursor: "pointer", textAlign: "left" }}
+                >
+                  <span style={{ width: 6, height: 6, borderRadius: 99, background: space.color, flex: "none" }} />
+                  <span style={{ fontSize: 11.5, fontWeight: 400, color: "var(--sw-text-soft)", flex: 1, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{space.name}</span>
+                  <span style={{ color: "var(--sw-muted)", display: "flex", transform: isCollapsed ? "rotate(-90deg)" : "none", transition: "transform .12s" }}>
+                    <IconChevDown size={10} />
+                  </span>
+                </button>
+                {isAdmin && hoverSpace === space.id && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); archiveSpace(space); }}
+                    title="Archive space"
+                    style={{ position: "absolute", right: 20, border: "none", background: "none", cursor: "pointer", color: "var(--sw-muted)", padding: 2, display: "flex" }}
+                  >
+                    <IconTrash size={11} />
+                  </button>
+                )}
+              </div>
               {!isCollapsed && spaceLists.map((l) => listRow(l, true))}
               {!isCollapsed && (
                 addingBoardFor === space.id ? (

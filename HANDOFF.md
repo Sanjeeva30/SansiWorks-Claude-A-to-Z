@@ -219,6 +219,32 @@ UI-level convenience filter is optional decoration on top, never a substitute.
 - `sanjeeva.sansico@gmail.com` exists as a real test account from this audit
   (password `InAppSansi2026!`). Delete it before go-live.
 
+## Spaces/boards: create, archive, restore (2026-07-28)
+Root cause traced while fixing "space create doesn't exist": department creation
+never paired a matching Space, so any department created before this fix had no
+board home — including the real invited user's own department. Fixed both
+create-department call sites (`workspace-section.tsx` proposal-approval flow and
+direct-create flow) to go through a new shared `createDepartmentWithSpace()`
+helper in `lib/actions.ts`, and retroactively repaired 8 existing departments/
+divisions that were missing their space via a one-off SQL insert.
+
+Added on top:
+- `spaces`/`lists` both got an `archived boolean` column (default false) — same
+  soft-delete pattern already used for tasks/docs — plus a matching
+  `.eq("archived", false)` filter on the initial store fetch.
+- Sidebar: hover-revealed Archive (trash icon) on each space header and each
+  board row, dept-admin-gated via `isDeptAdmin(me, levels)`; a "+ New Space"
+  inline-input control next to the Spaces section label, same gate.
+- Admin console → Departments tab: an "Archived spaces & boards" section (only
+  rendered when non-empty) with a Restore button per row — this closes the loop
+  the archive confirm-dialog copy already promised ("restore it from Admin
+  console → Departments → Archived spaces/boards"). Archived rows are fetched
+  lazily (not part of the main store fetch) when the Departments tab opens.
+- All three flows (create, archive, restore) verified live end-to-end by
+  temporarily elevating a real test account (`Sansi Test User`, l6→l3) in the
+  browser preview, confirming DB state via direct SQL after each action, then
+  reverting the account and deleting the test rows.
+
 ## Status: open
 - Phase 4 remainder: **Sansi 2.0 info-finder** and **realtime multiplayer presence**.
   (Comments/@mentions and the mention-email gap are done — see roadmap 9.)

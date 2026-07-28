@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useStore } from "@/lib/store";
 import { useUI } from "@/lib/ui";
-import { initials, Doc, PRIORITY_COLORS } from "@/lib/types";
+import { initials, Doc, PRIORITY_COLORS, Space, List } from "@/lib/types";
 import { relTime, fmtShort, todayIso } from "@/lib/dates";
 import { isOpen, isOverdue, onTimeStats, tasksOfPerson, canViewSop, isSeniorRank, isInternalAudit, isInternalAuditManager, isDeptHead, internalAuditDept, isMultiDeptAdmin, isDeptAdmin, hasExecVisibility } from "@/lib/logic";
 import { TopIcons } from "./shared";
@@ -98,6 +98,13 @@ export function WorkspaceSection() {
   const [nominate, setNominate] = useState({ name: "", reason: "" });
   const [deptModal, setDeptModal] = useState<"create" | "propose" | null>(null);
   const [deptForm, setDeptForm] = useState({ name: "", reason: "" });
+  const [archivedSpaces, setArchivedSpaces] = useState<Space[]>([]);
+  const [archivedLists, setArchivedLists] = useState<List[]>([]);
+  useEffect(() => {
+    if (adminTab !== "departments") return;
+    supabase.from("spaces").select("*").eq("archived", true).then(({ data }) => setArchivedSpaces(data || []));
+    supabase.from("lists").select("*").eq("archived", true).then(({ data }) => setArchivedLists(data || []));
+  }, [adminTab, supabase]);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteLevel, setInviteLevel] = useState("l6");
   const [inviteDept, setInviteDept] = useState<string | null>(null);
@@ -1066,6 +1073,50 @@ export function WorkspaceSection() {
                     })}
                   </section>
 
+                  {(archivedSpaces.length > 0 || archivedLists.length > 0) && (
+                    <section style={{ ...card, marginBottom: 14 }}>
+                      <h3 style={{ margin: "0 0 4px", fontSize: 13, fontWeight: 400 }}>Archived spaces &amp; boards</h3>
+                      <p style={{ margin: "0 0 12px", fontSize: 11.5, color: "var(--sw-muted)" }}>Nothing here is deleted — restoring puts it straight back where it was.</p>
+                      {archivedSpaces.map((s) => (
+                        <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 0", borderBottom: "1px solid var(--sw-hair)" }}>
+                          <span style={{ width: 8, height: 8, borderRadius: 99, background: s.color, flex: "none" }} />
+                          <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 400 }}>{s.name}</span>
+                          <span style={{ fontSize: 10.5, fontWeight: 400, color: "var(--sw-muted)" }}>Space</span>
+                          <button
+                            onClick={async () => {
+                              await supabase.from("spaces").update({ archived: false }).eq("id", s.id);
+                              setArchivedSpaces(archivedSpaces.filter((x) => x.id !== s.id));
+                              patch("spaces", [...spaces, { ...s, archived: false }]);
+                              if (me) { const { logAudit } = await import("@/lib/actions"); await logAudit(supabase, me.id, "restored space", s.name); }
+                              pushToast(`"${s.name}" restored`);
+                            }}
+                            style={pillBtn("var(--sw-text-soft)")}
+                          >
+                            Restore
+                          </button>
+                        </div>
+                      ))}
+                      {archivedLists.map((l) => (
+                        <div key={l.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 0", borderBottom: "1px solid var(--sw-hair)" }}>
+                          <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 400 }}>{l.name}</span>
+                          <span style={{ fontSize: 10.5, fontWeight: 400, color: "var(--sw-muted)" }}>Board</span>
+                          <button
+                            onClick={async () => {
+                              await supabase.from("lists").update({ archived: false }).eq("id", l.id);
+                              setArchivedLists(archivedLists.filter((x) => x.id !== l.id));
+                              patch("lists", [...lists, { ...l, archived: false }]);
+                              if (me) { const { logAudit } = await import("@/lib/actions"); await logAudit(supabase, me.id, "restored board", l.name); }
+                              pushToast(`"${l.name}" restored`);
+                            }}
+                            style={pillBtn("var(--sw-text-soft)")}
+                          >
+                            Restore
+                          </button>
+                        </div>
+                      ))}
+                    </section>
+                  )}
+
                   <section style={card}>
                     <div style={{ display: "flex", alignItems: "center", marginBottom: 4 }}>
                       <h3 style={{ margin: 0, fontSize: 13, fontWeight: 400, flex: 1 }}>Proposed departments</h3>
@@ -1090,10 +1141,12 @@ export function WorkspaceSection() {
                           </button>
                           <button
                             onClick={async () => {
-                              await supabase.from("org_units").insert({ name: p.name, color: "#22409E", mode: "Workspace visible" });
+                              const { logAudit, createDepartmentWithSpace } = await import("@/lib/actions");
+                              const { error } = await createDepartmentWithSpace(supabase, p.name);
                               await supabase.from("dept_proposals").update({ status: "accepted" }).eq("id", p.id);
                               await refresh();
-                              pushToast(`Department "${p.name}" created`);
+                              if (me) await logAudit(supabase, me.id, "created department (from proposal)", p.name);
+                              pushToast(error || `Department "${p.name}" created, with its own board`);
                             }}
                             style={{ padding: "6px 12px", borderRadius: 999, border: "none", background: "var(--crimson)", color: "#fff", fontSize: 11.5, fontWeight: 400, cursor: "pointer" }}
                           >
@@ -1706,9 +1759,10 @@ export function WorkspaceSection() {
                 onClick={async () => {
                   if (!deptForm.name.trim() || !me) return;
                   if (deptModal === "create") {
-                    await supabase.from("org_units").insert({ name: deptForm.name.trim(), color: "#22409E", mode: "Workspace visible" });
+                    const { createDepartmentWithSpace } = await import("@/lib/actions");
+                    const { error } = await createDepartmentWithSpace(supabase, deptForm.name.trim());
                     await refresh();
-                    pushToast(`Department "${deptForm.name.trim()}" created`);
+                    pushToast(error || `Department "${deptForm.name.trim()}" created, with its own board`);
                   } else {
                     const { data } = await supabase.from("dept_proposals").insert({ name: deptForm.name.trim(), proposer_id: me.id, reason: deptForm.reason }).select().single();
                     if (data) patch("proposals", [...proposals, data]);

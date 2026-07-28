@@ -7,6 +7,30 @@ import { createClient } from "./supabase/client";
 type Supabase = ReturnType<typeof createClient>;
 type Patch = <K extends keyof StoreData>(key: K, value: StoreData[K]) => void;
 
+/* Every "department"-type org unit is meant to own exactly one Space (the
+   board container in the sidebar) — that's how the seeded org tree works
+   (IGP Production, Sourcing & Trade, Finance & Shared Services each have
+   one). Creating a department without its Space used to be silently
+   possible via both paths below, which is exactly how a real invited user
+   ended up in a department ("Strategic Support") with nowhere to work —
+   zero boards, zero tasks, nothing to do. Centralizing department creation
+   here means the pairing can't be forgotten a third time. */
+export async function createDepartmentWithSpace(
+  supabase: Supabase,
+  name: string,
+  color = "#22409E"
+): Promise<{ department: { id: string; name: string } | null; error: string | null }> {
+  const { data: dept, error: deptErr } = await supabase
+    .from("org_units")
+    .insert({ name, color, mode: "Workspace visible" })
+    .select()
+    .single();
+  if (deptErr || !dept) return { department: null, error: deptErr?.message || "Could not create the department." };
+  const { error: spaceErr } = await supabase.from("spaces").insert({ name, color, department_id: dept.id, sort: 99 });
+  if (spaceErr) return { department: dept, error: `Department created, but its board space failed — ${spaceErr.message}. It will have nowhere to work until a space is added.` };
+  return { department: dept, error: null };
+}
+
 /* ---- recurrence ----
    `recur` has been collected in quick-add and stored on every task since the
    beginning, but nothing ever read it: picking "Repeats weekly" saved the word

@@ -129,6 +129,7 @@ export interface Space {
   department_id: string | null;
   sort: number;
   slug: string;
+  archived: boolean;
 }
 
 export interface List {
@@ -137,6 +138,7 @@ export interface List {
   name: string;
   sort: number;
   slug: string;
+  archived: boolean;
 }
 
 export interface Pin {
