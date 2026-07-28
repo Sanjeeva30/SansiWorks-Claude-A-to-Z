@@ -1,7 +1,7 @@
 # SansiWorks — Session Handoff
 
 > Kept current at every major milestone so any fresh session (or fresh context window)
-> can pick up without re-deriving state. Last updated: **2026-07-27** (real-invite security incident).
+> can pick up without re-deriving state. Last updated: **2026-07-28** (company-wide data-visibility incident).
 
 ## What this project is
 1:1 rebuild of the SansiWorks design (Sansico Group PM workspace) on Next.js 16 + Supabase
@@ -157,6 +157,61 @@ new admin action needs (1) a role check before the button renders, (2) the mutat
 itself checked/gated (RLS `WITH CHECK`, or a trigger for column-level rules RLS can't
 express), and (3) the audit/success-toast conditioned on the real DB result — not
 assumed.
+
+## Company-wide data-visibility incident (2026-07-28)
+A real invited user (Staff/l6, no `is_super`) logged in and could see every space,
+every board, and every task company-wide — not just their own department's. Root
+cause: the 2026-07-23 RLS audit (below) locked down *writes* and verified them
+adversarially, but explicitly left reads on `tasks`/`lists`/`spaces` (and several
+satellite tables) as `USING (true)` — readable by any authenticated user, no
+department or rank check at all. This was not a regression from that audit; it was
+the audit's own scope boundary, and nobody flagged it as wrong until a real invited
+user actually hit it.
+
+Fixed with two new SECURITY DEFINER helpers — `app_can_read_task(id)` and
+`app_can_read_space(id)` — and rewritten read policies on: `spaces`, `lists`,
+`tasks`, `subtasks`, `task_raci`, `task_assignees`, `task_dependencies`,
+`task_attachments`, `task_activity`, `comments`. The rule: visible if you're
+personally on the task (owner/assignee/accountable/RACI/assignee-list), your home
+department owns the space, you're cross-assigned into that department via
+`org_unit_members`, or you hold an exec-visibility rank (`app_is_exec()` — Board,
+Group Heads, or super admin). Verified live (not just by reading the SQL) by
+switching a real test account between departments and ranks and confirming task
+counts matched exactly what each should see — including that exec ranks still see
+company-wide totals for Overview/reporting.
+
+**A second instance of the identical mistake was found in the same sweep**, in a
+completely different subsystem: `canViewSop()` (`lib/logic.ts`) — "owning
+department + Board/Group/Regional Heads + Internal Audit" — was a CLIENT-SIDE-ONLY
+filter (`workspace-section.tsx` `.filter(d => !d.is_sop || canViewSop(...))`). The
+`docs`/`doc_versions` RLS was `USING(true)`, so the UI hid other departments' SOPs
+but a direct API call would not have. Fixed with `app_can_read_doc()`, mirroring
+`canViewSop()`'s exact rule in SQL (rank ≤ 3 = Board/Group/Regional Heads, matching
+`isSeniorRank()` — not `app_is_exec()`'s rank ≤ 2, which excludes Regional Group
+Heads). Plain (non-SOP) docs remain open, matching the original design intent.
+
+Also tightened in the same pass (all were `USING(true)`, none had a documented
+reason to be): `approvals`, `automations`, `board_requests`, `custom_fields`,
+`dept_proposals`, `form_submissions` (its policy was literally named
+`own_form_submissions_read` while enforcing no ownership check at all — the name
+had drifted from the implementation), `nominations`, `permission_templates`,
+`templates`.
+
+**Deliberately left open** (re-verified, not overlooked): `profiles`, `org_units`,
+`org_unit_heads`, `org_unit_members`, `assignments`, `levels`, `features`, `forms`.
+These are directory/reference data (who works where, what forms exist to fill out,
+what a rank is called) rather than private team work product — the same category
+`profiles` was already open for. If this line is wrong for your business, say so
+specifically; it's a judgment call, not something re-derived from first principles
+each time.
+
+**Lesson, stated plainly so it doesn't get relearned a third time:** a client-side
+`.filter()` or a hidden nav button is not a permission boundary. It's decoration on
+top of one. The only place that actually stops a request is a `USING` clause on the
+table — anything else is convenience for the honest case and provides zero
+protection against a direct API call. Every future feature with any restricted
+audience needs its enforcement written and tested at the RLS layer *first*; the
+UI-level convenience filter is optional decoration on top, never a substitute.
 
 ### Known, not yet fixed
 - Invites always use the sender's own `department_id` — no department picker, so
