@@ -3,7 +3,7 @@ import React, { useEffect, useState } from "react";
 import { useStore } from "@/lib/store";
 import { useUI } from "@/lib/ui";
 import { initials } from "@/lib/types";
-import { isDeptAdmin } from "@/lib/logic";
+import { isDeptAdmin, hasExecVisibility } from "@/lib/logic";
 import { IconChevDown, IconStar, IconTrash } from "./icons";
 import { Avatar } from "./shared";
 
@@ -38,6 +38,12 @@ export function Sidebar() {
   };
 
   const isAdmin = isDeptAdmin(me, levels);
+  // "Everything" (every task company-wide) and "Overview" (the executive
+  // dashboard) are RLS-safe either way, but showing them to someone whose own
+  // visibility is scoped to their department is just clutter — an empty or
+  // near-empty company-wide view that means nothing to them. Same pattern as
+  // canViewSop: exec_visibility is the real gate, not rank alone.
+  const canSeeCompanyWide = hasExecVisibility(me, levels);
 
   /* "member_can_create_board" used to be a toggle with nothing behind it —
      there was no board-creation UI at all, self-serve or request-based, so
@@ -202,8 +208,8 @@ export function Sidebar() {
         {navBtn("Inbox", section === "workspace" && workspacePage === "inbox", () => setWorkspacePage("inbox"), unread)}
 
         {sectionLabel("Company")}
-        {navBtn("Everything", section === "list" && listPage === "everything", () => setListPage("everything"))}
-        {navBtn("Overview", section === "company" && companyPage === "executive", () => setCompanyPage("executive"))}
+        {canSeeCompanyWide && navBtn("Everything", section === "list" && listPage === "everything", () => setListPage("everything"))}
+        {canSeeCompanyWide && navBtn("Overview", section === "company" && companyPage === "executive", () => setCompanyPage("executive"))}
         {navBtn("People", section === "company" && companyPage === "people", () => setCompanyPage("people"))}
 
         {sectionLabel("Workspace")}

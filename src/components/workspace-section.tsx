@@ -808,6 +808,28 @@ export function WorkspaceSection() {
                           {u.active === false ? "Reactivate" : "Suspend"}
                         </button>
                       )}
+                      {me?.is_super && u.id !== me?.id && (
+                        <button
+                          onClick={async () => {
+                            const firstName = u.name.split(" ")[0];
+                            if (!(await confirm({
+                              title: `Permanently delete ${u.name}?`,
+                              message: `This removes their account entirely — it can't be undone like Suspend can. Blocked automatically if they have any tasks, comments, docs, or audit history (reassign or suspend those first).`,
+                              confirmLabel: "Delete permanently", danger: true,
+                            }))) return;
+                            const res = await fetch(`/api/admin/users/${u.id}`, { method: "DELETE" }).catch(() => null);
+                            const json = res ? await res.json().catch(() => ({ ok: false })) : { ok: false };
+                            if (!json.ok) { pushToast(`Couldn't delete ${firstName} — ${json.error || "unknown error"}.`); return; }
+                            patch("profiles", profiles.filter((p) => p.id !== u.id));
+                            const { logAudit } = await import("@/lib/actions");
+                            if (me) await logAudit(supabase, me.id, "permanently deleted", u.name);
+                            pushToast(`${firstName} deleted`);
+                          }}
+                          style={pillBtn("var(--sw-on-red)")}
+                        >
+                          Delete permanently
+                        </button>
+                      )}
                     </div>
                   ))}
                 </section>
