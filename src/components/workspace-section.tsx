@@ -747,9 +747,9 @@ export function WorkspaceSection() {
           )}
           {workspacePage === "admin" && isAdmin && (
             <>
-              <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 16, borderBottom: "1px solid var(--sw-hair)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 16, borderBottom: "1px solid var(--sw-hair)", overflowX: "auto" }}>
                 {adminTabDefs.map(([key, label]) => (
-                  <button key={key} onClick={() => setAdminTab(key)} style={{ padding: "9px 13px", border: "none", background: "none", borderBottom: `2px solid ${adminTab === key ? "var(--crimson)" : "transparent"}`, color: adminTab === key ? "var(--sw-on-crimson)" : "var(--sw-text-soft)", fontSize: 12.5, fontWeight: 400, cursor: "pointer", marginBottom: -1 }}>
+                  <button key={key} onClick={() => setAdminTab(key)} style={{ padding: "9px 13px", border: "none", background: "none", borderBottom: `2px solid ${adminTab === key ? "var(--crimson)" : "transparent"}`, color: adminTab === key ? "var(--sw-on-crimson)" : "var(--sw-text-soft)", fontSize: 12.5, fontWeight: 400, cursor: "pointer", marginBottom: -1, whiteSpace: "nowrap", flex: "none" }}>
                     {label}
                   </button>
                 ))}
