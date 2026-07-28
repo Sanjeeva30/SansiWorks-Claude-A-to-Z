@@ -6,6 +6,7 @@ import { useUI } from "@/lib/ui";
 import { STATUS_COLORS, PRIORITY_COLORS, STATUSES, initials, Task } from "@/lib/types";
 import { iso, fmtShort, todayIso } from "@/lib/dates";
 import { updateTask } from "@/lib/actions";
+import { writeOrRevert } from "@/lib/actions";
 import { FilterState, EMPTY_FILTERS, applyFilters } from "@/lib/search";
 import { difficultyPoints } from "@/lib/logic";
 import { TopIcons } from "./shared";
@@ -260,7 +261,7 @@ export function ListSection() {
                   onClick={async (e) => {
                     e.stopPropagation();
                     if (!(await confirm({ title: `Delete "${v.name}"?`, message: "This saved view can't be recovered once deleted.", confirmLabel: "Delete", danger: true }))) return;
-                    await supabase.from("saved_views").delete().eq("id", v.id);
+                    if (!await writeOrRevert(supabase.from("saved_views").delete().eq("id", v.id), { toast: pushToast, what: `delete "${v.name}"` })) return;
                     patch("savedViews", savedViews.filter((x) => x.id !== v.id));
                   }}
                   title="Delete view"
@@ -537,7 +538,7 @@ export function ListSection() {
                 <button
                   onClick={async () => {
                     if (!(await confirm({ title: `Delete field "${f.name}"?`, message: "Every task in this list loses its value for this field. This can't be undone.", confirmLabel: "Delete field", danger: true }))) return;
-                    await supabase.from("custom_fields").delete().eq("id", f.id);
+                    if (!await writeOrRevert(supabase.from("custom_fields").delete().eq("id", f.id), { toast: pushToast, what: `remove "${f.name}"` })) return;
                     patch("customFields", customFields.filter((x) => x.id !== f.id));
                   }}
                   style={{ border: "none", background: "none", color: "var(--sw-on-red)", fontSize: 11.5, fontWeight: 400, cursor: "pointer" }}
@@ -584,9 +585,11 @@ export function ListSection() {
                 </span>
                 <span
                   onClick={async () => {
-                    const next = automations.map((x) => (x.id === a.id ? { ...x, enabled: !x.enabled } : x));
-                    patch("automations", next);
-                    await supabase.from("automations").update({ enabled: !a.enabled }).eq("id", a.id);
+                    const prev = automations;
+                    patch("automations", automations.map((x) => (x.id === a.id ? { ...x, enabled: !x.enabled } : x)));
+                    await writeOrRevert(supabase.from("automations").update({ enabled: !a.enabled }).eq("id", a.id), {
+                      toast: pushToast, what: "toggle that automation", revert: () => patch("automations", prev),
+                    });
                   }}
                   style={{ width: 36, height: 20, borderRadius: 999, background: a.enabled ? "var(--crimson)" : "var(--sw-hair)", position: "relative", flex: "none", cursor: "pointer", transition: "background .15s" }}
                 >

@@ -9,7 +9,7 @@ import {
   addDependency, removeDependency, canAddSubtask, accountableCandidates,
   createReminder, canEditDifficulty, updateTaskDifficulty, updateSubtaskDifficulty,
   listAttachments, uploadAttachment, deleteAttachment, downloadAttachmentUrl,
-  createComment, archiveTask,
+  createComment, archiveTask, writeOrRevert,
 } from "@/lib/actions";
 import { difficultyPoints } from "@/lib/logic";
 import { isHeadRank , readableTextOn} from "@/lib/colors";
@@ -562,8 +562,11 @@ export function TaskDetailSlideOver() {
                             <button
                               onClick={async () => {
                                 if (!(await confirm({ title: "Delete this comment?", message: "This can't be undone.", confirmLabel: "Delete", danger: true }))) return;
+                                const prev = comments;
                                 patch("comments", comments.filter((x) => x.id !== c.id));
-                                await supabase.from("comments").delete().eq("id", c.id);
+                                await writeOrRevert(supabase.from("comments").delete().eq("id", c.id), {
+                                  toast: pushToast, what: "delete that comment", revert: () => patch("comments", prev),
+                                });
                               }}
                               title="Delete comment"
                               style={{ border: "none", background: "none", color: "var(--sw-muted)", cursor: "pointer", padding: 2, display: "flex" }}

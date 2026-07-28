@@ -4,6 +4,7 @@ import { useStore } from "@/lib/store";
 import { useUI } from "@/lib/ui";
 import { initials } from "@/lib/types";
 import { isDeptAdmin, hasExecVisibility } from "@/lib/logic";
+import { writeOrRevert } from "@/lib/actions";
 import { IconChevDown, IconStar, IconTrash, IconX } from "./icons";
 import { Avatar } from "./shared";
 
@@ -90,8 +91,11 @@ export function Sidebar() {
      Restore path (Admin console -> Departments -> Archived spaces/boards). */
   const archiveList = async (l: { id: string; name: string }) => {
     if (!(await confirm({ title: `Archive "${l.name}"?`, message: "This board and its tasks stay intact — you can restore it from Admin console → Departments → Archived boards.", confirmLabel: "Archive", danger: true }))) return;
+    const prev = lists;
     patch("lists", lists.filter((x) => x.id !== l.id));
-    await supabase.from("lists").update({ archived: true }).eq("id", l.id);
+    await writeOrRevert(supabase.from("lists").update({ archived: true }).eq("id", l.id), {
+      toast: pushToast, what: `archive "${l.name}"`, revert: () => patch("lists", prev),
+    });
   };
   const archiveSpace = async (space: { id: string; name: string }) => {
     const spaceLists = lists.filter((x) => x.space_id === space.id);
@@ -102,9 +106,13 @@ export function Sidebar() {
         : "You can restore it from Admin console → Departments → Archived spaces.",
       confirmLabel: "Archive", danger: true,
     }))) return;
+    const prevSpaces = spaces, prevLists = lists;
     patch("spaces", spaces.filter((x) => x.id !== space.id));
     patch("lists", lists.filter((x) => x.space_id !== space.id));
-    await supabase.from("spaces").update({ archived: true }).eq("id", space.id);
+    await writeOrRevert(supabase.from("spaces").update({ archived: true }).eq("id", space.id), {
+      toast: pushToast, what: `archive "${space.name}"`,
+      revert: () => { patch("spaces", prevSpaces); patch("lists", prevLists); },
+    });
   };
   const createSpace = async () => {
     const name = newSpaceName.trim();
@@ -126,8 +134,11 @@ export function Sidebar() {
   const togglePin = async (listId: string) => {
     const existing = pins.find((p) => p.kind === "list" && p.target_id === listId);
     if (existing) {
+      const prev = pins;
       patch("pins", pins.filter((p) => p.id !== existing.id));
-      await supabase.from("pins").delete().eq("id", existing.id);
+      await writeOrRevert(supabase.from("pins").delete().eq("id", existing.id), {
+        toast: pushToast, what: "unpin that board", revert: () => patch("pins", prev),
+      });
     } else {
       if (!me) return;
       const { data } = await supabase.from("pins").insert({ profile_id: me.id, kind: "list", target_id: listId }).select().single();

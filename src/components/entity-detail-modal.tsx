@@ -5,7 +5,7 @@ import { useUI } from "@/lib/ui";
 import { initials, DocVersion } from "@/lib/types";
 import { relTime, fmtShort } from "@/lib/dates";
 import { isDeptHead, isInternalAuditManager, isInternalAudit, internalAuditDept } from "@/lib/logic";
-import { notify, logAudit } from "@/lib/actions";
+import { notify, logAudit, writeOrRevert } from "@/lib/actions";
 import { IconX, IconTrash } from "./icons";
 import { Avatar } from "./shared";
 import { useFocusTrap } from "@/lib/a11y";
@@ -171,7 +171,7 @@ const REVIEW_COLOR: Record<string, string> = { pending: "var(--sw-muted)", appro
    For SOPs, also carries the version history + dual-review (dept head +
    Internal Audit) actions and the "submit a revision" flow. */
 export function DocDetailModal() {
-  const { docDetailId, setDocDetailId, openProfile, confirm } = useUI();
+  const { docDetailId, setDocDetailId, openProfile, confirm, pushToast } = useUI();
   const { docs, docVersions, profiles, departments, deptHeads, me, supabase, patch, ensureDeferred } = useStore();
   // doc_versions is deferred — the revision trail is only needed once open.
   useEffect(() => { if (docDetailId) ensureDeferred(); }, [docDetailId, ensureDeferred]);
@@ -213,7 +213,11 @@ export function DocDetailModal() {
     const patchFields = kind === "head"
       ? { head_status: status, head_by: me.id, head_at: new Date().toISOString(), head_note_path: notePath }
       : { audit_status: status, audit_by: me.id, audit_at: new Date().toISOString(), audit_note_path: notePath };
-    await supabase.from("doc_versions").update(patchFields).eq("id", latest.id);
+    // A review verdict that silently fails to save is the worst case here:
+    // the reviewer believes they signed off and the doc never advances.
+    if (!await writeOrRevert(supabase.from("doc_versions").update(patchFields).eq("id", latest.id), {
+      toast: pushToast, what: "record that review decision",
+    })) { setBusy(false); return; }
     const updatedVersion = { ...latest, ...patchFields };
     const newHeadStatus = kind === "head" ? status : latest.head_status;
     const newAuditStatus = kind === "audit" ? status : latest.audit_status;
@@ -224,7 +228,11 @@ export function DocDetailModal() {
     } else if (fullyApproved) {
       docPatch = { status: "Active", current_version_id: latest.id };
     }
-    if (Object.keys(docPatch).length) await supabase.from("docs").update(docPatch).eq("id", d.id);
+    if (Object.keys(docPatch).length) {
+      await writeOrRevert(supabase.from("docs").update(docPatch).eq("id", d.id), {
+        toast: pushToast, what: "update the document status",
+      });
+    }
     patch("docVersions", docVersions.map((v) => (v.id === latest.id ? updatedVersion : v)));
     if (Object.keys(docPatch).length) patch("docs", docs.map((x) => (x.id === d.id ? { ...x, ...docPatch } : x)));
     const kindLabelForAudit = kind === "head" ? "Department review" : "Internal Audit";
@@ -272,7 +280,9 @@ export function DocDetailModal() {
       submitted_by: me.id, change_note: note || null, ai_summary: summary,
       review_due: reviewDue, head_reviewer_id: headReviewerId,
     }).select().single();
-    await supabase.from("docs").update({ status: "Under review" }).eq("id", d.id);
+    await writeOrRevert(supabase.from("docs").update({ status: "Under review" }).eq("id", d.id), {
+      toast: pushToast, what: "move the document to Under review",
+    });
     if (version) patch("docVersions", [...docVersions, version]);
     patch("docs", docs.map((x) => (x.id === d.id ? { ...x, status: "Under review" } : x)));
     if (headReviewerId && headReviewerId !== me.id) {
@@ -297,7 +307,9 @@ export function DocDetailModal() {
       submitted_by: me.id, head_status: "approved", audit_status: "approved",
     }).select().single();
     if (version) {
-      await supabase.from("docs").update({ current_version_id: version.id }).eq("id", d.id);
+      await writeOrRevert(supabase.from("docs").update({ current_version_id: version.id }).eq("id", d.id), {
+        toast: pushToast, what: "point the document at the new version",
+      });
       patch("docVersions", [...docVersions, version]);
       patch("docs", docs.map((x) => (x.id === d.id ? { ...x, current_version_id: version.id } : x)));
     }
@@ -317,8 +329,11 @@ export function DocDetailModal() {
               onClick={async () => {
                 if (!(await confirm({ title: `Delete "${d.title}"?`, message: "This removes it from Docs & SOPs everywhere it's listed, including any version history. This can't be undone from here.", confirmLabel: "Delete document", danger: true }))) return;
                 setDocDetailId(null);
+                const prev = docs;
                 patch("docs", docs.filter((x) => x.id !== d.id));
-                await supabase.from("docs").update({ archived: true }).eq("id", d.id);
+                await writeOrRevert(supabase.from("docs").update({ archived: true }).eq("id", d.id), {
+                  toast: pushToast, what: `delete "${d.title}"`, revert: () => patch("docs", prev),
+                });
               }}
               title="Delete document"
               aria-label="Delete document"

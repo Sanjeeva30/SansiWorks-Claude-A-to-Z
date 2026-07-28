@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useStore } from "@/lib/store";
 import { useUI } from "@/lib/ui";
 import { initials, Doc, PRIORITY_COLORS, Space, List, DocVisibility, DOC_VISIBILITY } from "@/lib/types";
+import { writeOrRevert } from "@/lib/actions";
 import { relTime, fmtShort, todayIso } from "@/lib/dates";
 import { isOpen, isOverdue, onTimeStats, tasksOfPerson, canViewSop, canViewDoc, isSeniorRank, isInternalAudit, isInternalAuditManager, isDeptHead, internalAuditDept, isMultiDeptAdmin, isDeptAdmin, hasExecVisibility } from "@/lib/logic";
 import { TopIcons } from "./shared";
@@ -245,9 +246,13 @@ export function WorkspaceSection() {
 
   const updateMe = async (fields: Record<string, unknown>) => {
     if (!me) return;
+    const prevProfiles = profiles, prevMe = me;
     patch("profiles", profiles.map((p) => (p.id === me.id ? { ...p, ...fields } : p)));
     patch("me", { ...me, ...fields } as typeof me);
-    await supabase.from("profiles").update(fields).eq("id", me.id);
+    await writeOrRevert(supabase.from("profiles").update(fields).eq("id", me.id), {
+      toast: pushToast, what: "save that setting",
+      revert: () => { patch("profiles", prevProfiles); patch("me", prevMe); },
+    });
   };
 
   /* ------- inbox rows ------- */
@@ -321,8 +326,12 @@ export function WorkspaceSection() {
     });
     if (created) {
       patch("formSubmissions", formSubmissions.map((s) => (s.id === submissionId ? { ...s, task_id: created.id } : s)));
-      await supabase.from("form_submissions").update({ task_id: created.id }).eq("id", submissionId);
-      pushToast("Submission converted to a task");
+      // The task exists either way; if the link write fails the submission
+      // stays unconverted and would be converted twice on the next click.
+      const linked = await writeOrRevert(supabase.from("form_submissions").update({ task_id: created.id }).eq("id", submissionId), {
+        toast: pushToast, what: "link the submission to its new task",
+      });
+      if (linked) pushToast("Submission converted to a task");
     }
     setConvertingSubmission(null);
   };
@@ -405,8 +414,11 @@ export function WorkspaceSection() {
         {workspacePage === "inbox" && (
           <button
             onClick={async () => {
+              const prev = notifications;
               patch("notifications", notifications.map((n) => ({ ...n, read: true })));
-              if (me) await supabase.from("notifications").update({ read: true }).eq("profile_id", me.id);
+              if (me) await writeOrRevert(supabase.from("notifications").update({ read: true }).eq("profile_id", me.id), {
+                toast: pushToast, what: "mark everything read", revert: () => patch("notifications", prev),
+              });
             }}
             style={{ padding: "7px 14px", borderRadius: 999, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", color: "var(--sw-text-soft)", fontSize: 12, fontWeight: 400, cursor: "pointer", whiteSpace: "nowrap", flex: "none" }}
           >
@@ -448,8 +460,11 @@ export function WorkspaceSection() {
                     key={n.id}
                     onClick={async () => {
                       if (!n.read) {
+                        const prev = notifications;
                         patch("notifications", notifications.map((x) => (x.id === n.id ? { ...x, read: true } : x)));
-                        await supabase.from("notifications").update({ read: true }).eq("id", n.id);
+                        await writeOrRevert(supabase.from("notifications").update({ read: true }).eq("id", n.id), {
+                          toast: pushToast, what: "mark that read", revert: () => patch("notifications", prev),
+                        });
                       }
                       if (n.task_id) setActiveTaskId(n.task_id);
                     }}
@@ -571,8 +586,11 @@ export function WorkspaceSection() {
                       value={f.default_assignee_id || ""}
                       onChange={async (e) => {
                         const ownerId = e.target.value || null;
+                        const prev = forms;
                         patch("forms", forms.map((x) => (x.id === f.id ? { ...x, default_assignee_id: ownerId } : x)));
-                        await supabase.from("forms").update({ default_assignee_id: ownerId }).eq("id", f.id);
+                        await writeOrRevert(supabase.from("forms").update({ default_assignee_id: ownerId }).eq("id", f.id), {
+                          toast: pushToast, what: "change the form owner", revert: () => patch("forms", prev),
+                        });
                       }}
                       style={{ height: 22, borderRadius: 999, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", color: "var(--sw-text-soft)", fontSize: 10.5, padding: "0 6px" }}
                     >
@@ -602,8 +620,11 @@ export function WorkspaceSection() {
                     </button>
                     <button
                       onClick={async () => {
+                        const prev = forms;
                         patch("forms", forms.map((x) => (x.id === f.id ? { ...x, active: !f.active } : x)));
-                        await supabase.from("forms").update({ active: !f.active }).eq("id", f.id);
+                        await writeOrRevert(supabase.from("forms").update({ active: !f.active }).eq("id", f.id), {
+                          toast: pushToast, what: f.active ? "pause that form" : "make that form live", revert: () => patch("forms", prev),
+                        });
                       }}
                       style={pillBtn("var(--sw-text-soft)")}
                     >
@@ -1021,9 +1042,14 @@ export function WorkspaceSection() {
                                       type="checkbox"
                                       checked={on}
                                       onChange={async () => {
+                                        const prev = levels;
                                         patch("levels", levels.map((x) => (x.id === lv.id ? { ...x, [key]: !on } : x)));
-                                        await supabase.from("levels").update({ [key]: !on }).eq("id", lv.id);
-                                        if (me) { const { logAudit } = await import("@/lib/actions"); await logAudit(supabase, me.id, `${!on ? "granted" : "revoked"} "${label}" for level`, lv.name); }
+                                        // A permission flag that looks flipped but wasn't is the
+                                        // most dangerous silent failure in the whole admin console.
+                                        const ok = await writeOrRevert(supabase.from("levels").update({ [key]: !on }).eq("id", lv.id), {
+                                          toast: pushToast, what: `${!on ? "grant" : "revoke"} "${label}"`, revert: () => patch("levels", prev),
+                                        });
+                                        if (ok && me) { const { logAudit } = await import("@/lib/actions"); await logAudit(supabase, me.id, `${!on ? "granted" : "revoked"} "${label}" for level`, lv.name); }
                                       }}
                                       style={{ width: 15, height: 15 }}
                                     />
@@ -1055,9 +1081,12 @@ export function WorkspaceSection() {
                           onChange={async (e) => {
                             const prevLevel = levels.find((l) => l.id === u.level_id)?.name || u.level_id;
                             const newLevel = levels.find((l) => l.id === e.target.value)?.name || e.target.value;
+                            const prev = profiles;
                             patch("profiles", profiles.map((p) => (p.id === u.id ? { ...p, level_id: e.target.value } : p)));
-                            await supabase.from("profiles").update({ level_id: e.target.value }).eq("id", u.id);
-                            if (me) { const { logAudit } = await import("@/lib/actions"); await logAudit(supabase, me.id, `changed level from ${prevLevel} to ${newLevel} for`, u.name); }
+                            const ok = await writeOrRevert(supabase.from("profiles").update({ level_id: e.target.value }).eq("id", u.id), {
+                              toast: pushToast, what: `change ${u.name.split(" ")[0]}'s level`, revert: () => patch("profiles", prev),
+                            });
+                            if (ok && me) { const { logAudit } = await import("@/lib/actions"); await logAudit(supabase, me.id, `changed level from ${prevLevel} to ${newLevel} for`, u.name); }
                           }}
                           style={{ height: 32, borderRadius: 8, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "0 10px", fontSize: 12, color: "var(--sw-text)", width: 150 }}
                         >
@@ -1068,8 +1097,11 @@ export function WorkspaceSection() {
                           value={u.manager_id || ""}
                           onChange={async (e) => {
                             const v = e.target.value || null;
+                            const prev = profiles;
                             patch("profiles", profiles.map((p) => (p.id === u.id ? { ...p, manager_id: v } : p)));
-                            await supabase.from("profiles").update({ manager_id: v }).eq("id", u.id);
+                            await writeOrRevert(supabase.from("profiles").update({ manager_id: v }).eq("id", u.id), {
+                              toast: pushToast, what: `change ${u.name.split(" ")[0]}'s manager`, revert: () => patch("profiles", prev),
+                            });
                           }}
                           style={{ height: 32, borderRadius: 8, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "0 10px", fontSize: 12, color: "var(--sw-text)", width: 150 }}
                         >
@@ -1104,8 +1136,11 @@ export function WorkspaceSection() {
                             <button
                               onClick={async () => {
                                 if (d.archived) {
+                                  const prev = departments;
                                   patch("departments", departments.map((x) => (x.id === d.id ? { ...x, archived: false } : x)));
-                                  await supabase.from("org_units").update({ archived: false }).eq("id", d.id);
+                                  if (!await writeOrRevert(supabase.from("org_units").update({ archived: false }).eq("id", d.id), {
+                                    toast: pushToast, what: `restore "${d.name}"`, revert: () => patch("departments", prev),
+                                  })) return;
                                   if (me) { const { logAudit } = await import("@/lib/actions"); await logAudit(supabase, me.id, "restored department", d.name); }
                                   pushToast(`"${d.name}" restored`);
                                   return;
@@ -1115,8 +1150,11 @@ export function WorkspaceSection() {
                                   message: `${heads.length + members.length} ${heads.length + members.length === 1 ? "person keeps" : "people keep"} their existing tasks and history — archiving only hides it from pickers going forward. You can restore it any time.`,
                                   confirmLabel: "Archive", danger: true,
                                 }))) return;
+                                const prevDepts = departments;
                                 patch("departments", departments.map((x) => (x.id === d.id ? { ...x, archived: true } : x)));
-                                await supabase.from("org_units").update({ archived: true }).eq("id", d.id);
+                                if (!await writeOrRevert(supabase.from("org_units").update({ archived: true }).eq("id", d.id), {
+                                  toast: pushToast, what: `archive "${d.name}"`, revert: () => patch("departments", prevDepts),
+                                })) return;
                                 if (me) { const { logAudit } = await import("@/lib/actions"); await logAudit(supabase, me.id, "archived department", d.name); }
                                 pushToast(`"${d.name}" archived`);
                               }}
@@ -1166,8 +1204,11 @@ export function WorkspaceSection() {
                                       <button
                                         onClick={async () => {
                                           if (!(await confirm({ title: `Remove ${h!.name} as head of ${d.name}?`, message: "They'll lose head-level authority over this department immediately.", confirmLabel: "Remove", danger: true }))) return;
+                                          const prev = deptHeads;
                                           patch("deptHeads", deptHeads.filter((x) => !(x.unit_id === d.id && x.profile_id === h!.id)));
-                                          await supabase.from("org_unit_heads").delete().eq("unit_id", d.id).eq("profile_id", h!.id);
+                                          await writeOrRevert(supabase.from("org_unit_heads").delete().eq("unit_id", d.id).eq("profile_id", h!.id), {
+                                            toast: pushToast, what: `remove ${h!.name} as head`, revert: () => patch("deptHeads", prev),
+                                          });
                                         }}
                                         style={{ border: "none", background: "none", color: "var(--sw-muted)", cursor: "pointer", fontSize: 12, padding: "0 2px" }}
                                       >
@@ -1207,8 +1248,11 @@ export function WorkspaceSection() {
                                     <button
                                       onClick={async () => {
                                         if (!(await confirm({ title: `Remove ${m!.name} from ${d.name}?`, message: "This removes their cross-department membership here — their home department is unaffected.", confirmLabel: "Remove", danger: true }))) return;
+                                        const prev = deptMembers;
                                         patch("deptMembers", deptMembers.filter((x) => !(x.department_id === d.id && x.profile_id === m!.id)));
-                                        await supabase.from("org_unit_members").delete().eq("department_id", d.id).eq("profile_id", m!.id);
+                                        await writeOrRevert(supabase.from("org_unit_members").delete().eq("department_id", d.id).eq("profile_id", m!.id), {
+                                          toast: pushToast, what: `remove ${m!.name}`, revert: () => patch("deptMembers", prev),
+                                        });
                                       }}
                                       style={{ border: "none", background: "none", color: "var(--sw-muted)", cursor: "pointer", fontSize: 12, padding: "0 2px" }}
                                     >
@@ -1256,7 +1300,7 @@ export function WorkspaceSection() {
                           <span style={{ fontSize: 10.5, fontWeight: 400, color: "var(--sw-muted)" }}>Space</span>
                           <button
                             onClick={async () => {
-                              await supabase.from("spaces").update({ archived: false }).eq("id", s.id);
+                              if (!await writeOrRevert(supabase.from("spaces").update({ archived: false }).eq("id", s.id), { toast: pushToast, what: `restore "${s.name}"` })) return;
                               setArchivedSpaces(archivedSpaces.filter((x) => x.id !== s.id));
                               patch("spaces", [...spaces, { ...s, archived: false }]);
                               if (me) { const { logAudit } = await import("@/lib/actions"); await logAudit(supabase, me.id, "restored space", s.name); }
@@ -1274,7 +1318,7 @@ export function WorkspaceSection() {
                           <span style={{ fontSize: 10.5, fontWeight: 400, color: "var(--sw-muted)" }}>Board</span>
                           <button
                             onClick={async () => {
-                              await supabase.from("lists").update({ archived: false }).eq("id", l.id);
+                              if (!await writeOrRevert(supabase.from("lists").update({ archived: false }).eq("id", l.id), { toast: pushToast, what: `restore "${l.name}"` })) return;
                               setArchivedLists(archivedLists.filter((x) => x.id !== l.id));
                               patch("lists", [...lists, { ...l, archived: false }]);
                               if (me) { const { logAudit } = await import("@/lib/actions"); await logAudit(supabase, me.id, "restored board", l.name); }
@@ -1304,8 +1348,11 @@ export function WorkspaceSection() {
                           </span>
                           <button
                             onClick={async () => {
+                              const prev = proposals;
                               patch("proposals", proposals.filter((x) => x.id !== p.id));
-                              await supabase.from("dept_proposals").update({ status: "dismissed" }).eq("id", p.id);
+                              await writeOrRevert(supabase.from("dept_proposals").update({ status: "dismissed" }).eq("id", p.id), {
+                                toast: pushToast, what: "dismiss that proposal", revert: () => patch("proposals", prev),
+                              });
                             }}
                             style={pillBtn("var(--sw-text-soft)")}
                           >
@@ -1315,10 +1362,16 @@ export function WorkspaceSection() {
                             onClick={async () => {
                               const { logAudit, createDepartmentWithSpace } = await import("@/lib/actions");
                               const { error } = await createDepartmentWithSpace(supabase, p.name);
-                              await supabase.from("dept_proposals").update({ status: "accepted" }).eq("id", p.id);
+                              // The proposal was being closed as "accepted" even when the
+                              // department failed to create — the request then vanished
+                              // from the queue with nothing to show for it.
+                              if (error) { pushToast(error); return; }
+                              if (!await writeOrRevert(supabase.from("dept_proposals").update({ status: "accepted" }).eq("id", p.id), {
+                                toast: pushToast, what: "close that proposal",
+                              })) return;
                               await refresh();
                               if (me) await logAudit(supabase, me.id, "created department (from proposal)", p.name);
-                              pushToast(error || `Department "${p.name}" created, with its own board`);
+                              pushToast(`Department "${p.name}" created, with its own board`);
                             }}
                             style={{ padding: "6px 12px", borderRadius: 999, border: "none", background: "var(--crimson)", color: "#fff", fontSize: 11.5, fontWeight: 400, cursor: "pointer" }}
                           >
@@ -1410,8 +1463,11 @@ export function WorkspaceSection() {
                             <button
                               key={verdict}
                               onClick={async () => {
+                                const prevNoms = nominations;
                                 patch("nominations", nominations.filter((x) => x.id !== nm.id));
-                                await supabase.from("nominations").update({ status: verdict }).eq("id", nm.id);
+                                if (!await writeOrRevert(supabase.from("nominations").update({ status: verdict }).eq("id", nm.id), {
+                                  toast: pushToast, what: `${verdict === "approved" ? "approve" : "reject"} that nomination`, revert: () => patch("nominations", prevNoms),
+                                })) return;
                                 if (verdict === "approved" && nominee && dept) {
                                   const { error } = await supabase.from("org_unit_heads").insert({ unit_id: dept.id, profile_id: nominee.id });
                                   await refresh();
@@ -1490,8 +1546,11 @@ export function WorkspaceSection() {
                           </span>
                           <button
                             onClick={async () => {
+                              const prevReqs = boardRequests;
                               patch("boardRequests", boardRequests.filter((x) => x.id !== b.id));
-                              await supabase.from("board_requests").update({ status: "approved" }).eq("id", b.id);
+                              if (!await writeOrRevert(supabase.from("board_requests").update({ status: "approved" }).eq("id", b.id), {
+                                toast: pushToast, what: "approve that request", revert: () => patch("boardRequests", prevReqs),
+                              })) return;
                               const sp = spaces.find((s) => s.department_id === b.department_id);
                               // Previously this toasted "created" even when no
                               // space existed for the department, or when the
@@ -1513,8 +1572,11 @@ export function WorkspaceSection() {
                           </button>
                           <button
                             onClick={async () => {
+                              const prev = boardRequests;
                               patch("boardRequests", boardRequests.filter((x) => x.id !== b.id));
-                              await supabase.from("board_requests").update({ status: "rejected" }).eq("id", b.id);
+                              await writeOrRevert(supabase.from("board_requests").update({ status: "rejected" }).eq("id", b.id), {
+                                toast: pushToast, what: "reject that request", revert: () => patch("boardRequests", prev),
+                              });
                             }}
                             style={pillBtn("var(--sw-on-red)")}
                           >
@@ -1599,8 +1661,11 @@ export function WorkspaceSection() {
                       <label key={key} style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 0", borderBottom: "1px solid var(--sw-hair)", cursor: "pointer" }}>
                         <span
                           onClick={async () => {
+                            const prev = features;
                             patch("features", { ...features, [key]: !on });
-                            await supabase.from("features").update({ enabled: !on }).eq("key", key);
+                            await writeOrRevert(supabase.from("features").update({ enabled: !on }).eq("key", key), {
+                              toast: pushToast, what: `turn that ${on ? "off" : "on"}`, revert: () => patch("features", prev),
+                            });
                           }}
                           style={{ width: 36, height: 20, borderRadius: 999, background: on ? "var(--crimson)" : "var(--sw-hair)", position: "relative", flex: "none", transition: "background .15s" }}
                         >
@@ -1769,7 +1834,9 @@ export function WorkspaceSection() {
                                 submitted_by: me.id, head_status: "approved", audit_status: "approved",
                               }).select().single();
                               if (version) {
-                                await supabase.from("docs").update({ current_version_id: version.id }).eq("id", createdDoc.id);
+                                await writeOrRevert(supabase.from("docs").update({ current_version_id: version.id }).eq("id", createdDoc.id), {
+                                  toast: pushToast, what: "attach the file to the new doc",
+                                });
                                 createdDoc = { ...createdDoc, current_version_id: version.id };
                                 patch("docVersions", [...docVersions, version]);
                               }
@@ -1886,7 +1953,7 @@ export function WorkspaceSection() {
                   if (!editingForm.title.trim()) return;
                   if (!editingForm.ownerId) { pushToast("Choose who submissions should notify and assign to"); return; }
                   const fields = editingForm.fields.filter((f) => f.label.trim());
-                  await supabase.from("forms").update({ title: editingForm.title.trim(), list_id: editingForm.listId || null, default_assignee_id: editingForm.ownerId, fields }).eq("id", editingForm.id);
+                  if (!await writeOrRevert(supabase.from("forms").update({ title: editingForm.title.trim(), list_id: editingForm.listId || null, default_assignee_id: editingForm.ownerId, fields }).eq("id", editingForm.id), { toast: pushToast, what: "save that form" })) return;
                   patch("forms", forms.map((x) => (x.id === editingForm.id ? { ...x, title: editingForm.title.trim(), list_id: editingForm.listId || null, default_assignee_id: editingForm.ownerId, fields } : x)));
                   setEditingForm(null);
                   pushToast("Form updated");

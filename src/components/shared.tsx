@@ -1,6 +1,7 @@
 "use client";
 import React, { useEffect, useRef, useState } from "react";
 import { useStore } from "@/lib/store";
+import { writeOrRevert } from "@/lib/actions";
 import { useUI } from "@/lib/ui";
 import { initials, Profile, STATUS_COLORS } from "@/lib/types";
 import { relTime, fmtShort, todayIso } from "@/lib/dates";
@@ -313,8 +314,19 @@ export function Toasts() {
 
 /* ---------- Profile modal ---------- */
 export function ProfileModal() {
-  const { profileTarget, openProfile, viewerLevel, setViewerLevel, setMetricModal } = useUI();
+  const { profileTarget, openProfile, viewerLevel, setViewerLevel, setMetricModal, pushToast } = useUI();
   const { me, profiles, departments, tasks, permissionTemplates, features, supabase, patch } = useStore();
+
+  /* Template, overrides and capacity all edit the same row the same way. These
+     are permission grants — a silently-refused write that still shows as applied
+     is how someone ends up believing a person has rights they don't. */
+  const saveProfile = async (id: string, fields: Record<string, unknown>, what: string) => {
+    const prev = profiles;
+    patch("profiles", profiles.map((x) => (x.id === id ? { ...x, ...fields } : x)));
+    await writeOrRevert(supabase.from("profiles").update(fields).eq("id", id), {
+      toast: pushToast, what, revert: () => patch("profiles", prev),
+    });
+  };
   const p = profiles.find((x) => x.id === profileTarget);
   const trapRef = useFocusTrap(!!p);
   if (!p) return null;
@@ -446,8 +458,7 @@ export function ProfileModal() {
                   value={p.template_id || ""}
                   onChange={async (e) => {
                     const template_id = e.target.value || null;
-                    patch("profiles", profiles.map((x) => (x.id === p.id ? { ...x, template_id } : x)));
-                    await supabase.from("profiles").update({ template_id }).eq("id", p.id);
+                    await saveProfile(p.id, { template_id }, "change the permission template");
                   }}
                   style={{ height: 30, borderRadius: 7, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", fontSize: 11.5, color: "var(--sw-text-soft)", padding: "0 8px", width: "100%" }}
                 >
@@ -468,8 +479,7 @@ export function ProfileModal() {
                         onChange={async (e) => {
                           const nextAbilities = { ...overrideAbilities, [key]: e.target.checked };
                           const permission_overrides = { ...(p.permission_overrides || {}), abilities: nextAbilities };
-                          patch("profiles", profiles.map((x) => (x.id === p.id ? { ...x, permission_overrides } : x)));
-                          await supabase.from("profiles").update({ permission_overrides }).eq("id", p.id);
+                          await saveProfile(p.id, { permission_overrides }, `change the "${lbl}" override`);
                         }}
                       />
                       {lbl}
@@ -486,8 +496,7 @@ export function ProfileModal() {
                     defaultValue={p.capacity_points ?? 20}
                     onBlur={async (e) => {
                       const capacity_points = Number(e.target.value) || 20;
-                      patch("profiles", profiles.map((x) => (x.id === p.id ? { ...x, capacity_points } : x)));
-                      await supabase.from("profiles").update({ capacity_points }).eq("id", p.id);
+                      await saveProfile(p.id, { capacity_points }, "update capacity");
                     }}
                     style={{ height: 30, borderRadius: 7, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", fontSize: 11.5, color: "var(--sw-text)", padding: "0 8px", width: 90 }}
                   />

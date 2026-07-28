@@ -255,6 +255,26 @@ export async function logAudit(supabase: Supabase, actorId: string, action: stri
   await supabase.from("audit_log").insert({ actor_id: actorId, action, target });
 }
 
+/* Every write in this app used to be fire-and-forget: `await supabase.from(x)
+   .update(...)` with the returned error dropped on the floor. When RLS refused
+   a write, the optimistic patch stayed on screen and the user believed a change
+   had saved that the database had rejected — the exact shape of the "+ Add
+   unit does nothing" and "form submitted (it hadn't)" bugs.
+
+   Wrap writes in this instead. It surfaces the failure, undoes the optimistic
+   patch, and returns false so callers can skip follow-up work (audit entries,
+   notifications) that would otherwise describe something that never happened. */
+export async function writeOrRevert(
+  op: PromiseLike<{ error: { message: string } | null }>,
+  opts: { toast: (msg: string) => void; what: string; revert?: () => void }
+): Promise<boolean> {
+  const { error } = await op;
+  if (!error) return true;
+  opts.revert?.();
+  opts.toast(`Couldn't ${opts.what} — ${error.message}`);
+  return false;
+}
+
 /* ----- comments & @mentions ----- */
 export async function createComment(
   supabase: Supabase,

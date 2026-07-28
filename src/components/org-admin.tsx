@@ -4,7 +4,7 @@ import { useStore } from "@/lib/store";
 import { useUI } from "@/lib/ui";
 import { OrgUnitType, ORG_UNIT_TYPES, PermissionTemplate } from "@/lib/types";
 import { colorForPerson } from "@/lib/colors";
-import { logAudit } from "@/lib/actions";
+import { logAudit, writeOrRevert } from "@/lib/actions";
 import { isMultiDeptAdmin } from "@/lib/logic";
 import { IconX } from "./icons";
 
@@ -92,14 +92,20 @@ export function OrgAdmin({ tab }: { tab: "organisation" | "permissions" }) {
   }
 
   async function archiveUnit(id: string, archived: boolean) {
+    const prev = departments;
     patch("departments", departments.map((d) => (d.id === id ? { ...d, archived } : d)));
-    await supabase.from("org_units").update({ archived }).eq("id", id);
-    if (me) await logAudit(supabase, me.id, archived ? "archived org unit" : "unarchived org unit", unitName(id));
+    const ok = await writeOrRevert(supabase.from("org_units").update({ archived }).eq("id", id), {
+      toast: pushToast, what: archived ? "archive that unit" : "restore that unit", revert: () => patch("departments", prev),
+    });
+    if (ok && me) await logAudit(supabase, me.id, archived ? "archived org unit" : "unarchived org unit", unitName(id));
   }
 
   async function toggleDormant(id: string, dormant: boolean) {
+    const prev = departments;
     patch("departments", departments.map((d) => (d.id === id ? { ...d, dormant } : d)));
-    await supabase.from("org_units").update({ dormant }).eq("id", id);
+    await writeOrRevert(supabase.from("org_units").update({ dormant }).eq("id", id), {
+      toast: pushToast, what: dormant ? "hide that unit" : "show that unit", revert: () => patch("departments", prev),
+    });
   }
 
   async function addHead(unitId: string, profileId: string) {
@@ -119,9 +125,12 @@ export function OrgAdmin({ tab }: { tab: "organisation" | "permissions" }) {
   async function removeHead(unitId: string, profileId: string) {
     const person = profiles.find((p) => p.id === profileId)?.name || "this person";
     if (!(await confirm({ title: `Remove ${person} as head of ${unitName(unitId)}?`, message: "They'll lose head-level authority over this unit immediately.", confirmLabel: "Remove", danger: true }))) return;
+    const prev = deptHeads;
     patch("deptHeads", deptHeads.filter((h) => !(h.unit_id === unitId && h.profile_id === profileId)));
-    await supabase.from("org_unit_heads").delete().eq("unit_id", unitId).eq("profile_id", profileId);
-    if (me) await logAudit(supabase, me.id, `removed ${person} as head of`, unitName(unitId));
+    const ok = await writeOrRevert(supabase.from("org_unit_heads").delete().eq("unit_id", unitId).eq("profile_id", profileId), {
+      toast: pushToast, what: `remove ${person} as head`, revert: () => patch("deptHeads", prev),
+    });
+    if (ok && me) await logAudit(supabase, me.id, `removed ${person} as head of`, unitName(unitId));
   }
 
   async function createAssignment() {
@@ -147,9 +156,12 @@ export function OrgAdmin({ tab }: { tab: "organisation" | "permissions" }) {
     if (!a) return;
     const person = profiles.find((p) => p.id === a.profile_id)?.name || "this person";
     if (!(await confirm({ title: `Remove "${a.function_name}" from ${person}?`, message: "This assignment can be re-added later, but not undone automatically.", confirmLabel: "Remove", danger: true }))) return;
-    patch("assignments", assignments.filter((a) => a.id !== id));
-    await supabase.from("assignments").delete().eq("id", id);
-    if (me) await logAudit(supabase, me.id, `removed assignment: ${person} as ${a.function_name}`, unitName(a.scope_unit_id) || "org-wide");
+    const prev = assignments;
+    patch("assignments", assignments.filter((x) => x.id !== id));
+    const ok = await writeOrRevert(supabase.from("assignments").delete().eq("id", id), {
+      toast: pushToast, what: "remove that assignment", revert: () => patch("assignments", prev),
+    });
+    if (ok && me) await logAudit(supabase, me.id, `removed assignment: ${person} as ${a.function_name}`, unitName(a.scope_unit_id) || "org-wide");
   }
 
   /* Same silent-failure shape as createUnit, plus it never pushed a success
@@ -166,7 +178,7 @@ export function OrgAdmin({ tab }: { tab: "organisation" | "permissions" }) {
     pushToast(`Template "${name}" created — set its screens and abilities below`);
   }
   async function saveTemplate(t: PermissionTemplate) {
-    await supabase.from("permission_templates").update({ screens: t.screens, abilities: t.abilities, description: t.description }).eq("id", t.id);
+    if (!await writeOrRevert(supabase.from("permission_templates").update({ screens: t.screens, abilities: t.abilities, description: t.description }).eq("id", t.id), { toast: pushToast, what: `save "${t.name}"` })) return;
     if (me) await logAudit(supabase, me.id, "edited permission template", t.name);
     await refresh();
     pushToast(`Template "${t.name}" saved`);
@@ -180,13 +192,16 @@ export function OrgAdmin({ tab }: { tab: "organisation" | "permissions" }) {
       message: inUse ? `${inUse} ${inUse === 1 ? "person is" : "people are"} currently using this template — they'll fall back to their level's default permissions.` : "This can't be undone.",
       confirmLabel: "Delete template", danger: true,
     }))) return;
-    await supabase.from("permission_templates").delete().eq("id", id);
+    if (!await writeOrRevert(supabase.from("permission_templates").delete().eq("id", id), { toast: pushToast, what: `delete "${t.name}"` })) return;
     if (me) await logAudit(supabase, me.id, "deleted permission template", t.name);
     await refresh();
   }
   async function assignTemplate(profileId: string, templateId: string) {
+    const prevProfiles = profiles;
     patch("profiles", profiles.map((p) => (p.id === profileId ? { ...p, template_id: templateId || null } : p)));
-    await supabase.from("profiles").update({ template_id: templateId || null }).eq("id", profileId);
+    if (!await writeOrRevert(supabase.from("profiles").update({ template_id: templateId || null }).eq("id", profileId), {
+      toast: pushToast, what: "assign that template", revert: () => patch("profiles", prevProfiles),
+    })) return;
     if (me) {
       const templateName = permissionTemplates.find((t) => t.id === templateId)?.name || "no template";
       await logAudit(supabase, me.id, `set permission template to "${templateName}" for`, profiles.find((p) => p.id === profileId)?.name || "someone");
@@ -295,8 +310,11 @@ export function OrgAdmin({ tab }: { tab: "organisation" | "permissions" }) {
                 value={d.color}
                 onChange={async (e) => {
                   const color = e.target.value;
+                  const prev = departments;
                   patch("departments", departments.map((x) => (x.id === d.id ? { ...x, color } : x)));
-                  await supabase.from("org_units").update({ color }).eq("id", d.id);
+                  await writeOrRevert(supabase.from("org_units").update({ color }).eq("id", d.id), {
+                    toast: pushToast, what: "change that colour", revert: () => patch("departments", prev),
+                  });
                 }}
                 title="Department hue — everyone in this unit renders in a shade of this colour"
                 style={{ width: 22, height: 22, borderRadius: 6, border: "1px solid var(--sw-hair)", padding: 0, flex: "none", cursor: "pointer" }}

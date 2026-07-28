@@ -1,6 +1,7 @@
 "use client";
 import React, { useRef, useState } from "react";
 import { useStore } from "@/lib/store";
+import { writeOrRevert } from "@/lib/actions";
 import { useUI } from "@/lib/ui";
 
 const OUT_SIZE = 256;
@@ -77,8 +78,13 @@ export function AvatarUploadButton({ profileId, size = 64 }: { profileId: string
     if (upErr) { pushToast("Couldn't upload the photo — try again."); return; }
     const { data } = supabase.storage.from("avatars").getPublicUrl(path);
     const avatar_url = `${data.publicUrl}?v=${Date.now()}`;
+    const prev = profiles;
     patch("profiles", profiles.map((p) => (p.id === profileId ? { ...p, avatar_url } : p)));
-    await supabase.from("profiles").update({ avatar_url }).eq("id", profileId);
+    // The file reached storage, but if the profile row won't take the URL the
+    // photo is orphaned and the avatar silently reverts on next load.
+    if (!await writeOrRevert(supabase.from("profiles").update({ avatar_url }).eq("id", profileId), {
+      toast: pushToast, what: "save the new photo", revert: () => patch("profiles", prev),
+    })) return;
     pushToast("Profile photo updated");
   };
 
