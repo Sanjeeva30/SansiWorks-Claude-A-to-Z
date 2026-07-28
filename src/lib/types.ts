@@ -158,7 +158,10 @@ export interface Task {
   status: Status;
   priority: Priority;
   due: string | null;
-  effort: number;
+  /* `effort` is retired — difficulty is the single sizing scale (see
+     difficultyPoints() in logic.ts). The DB column still exists, defaulted and
+     no longer read, so the original estimates survive if this is ever revisited;
+     it is deliberately absent here so nothing can start depending on it again. */
   blocked: boolean;
   description: string | null;
   reminder_at: string | null;

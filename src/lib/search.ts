@@ -113,15 +113,18 @@ export interface FilterState {
   statuses: string[];
   priorities: string[];
   due: "" | "overdue" | "today" | "week" | "next-week" | "none";
-  effort: "" | "light" | "medium" | "heavy"; // 1-2 / 3-5 / 8+
+  /* Was an `effort` band over the retired points field. Now filters on the
+     difficulty scale directly, so the label a user picks here is the same word
+     they see on the task itself. */
+  difficulty: "" | "light" | "medium" | "heavy"; // Trivial-Easy / Moderate / Hard-Complex
 }
 
-export const EMPTY_FILTERS: FilterState = { text: "", assignees: [], statuses: [], priorities: [], due: "", effort: "" };
+export const EMPTY_FILTERS: FilterState = { text: "", assignees: [], statuses: [], priorities: [], due: "", difficulty: "" };
 
 export function countActiveFilters(f: FilterState): number {
   return (
     (f.text ? 1 : 0) + (f.assignees.length ? 1 : 0) + (f.statuses.length ? 1 : 0) +
-    (f.priorities.length ? 1 : 0) + (f.due ? 1 : 0) + (f.effort ? 1 : 0)
+    (f.priorities.length ? 1 : 0) + (f.due ? 1 : 0) + (f.difficulty ? 1 : 0)
   );
 }
 
@@ -151,10 +154,11 @@ export function applyFilters(tasks: Task[], f: FilterState, today: string): Task
       }
     });
   }
-  if (f.effort) {
+  if (f.difficulty) {
     rows = rows.filter((t) => {
-      const e = t.effort || 1;
-      return f.effort === "light" ? e <= 2 : f.effort === "medium" ? e >= 3 && e <= 5 : e >= 8;
+      // Unsized tasks read as Moderate, matching difficultyPoints().
+      const d = t.difficulty ?? 3;
+      return f.difficulty === "light" ? d <= 2 : f.difficulty === "medium" ? d === 3 : d >= 4;
     });
   }
   return rows;
@@ -163,4 +167,6 @@ export function applyFilters(tasks: Task[], f: FilterState, today: string): Task
 export const DUE_LABELS: Record<string, string> = {
   overdue: "Overdue", today: "Due today", week: "This week", "next-week": "Next week", none: "No due date",
 };
-export const EFFORT_LABELS: Record<string, string> = { light: "1–2 pts", medium: "3–5 pts", heavy: "8+ pts" };
+export const DIFFICULTY_FILTER_LABELS: Record<string, string> = {
+  light: "Trivial–Easy", medium: "Moderate", heavy: "Hard–Complex",
+};

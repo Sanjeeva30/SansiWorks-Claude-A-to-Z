@@ -11,6 +11,7 @@ import {
   listAttachments, uploadAttachment, deleteAttachment, downloadAttachmentUrl,
   createComment, archiveTask,
 } from "@/lib/actions";
+import { difficultyPoints } from "@/lib/logic";
 import { isHeadRank , readableTextOn} from "@/lib/colors";
 import { ReminderInline } from "./reminders";
 import { relTime, fmtShort, todayIso } from "@/lib/dates";
@@ -347,11 +348,12 @@ export function TaskDetailSlideOver() {
                   ))}
                 </span>
 
-                <span style={label}>Effort</span>
-                <span style={{ fontSize: 12.5, fontWeight: 400 }}>{t.effort} pts</span>
-
+                {/* "Effort" used to sit right here beside Difficulty, asking
+                    for the same judgement twice. Difficulty is the single
+                    scale now; its weight is shown so the workload contribution
+                    is legible without a second field. */}
                 <span style={label}>Difficulty</span>
-                <span style={{ justifySelf: "start", width: 180 }}>
+                <span style={{ justifySelf: "start", width: 180, display: "flex", alignItems: "center", gap: 8 }}>
                   <DifficultyPicker
                     value={t.difficulty}
                     disabled={!canEditDifficulty(profiles, levels, me, t.difficulty_set_by)}
@@ -359,6 +361,12 @@ export function TaskDetailSlideOver() {
                     onChange={(v) => me && updateTaskDifficulty(supabase, store, patch, t, me, v)}
                     compact
                   />
+                  <span
+                    title={t.difficulty ? "Counts this much toward the assignee's weekly capacity" : "Unsized tasks count as Moderate so an unestimated backlog can't look free"}
+                    style={{ fontSize: 11, color: "var(--sw-muted)", flex: "none" }}
+                  >
+                    {difficultyPoints(t.difficulty)} pts{t.difficulty ? "" : " (est.)"}
+                  </span>
                 </span>
 
                 <span style={label}>Reminder</span>

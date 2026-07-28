@@ -2,9 +2,9 @@ import { describe, it, expect } from "vitest";
 import {
   isOpen, isOverdue, onTimeStats, efficiencyScore, departmentRisk, atRiskTasks,
   criticalUnblocker, workloadPct, canViewSop, isSeniorRank, isInternalAudit,
-  isDeptHead, isInternalAuditManager,
+  isDeptHead, isInternalAuditManager, difficultyPoints,
 } from "./logic";
-import { Task, Profile, Department, Dependency, Level } from "./types";
+import { Task, Profile, Department, Dependency, Level, DIFFICULTY_LEVELS } from "./types";
 import { nextRecurrenceDue } from "./actions";
 
 const iso = (offsetDays: number) => {
@@ -18,7 +18,7 @@ function task(fields: Partial<Task> = {}): Task {
   seq += 1;
   return {
     id: `t${seq}`, task_number: seq, list_id: "l1", owner_id: "p1", name: `Task ${seq}`,
-    status: "Not Started", priority: "Medium", due: null, effort: 1, blocked: false,
+    status: "Not Started", priority: "Medium", due: null, blocked: false,
     description: null, reminder_at: null, recur: "none", accountable_id: null,
     completed_at: null, created_at: iso(0), milestone: false, assignee_id: "p1",
     raci_c: [], raci_i: [], difficulty: null, difficulty_set_by: null,
@@ -165,13 +165,35 @@ describe("workloadPct (capacity defaults to 20 pts/week)", () => {
   });
   it("uses the default 20pt capacity when capacity_points is unset", () => {
     const p = profile({ id: "solo", capacity_points: null });
-    const rows = [task({ assignee_id: "solo", effort: 10 })];
-    expect(workloadPct(rows, p)).toBe(50);
+    // Two Complex tasks = 8 + 8 = 16 of a 20pt week.
+    const rows = [task({ assignee_id: "solo", difficulty: 5 }), task({ assignee_id: "solo", difficulty: 5 })];
+    expect(workloadPct(rows, p)).toBe(80);
   });
   it("caps at 100 even when massively over capacity", () => {
     const p = profile({ id: "solo", capacity_points: 5 });
-    const rows = [task({ assignee_id: "solo", effort: 40 })];
+    const rows = Array.from({ length: 6 }, () => task({ assignee_id: "solo", difficulty: 5 }));
     expect(workloadPct(rows, p)).toBe(100);
+  });
+});
+
+describe("difficultyPoints — the single sizing scale", () => {
+  it("weights Fibonacci-style so hard work costs more than linearly", () => {
+    expect(DIFFICULTY_LEVELS.map((d) => d.weight)).toEqual([1, 2, 3, 5, 8]);
+    expect(difficultyPoints(1)).toBe(1);
+    expect(difficultyPoints(5)).toBe(8);
+  });
+  it("treats an unsized task as Moderate, never as free", () => {
+    // An unestimated backlog reading as 0 capacity was the trap worth avoiding.
+    expect(difficultyPoints(null)).toBe(3);
+    expect(difficultyPoints(undefined)).toBe(3);
+  });
+  it("falls back to Moderate for an out-of-range value", () => {
+    expect(difficultyPoints(99)).toBe(3);
+  });
+  it("counts unsized open tasks toward workload", () => {
+    const p = profile({ id: "solo", capacity_points: 20 });
+    const rows = [task({ assignee_id: "solo", difficulty: null })];
+    expect(workloadPct(rows, p)).toBe(15); // 3 of 20
   });
 });
 

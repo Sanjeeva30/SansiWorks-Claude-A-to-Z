@@ -297,6 +297,40 @@ and board-request approval (which toasted "created" even when the department had
 no space). Rule going forward: **every mutation checks its error and says
 something**; optimistic patches roll back on failure.
 
+## Difficulty is now the single sizing scale (2026-07-28)
+`effort` and `difficulty` were two parallel point systems that never met:
+`effort` fed workload/filters/timeline, while `difficulty` — the one with a
+labelled 1-5 scale and rank-gated editing — fed nothing at all. Its Fibonacci
+weights (1/2/3/5/8) existed in `DIFFICULTY_LEVELS` and were never read. People
+filled in both; only one counted, and the task detail asked for both side by side.
+
+- `difficultyPoints()` in `logic.ts` is the single source of sizing. Unsized
+  tasks count as Moderate (3), never 0 — an unestimated backlog must not read
+  as free capacity.
+- `workloadPct`, the Everything/timeline bar length, and the task filter all use
+  it. The filter chip is now "Difficulty" with Trivial–Easy / Moderate /
+  Hard–Complex, so the words in the filter match the words on the task.
+- Backfill: `difficulty = effort` (both were already 1-5), so every task's
+  relative sizing carried over unchanged; only the weighting moved from linear
+  to Fibonacci. Effect verified live — Budi 90%→100%, Siti 40%→45%; people
+  carrying Hard/Complex work now read heavier, which is the entire point.
+- **The `tasks.effort` column still exists** (defaulted, no longer read or
+  written) so the original estimates survive if this is revisited. It is
+  deliberately absent from the `Task` TS type so nothing can quietly depend on
+  it again — the compiler is the guard.
+
+## PWA / mobile
+There is no native app and no store presence; the mobile app *is* the PWA, and
+it is complete: `public/manifest.json` (standalone, brand theme colour),
+`public/sw.js`, 192/512 + maskable icons, `apple-touch-icon.png`, registered by
+`src/app/sw-register.tsx`. The service worker deliberately caches only the app
+shell — never `/api/` — because this app's data is live via Supabase and stale
+cached data would be worse than an honest network error. Requires HTTPS, so
+install from the Vercel URL, not localhost. On iPhone, install via **Safari**
+("Share → Add to Home Screen"); iOS only reliably supports home-screen install
+from Safari, and a home-screen app runs in WebKit regardless of which browser
+installed it.
+
 ## Status: open
 - Phase 4 remainder: **Sansi 2.0 info-finder** and **realtime multiplayer presence**.
   (Comments/@mentions and the mention-email gap are done — see roadmap 9.)

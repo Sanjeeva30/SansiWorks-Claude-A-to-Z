@@ -4,7 +4,7 @@
 // - Department efficiency = same formula, applied department-wide
 // - At-risk prediction = overdue OR (due ≤4 days AND (assignee has ≥5 open tasks OR assignee's on-time history <75%))
 // - Critical unblocker of the day = open task with the largest downstream dependency chain of other open tasks
-import { Task, Dependency, Profile, Department, Level, DocVisibility } from "./types";
+import { Task, Dependency, Profile, Department, Level, DocVisibility, DIFFICULTY_LEVELS } from "./types";
 import { todayIso } from "./dates";
 
 export const isOpen = (t: Task) => t.status !== "Done";
@@ -222,11 +222,25 @@ export function criticalUnblocker(tasks: Task[], deps: Dependency[]): { task: Ta
   return best;
 }
 
+/* Difficulty is the single sizing scale. `effort` used to be a second,
+   parallel points field that fed the workload math while difficulty — the one
+   with rank-gated editing and a labelled 1-5 scale — fed nothing at all.
+   People filled in both; only one counted. Difficulty now carries the weight,
+   using the Fibonacci spacing in DIFFICULTY_LEVELS: a Complex task is 8 points
+   against a Trivial task's 1, because hard work costs disproportionately more
+   than a linear 1..5 implies. Unsized tasks count as Moderate (3) rather than
+   0, so an unestimated backlog can't read as free capacity. */
+export const DIFFICULTY_DEFAULT = 3;
+export function difficultyPoints(difficulty: number | null | undefined): number {
+  const level = DIFFICULTY_LEVELS.find((d) => d.value === difficulty);
+  return level ? level.weight : DIFFICULTY_LEVELS.find((d) => d.value === DIFFICULTY_DEFAULT)!.weight;
+}
+
 // capacity defaults to 20 points/week until the "capacity tracking" admin
 // toggle is on and a real capacity_points value is set per person.
 export function workloadPct(tasks: Task[], person: Profile): number {
   const open = tasksOfPerson(tasks, person.id).filter(isOpen);
-  const points = open.reduce((s, t) => s + (t.effort || 1), 0);
+  const points = open.reduce((s, t) => s + difficultyPoints(t.difficulty), 0);
   const capacity = person.capacity_points || 20;
   return Math.min(100, Math.round((points / capacity) * 100));
 }

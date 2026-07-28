@@ -7,6 +7,7 @@ import { STATUS_COLORS, PRIORITY_COLORS, STATUSES, initials, Task } from "@/lib/
 import { iso, fmtShort, todayIso } from "@/lib/dates";
 import { updateTask } from "@/lib/actions";
 import { FilterState, EMPTY_FILTERS, applyFilters } from "@/lib/search";
+import { difficultyPoints } from "@/lib/logic";
 import { TopIcons } from "./shared";
 import { FilterBar } from "./filter-bar";
 import { IconChevLeft, IconChevRight, IconX } from "./icons";
@@ -136,7 +137,9 @@ export function ListSection() {
       const bars = laneTasks
         .map((t) => {
           const dueDate = new Date(t.due + "T00:00:00");
-          const span = Math.max(1, Math.ceil((t.effort || 1) / 2));
+          // Bar length tracks difficulty weight (1/2/3/5/8), so a Complex task
+          // visibly occupies more of the timeline than a Trivial one.
+          const span = Math.max(1, Math.ceil(difficultyPoints(t.difficulty) / 2));
           const startDate = new Date(dueDate);
           startDate.setDate(startDate.getDate() - (span - 1));
           const off = Math.max(0, Math.min(Math.round((startDate.getTime() - ganttStart.getTime()) / dayMs), ganttSpan - 1));

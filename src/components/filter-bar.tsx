@@ -1,7 +1,7 @@
 "use client";
 import React, { useEffect, useRef, useState } from "react";
 import { Profile, STATUSES, PRIORITIES, STATUS_COLORS, PRIORITY_COLORS, initials } from "@/lib/types";
-import { FilterState, EMPTY_FILTERS, countActiveFilters, DUE_LABELS, EFFORT_LABELS } from "@/lib/search";
+import { FilterState, EMPTY_FILTERS, countActiveFilters, DUE_LABELS, DIFFICULTY_FILTER_LABELS } from "@/lib/search";
 import { IconChevDown, IconX } from "./icons";
 import { readableTextOn } from "@/lib/colors";
 
@@ -151,14 +151,14 @@ export function FilterBar({
       </Chip>
 
       <Chip
-        label="Effort"
-        active={!!f.effort}
-        activeLabel={EFFORT_LABELS[f.effort] || "Effort"}
-        onClear={() => onChange({ ...f, effort: "" })}
+        label="Difficulty"
+        active={!!f.difficulty}
+        activeLabel={DIFFICULTY_FILTER_LABELS[f.difficulty] || "Difficulty"}
+        onClear={() => onChange({ ...f, difficulty: "" })}
       >
-        {(Object.keys(EFFORT_LABELS) as (keyof typeof EFFORT_LABELS)[]).map((k) => (
-          <CheckRow key={k} checked={f.effort === k} onToggle={() => onChange({ ...f, effort: f.effort === k ? "" : (k as FilterState["effort"]) })}>
-            {EFFORT_LABELS[k]}
+        {(Object.keys(DIFFICULTY_FILTER_LABELS) as (keyof typeof DIFFICULTY_FILTER_LABELS)[]).map((k) => (
+          <CheckRow key={k} checked={f.difficulty === k} onToggle={() => onChange({ ...f, difficulty: f.difficulty === k ? "" : (k as FilterState["difficulty"]) })}>
+            {DIFFICULTY_FILTER_LABELS[k]}
           </CheckRow>
         ))}
       </Chip>

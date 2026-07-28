@@ -72,7 +72,7 @@ export async function GET(req: NextRequest) {
 
   const [{ data: profiles }, { data: tasks }, { data: prefs }, { data: convo }] = await Promise.all([
     supabase.from("profiles").select("id,name,email,digest_time,capacity_points,level_id"),
-    supabase.from("tasks").select("id,name,status,priority,due,list_id,assignee_id,effort,completed_at").neq("status", "Done"),
+    supabase.from("tasks").select("id,name,status,priority,due,list_id,assignee_id,difficulty,completed_at").neq("status", "Done"),
     supabase.from("notification_prefs").select("profile_id,category,channel"),
     // Unread @mentions and comment replies. Without this the digest was built
     // purely from tasks, so being mentioned reached you in-app and never by

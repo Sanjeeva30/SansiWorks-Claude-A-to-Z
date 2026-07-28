@@ -69,7 +69,6 @@ async function rollRecurrence(supabase: Supabase, task: Task) {
     status: "Not Started",
     priority: task.priority,
     due,
-    effort: task.effort,
     description: task.description,
     recur: task.recur,
     difficulty: task.difficulty,
