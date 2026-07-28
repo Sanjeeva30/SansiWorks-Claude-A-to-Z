@@ -229,7 +229,20 @@ export interface Doc {
   department_id: string | null;
   is_sop: boolean;
   current_version_id: string | null;
+  /* Who can read this. "company" is deliberate for things everyone must see
+     (handbook, code of conduct); hiding those causes more harm than exposing
+     them. Enforced by app_can_read_doc() in Postgres — the UI filter below is
+     only there so the list matches what the database would return anyway. */
+  visibility: DocVisibility;
 }
+
+export type DocVisibility = "company" | "department" | "restricted";
+
+export const DOC_VISIBILITY: { value: DocVisibility; label: string; help: string }[] = [
+  { value: "company", label: "Company-wide", help: "Everyone can read it — policies, handbook, code of conduct." },
+  { value: "department", label: "Department", help: "The owning department, exec visibility, and Internal Audit." },
+  { value: "restricted", label: "Restricted", help: "Owner, exec visibility, and Internal Audit only." },
+];
 
 export type ReviewStatus = "pending" | "approved" | "revisions_requested";
 

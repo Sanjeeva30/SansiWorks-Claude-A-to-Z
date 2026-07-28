@@ -4,7 +4,10 @@ import { useStore } from "@/lib/store";
 import { useUI } from "@/lib/ui";
 import { STATUS_COLORS, PRIORITY_COLORS, STATUSES, Task, initials } from "@/lib/types";
 import { iso, fmtShort, fmtFull, todayIso } from "@/lib/dates";
-import { atRiskTasks, isOpen, isOverdue, tasksOfPerson, workloadPct, efficiencyScore, departmentRisk, upcomingBirthdays } from "@/lib/logic";
+import { atRiskTasks, isOpen, isOverdue, tasksOfPerson, workloadPct, efficiencyScore, departmentRisk, upcomingBirthdays, onTimeStats, hasExecVisibility } from "@/lib/logic";
+
+const dedupeById = <T extends { id: string }>(xs: T[]): T[] =>
+  Array.from(new Map(xs.map((x) => [x.id, x])).values());
 import { isHeadRank } from "@/lib/colors";
 import { FilterState, EMPTY_FILTERS, applyFilters } from "@/lib/search";
 import { TopIcons, Avatar } from "./shared";
@@ -16,7 +19,8 @@ import { IconCheckSquare, IconClock, IconFlag, IconGrid, IconSquare, IconX } fro
    Tabs: Today (overview) · This Week (day columns) · All tasks (filterable) · Personal. */
 export function HomeSection() {
   const store = useStore();
-  const { me, tasks, lists, spaces, profiles, notifications, departments, deptMembers, levels } = store;
+  const { me, tasks, lists, spaces, profiles, notifications, departments, deptMembers, levels, deps, features } = store;
+  const canSeeCompanyWide = hasExecVisibility(me, levels);
   const {
     homePage, setHomePage, setShowQuickAdd, setActiveTaskId,
     setCompanyPage, setWorkspacePage, openProfile, setMetricModal, setActiveList,
@@ -115,6 +119,45 @@ export function HomeSection() {
   const workloadPeople = profiles.filter((p) => p.email.endsWith("@sansico.com")).slice(0, 3)
     .map((p) => ({ p, pct: workloadPct(tasks, p) }))
     .sort((a, b) => b.pct - a.pct);
+
+  /* Company pulse is an exec instrument — a company health ring and three
+     arbitrary colleagues' workload bars are numbers a staff member can neither
+     move nor act on. Everyone below exec visibility gets this instead: their
+     own capacity and on-time record, and the dependency edges they're actually
+     on either side of. Same data, scoped to what the reader owns. */
+  const myPersonal = useMemo(() => {
+    if (!me) return null;
+    const myOpenIds = new Set(myTasks.filter(isOpen).map((t) => t.id));
+    const openById = new Map(tasks.filter(isOpen).map((t) => [t.id, t]));
+
+    // Blocking me: something I have open depends on someone else's open task.
+    const blockingMe = deps
+      .filter((d) => myOpenIds.has(d.task_id) && openById.has(d.depends_on))
+      .map((d) => openById.get(d.depends_on)!)
+      .filter((t) => t.assignee_id !== me.id);
+    // I'm blocking: someone else's open task depends on one of mine.
+    const iBlock = deps
+      .filter((d) => myOpenIds.has(d.depends_on) && openById.has(d.task_id))
+      .map((d) => openById.get(d.task_id)!)
+      .filter((t) => t.assignee_id !== me.id);
+
+    const deptIds = new Set(
+      deptMembers.filter((m) => m.department_id === me.department_id).map((m) => m.profile_id)
+    );
+    deptIds.add(me.id);
+    const deptTasks = tasks.filter((t) => !!t.assignee_id && deptIds.has(t.assignee_id));
+    const stats = onTimeStats(myTasks);
+
+    return {
+      pct: workloadPct(tasks, me),
+      onTimePct: stats.total ? Math.round((stats.onTime / stats.total) * 100) : null,
+      onTimeTotal: stats.total,
+      blockingMe: dedupeById(blockingMe),
+      iBlock: dedupeById(iBlock),
+      deptOpen: deptTasks.filter(isOpen).length,
+      deptOverdue: deptTasks.filter(isOverdue).length,
+    };
+  }, [me, myTasks, tasks, deps, deptMembers, today]);
 
   // Company pulse: average dept efficiency
   const deptScores = departments.map((d) => {
@@ -426,7 +469,60 @@ export function HomeSection() {
                 </section>
               </div>
 
-              {/* company pulse */}
+              {/* my week — the non-exec counterpart to the company pulse below */}
+              {!canSeeCompanyWide && myPersonal && (
+                <section style={{ background: "var(--sw-card)", border: "1px solid var(--sw-hair)", borderRadius: 12, padding: "16px 18px", boxShadow: "var(--shadow-card)", display: "flex", gap: 26, alignItems: "center", flexWrap: "wrap" }}>
+                  {features.capacity_tracking && (
+                    <>
+                      <div style={{ flex: "1 1 150px", minWidth: 0 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 5 }}>
+                          <span style={{ fontSize: 11.5, fontWeight: 400 }}>My workload</span>
+                          <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--sw-muted)" }}>{myPersonal.pct}%</span>
+                        </div>
+                        <div style={{ height: 5, borderRadius: 99, background: "var(--sw-hover)", overflow: "hidden" }}>
+                          <div style={{ height: "100%", borderRadius: 99, background: myPersonal.pct > 100 ? "var(--red)" : myPersonal.pct > 80 ? "#B7791F" : "var(--green)", width: `${Math.min(myPersonal.pct, 100)}%` }} />
+                        </div>
+                      </div>
+                      <div className="sw-hide-mobile" style={{ width: 1, alignSelf: "stretch", background: "var(--sw-hair)" }} />
+                    </>
+                  )}
+                  <div style={{ flex: "none" }}>
+                    <div style={{ fontSize: 15, fontWeight: 400 }}>
+                      {myPersonal.onTimePct === null ? "—" : `${myPersonal.onTimePct}%`}
+                    </div>
+                    <div style={{ fontSize: 10.5, color: "var(--sw-muted)" }}>
+                      {myPersonal.onTimeTotal ? `My on-time rate · ${myPersonal.onTimeTotal} done` : "No finished work yet"}
+                    </div>
+                  </div>
+                  <div className="sw-hide-mobile" style={{ width: 1, alignSelf: "stretch", background: "var(--sw-hair)" }} />
+                  <button
+                    onClick={() => myPersonal.blockingMe[0] && setActiveTaskId(myPersonal.blockingMe[0].id)}
+                    disabled={!myPersonal.blockingMe.length}
+                    style={{ flex: "none", border: "none", background: "none", padding: 0, textAlign: "left", cursor: myPersonal.blockingMe.length ? "pointer" : "default" }}
+                  >
+                    <div style={{ fontSize: 15, fontWeight: 400, color: myPersonal.blockingMe.length ? "var(--sw-on-red)" : "var(--sw-text)" }}>{myPersonal.blockingMe.length}</div>
+                    <div style={{ fontSize: 10.5, color: "var(--sw-muted)" }}>Blocking me</div>
+                  </button>
+                  <button
+                    onClick={() => myPersonal.iBlock[0] && setActiveTaskId(myPersonal.iBlock[0].id)}
+                    disabled={!myPersonal.iBlock.length}
+                    style={{ flex: "none", border: "none", background: "none", padding: 0, textAlign: "left", cursor: myPersonal.iBlock.length ? "pointer" : "default" }}
+                  >
+                    <div style={{ fontSize: 15, fontWeight: 400, color: myPersonal.iBlock.length ? "var(--sw-on-amber)" : "var(--sw-text)" }}>{myPersonal.iBlock.length}</div>
+                    <div style={{ fontSize: 10.5, color: "var(--sw-muted)" }}>Waiting on me</div>
+                  </button>
+                  <div className="sw-hide-mobile" style={{ width: 1, alignSelf: "stretch", background: "var(--sw-hair)" }} />
+                  <div style={{ flex: "none" }}>
+                    <div style={{ fontSize: 15, fontWeight: 400 }}>{myPersonal.deptOpen}</div>
+                    <div style={{ fontSize: 10.5, color: "var(--sw-muted)" }}>
+                      My team&apos;s open{myPersonal.deptOverdue ? ` · ${myPersonal.deptOverdue} overdue` : ""}
+                    </div>
+                  </div>
+                </section>
+              )}
+
+              {/* company pulse — exec instrument, exec audience */}
+              {canSeeCompanyWide && (
               <section style={{ background: "var(--sw-card)", border: "1px solid var(--sw-hair)", borderRadius: 12, padding: "16px 18px", boxShadow: "var(--shadow-card)", display: "flex", gap: 26, alignItems: "center", flexWrap: "wrap" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12, flex: "none" }}>
                   <div style={{ position: "relative", width: 52, height: 52, borderRadius: 99, background: `conic-gradient(var(--green) 0% ${health}%, var(--sw-hair) ${health}% 100%)`, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -438,8 +534,11 @@ export function HomeSection() {
                   </div>
                 </div>
                 <div className="sw-hide-mobile" style={{ width: 1, alignSelf: "stretch", background: "var(--sw-hair)" }} />
+                {/* The capacity_tracking toggle promised to control "whether
+                    people see a capacity number" but only ever gated the input
+                    in the profile popup — these bars rendered regardless. */}
                 <div style={{ flex: "1 1 260px", display: "flex", gap: 20, flexWrap: "wrap" }}>
-                  {workloadPeople.map(({ p, pct }) => (
+                  {features.capacity_tracking && workloadPeople.map(({ p, pct }) => (
                     <div key={p.id} style={{ flex: "1 1 150px", minWidth: 0 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 5 }}>
                         <Avatar person={p} size={19} fontSize={8.5} ring={isHeadRank(p, levels)} onClick={(e) => { e.stopPropagation(); openProfile(p.id); }} />
@@ -460,6 +559,7 @@ export function HomeSection() {
                   View executive report →
                 </a>
               </section>
+              )}
 
               {birthdays.length > 0 && (
                 <section style={{ background: "var(--sw-card)", border: "1px solid var(--sw-hair)", borderRadius: 12, padding: "16px 18px", boxShadow: "var(--shadow-card)", marginTop: 12 }}>

@@ -21,6 +21,7 @@ function AcceptInviteInner() {
   const [birthMonth, setBirthMonth] = useState("");
   const [birthYear, setBirthYear] = useState("");
   const [password, setPassword] = useState("");
+  const [showPw, setShowPw] = useState(false);
   const [terms, setTerms] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -229,7 +230,24 @@ function AcceptInviteInner() {
               </div>
 
               <label style={label}>Create password</label>
-              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="8+ characters, 1 uppercase, 1 number, 1 symbol" style={{ ...input, marginBottom: 8 }} />
+              {/* Show/hide, like every other password field in the app — this
+                  one is typed once against strict rules, so typing it blind is
+                  where a typo is most likely and most costly. */}
+              <div style={{ position: "relative", marginBottom: 8 }}>
+                <input
+                  type={showPw ? "text" : "password"} value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="8+ characters, 1 uppercase, 1 number, 1 symbol"
+                  style={{ ...input, marginBottom: 0, paddingRight: 62 }}
+                />
+                <button
+                  type="button" onClick={() => setShowPw((s) => !s)}
+                  aria-label={showPw ? "Hide password" : "Show password"}
+                  style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", border: "none", background: "none", color: "#7A0D20", fontSize: 11.5, fontWeight: 700, cursor: "pointer", padding: "6px 8px" }}
+                >
+                  {showPw ? "Hide" : "Show"}
+                </button>
+              </div>
               <p style={{ margin: "0 0 8px", fontSize: 11, color: "#9A918A", lineHeight: 1.5 }}>Must include an uppercase letter, a number, and a symbol.</p>
               <div style={{ display: "flex", gap: 4, marginBottom: 6 }}>
                 {[1, 2, 3, 4].map((i) => (

@@ -2,9 +2,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useStore } from "@/lib/store";
 import { useUI } from "@/lib/ui";
-import { initials, Doc, PRIORITY_COLORS, Space, List } from "@/lib/types";
+import { initials, Doc, PRIORITY_COLORS, Space, List, DocVisibility, DOC_VISIBILITY } from "@/lib/types";
 import { relTime, fmtShort, todayIso } from "@/lib/dates";
-import { isOpen, isOverdue, onTimeStats, tasksOfPerson, canViewSop, isSeniorRank, isInternalAudit, isInternalAuditManager, isDeptHead, internalAuditDept, isMultiDeptAdmin, isDeptAdmin, hasExecVisibility } from "@/lib/logic";
+import { isOpen, isOverdue, onTimeStats, tasksOfPerson, canViewSop, canViewDoc, isSeniorRank, isInternalAudit, isInternalAuditManager, isDeptHead, internalAuditDept, isMultiDeptAdmin, isDeptAdmin, hasExecVisibility } from "@/lib/logic";
 import { TopIcons } from "./shared";
 import { passwordMeetsRules } from "./auth-shell";
 import { IconX } from "./icons";
@@ -62,6 +62,32 @@ const FEATURE_HELP: Record<string, string> = {
 };
 
 const card: React.CSSProperties = { background: "var(--sw-card)", border: "1px solid var(--sw-hair)", borderRadius: 12, boxShadow: "var(--shadow-card)", padding: "16px 18px" };
+/* The auth pages' PasswordField is styled for the full-page sign-in card; this
+   is the same show/hide behaviour at the settings-row scale. */
+function SettingsPasswordField({ id, value, onChange, placeholder, autoComplete }: {
+  id: string; value: string; onChange: (v: string) => void;
+  placeholder: string; autoComplete: "current-password" | "new-password";
+}) {
+  const [show, setShow] = useState(false);
+  return (
+    <div style={{ position: "relative" }}>
+      <input
+        id={id} name={id} type={show ? "text" : "password"} autoComplete={autoComplete}
+        value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
+        style={{ width: "100%", height: 38, borderRadius: 8, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "0 54px 0 12px", fontSize: 12.5, color: "var(--sw-text)", outline: "none", boxSizing: "border-box" }}
+      />
+      <button
+        type="button" onClick={() => setShow((s) => !s)}
+        aria-label={show ? "Hide password" : "Show password"}
+        style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", border: "none", background: "none", color: "var(--sw-on-crimson)", fontSize: 11, fontWeight: 700, cursor: "pointer", padding: "6px 7px" }}
+      >
+        {show ? "Hide" : "Show"}
+      </button>
+    </div>
+  );
+}
+
+const userSelect: React.CSSProperties = { height: 30, borderRadius: 8, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "0 8px", fontSize: 11.5, color: "var(--sw-text)", flex: "0 1 132px", minWidth: 96, maxWidth: 150 };
 const pillBtn = (color: string): React.CSSProperties => ({ padding: "6px 12px", borderRadius: 999, border: `1px solid ${color === "var(--sw-on-green)" ? "var(--sw-on-green)" : "var(--sw-hair)"}`, background: "none", color, fontSize: 11.5, fontWeight: 400, cursor: "pointer", whiteSpace: "nowrap", flex: "none" });
 
 export function WorkspaceSection() {
@@ -84,7 +110,9 @@ export function WorkspaceSection() {
   const [docFilters, setDocFilters] = useState({ dept: "All", type: "All", status: "All", text: "", overdueOnly: false });
   const [formFilters, setFormFilters] = useState({ dept: "All", status: "All" });
   const [showNewDoc, setShowNewDoc] = useState(false);
-  const [newDoc, setNewDoc] = useState({ title: "", type: "SOP", category: "", excerpt: "", departmentId: "", reviewDue: "", headReviewerId: "" });
+  const [newDoc, setNewDoc] = useState<{ title: string; type: string; category: string; excerpt: string; departmentId: string; reviewDue: string; headReviewerId: string; visibility: DocVisibility }>(
+    { title: "", type: "SOP", category: "", excerpt: "", departmentId: "", reviewDue: "", headReviewerId: "", visibility: "department" }
+  );
   const [newDocFile, setNewDocFile] = useState<File | null>(null);
   const [creatingDoc, setCreatingDoc] = useState(false);
   const [showNewForm, setShowNewForm] = useState(false);
@@ -98,6 +126,8 @@ export function WorkspaceSection() {
   const [nominate, setNominate] = useState({ name: "", reason: "" });
   const [deptModal, setDeptModal] = useState<"create" | "propose" | null>(null);
   const [deptForm, setDeptForm] = useState({ name: "", reason: "" });
+  const [deleteDept, setDeleteDept] = useState<{ id: string; name: string; typed: string; impact: string; people: number } | null>(null);
+  const [deletingDept, setDeletingDept] = useState(false);
   const [archivedSpaces, setArchivedSpaces] = useState<Space[]>([]);
   const [archivedLists, setArchivedLists] = useState<List[]>([]);
   useEffect(() => {
@@ -108,6 +138,40 @@ export function WorkspaceSection() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteLevel, setInviteLevel] = useState("l6");
   const [inviteDept, setInviteDept] = useState<string | null>(null);
+
+  /* One writer for the three inline user dropdowns. Writes go through the
+     server first and only patch the store on success — an RLS refusal here is
+     silent otherwise, and a select that springs back to its old value with no
+     explanation is worse than one that never moved. */
+  const updateUserField = async (
+    u: (typeof profiles)[number],
+    field: "department_id" | "level_id" | "manager_id",
+    value: string | null
+  ) => {
+    const prev = u[field];
+    if (prev === value) return;
+    const { error } = await supabase.from("profiles").update({ [field]: value }).eq("id", u.id);
+    if (error) { pushToast(`Couldn't update ${u.name.split(" ")[0]} — ${error.message}`); return; }
+    patch("profiles", profiles.map((p) => (p.id === u.id ? { ...p, [field]: value } : p)));
+    const label =
+      field === "department_id" ? `department to ${departments.find((d) => d.id === value)?.name || "none"}`
+      : field === "level_id" ? `level to ${levels.find((l) => l.id === value)?.name || value}`
+      : `manager to ${profiles.find((p) => p.id === value)?.name || "none"}`;
+    if (me) { const { logAudit } = await import("@/lib/actions"); await logAudit(supabase, me.id, `changed ${label} for`, u.name); }
+  };
+
+  /* The only genuinely rank-dependent row on Settings. Everything else there
+     ("my task", "my mentions", digest time, WhatsApp, password) is personal and
+     identical at every level, so the page needs no other tailoring. Nobody
+     requests approval from someone with no reports, no headship and no admin
+     rights, so that toggle can never fire for them. */
+  const canBeApprover =
+    !!me && (
+      isDeptAdmin(me, levels)
+      || deptHeads.some((h) => h.profile_id === me.id)
+      || profiles.some((p) => p.manager_id === me.id)
+    );
+  const visiblePrefCats = PREF_CATS.filter(([key]) => key !== "approval" || canBeApprover);
 
   const today = todayIso();
   const listPath = (listId: string | null) => {
@@ -121,15 +185,28 @@ export function WorkspaceSection() {
     workspacePage === "settings" ? "Settings" : "Admin console";
 
   /* ------- account: password change + sign out ------- */
+  const [currentPw, setCurrentPw] = useState("");
   const [newPw, setNewPw] = useState("");
   const [confirmPw, setConfirmPw] = useState("");
   const [pwBusy, setPwBusy] = useState(false);
   const [pwMsg, setPwMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   const changePassword = async () => {
-    if (!passwordMeetsRules(newPw) || newPw !== confirmPw) return;
+    if (!currentPw || !passwordMeetsRules(newPw) || newPw !== confirmPw) return;
     setPwBusy(true);
     setPwMsg(null);
+    /* Re-authenticate first. Supabase lets a live session change its own
+       password without proving the old one, so an unattended logged-in laptop
+       was enough to lock the real owner out of their account. Verifying the
+       current password costs one round trip and closes that. */
+    if (me?.email) {
+      const { error: reauth } = await supabase.auth.signInWithPassword({ email: me.email, password: currentPw });
+      if (reauth) {
+        setPwBusy(false);
+        setPwMsg({ ok: false, text: "That current password isn't right." });
+        return;
+      }
+    }
     const { error } = await supabase.auth.updateUser({ password: newPw });
     setPwBusy(false);
     if (error) {
@@ -141,6 +218,7 @@ export function WorkspaceSection() {
       });
       return;
     }
+    setCurrentPw("");
     setNewPw("");
     setConfirmPw("");
     setPwMsg({ ok: true, text: "Password updated. It applies the next time you sign in." });
@@ -178,7 +256,9 @@ export function WorkspaceSection() {
 
   /* ------- docs ------- */
   const docsMapped = docs
-    .filter((d) => !d.is_sop || canViewSop(d.department_id, me, departments, levels))
+    // Was `!d.is_sop || canViewSop(...)` — which left every non-SOP doc readable
+    // company-wide. Visibility is now per-doc and enforced in RLS; this mirrors it.
+    .filter((d) => canViewDoc(d, me, departments, levels))
     .map((d) => {
       const owner = profiles.find((p) => p.id === d.owner_id);
       const reviewState = !d.review_date ? "none" : d.review_date < today ? "overdue" : new Date(d.review_date).getTime() - Date.now() < 21 * 86400000 ? "soon" : "ok";
@@ -601,7 +681,7 @@ export function WorkspaceSection() {
                       <span key={l} style={{ fontSize: 11, fontWeight: 400, color: "var(--sw-muted)", textAlign: "center" }}>{l}</span>
                     ))}
                   </div>
-                  {PREF_CATS.map(([key, label, hint]) => (
+                  {visiblePrefCats.map(([key, label, hint]) => (
                     <div key={key} style={{ display: "grid", gridTemplateColumns: "1fr repeat(4, 108px)", alignItems: "center", padding: "11px 18px", borderBottom: "1px solid var(--sw-hair)" }}>
                       <span>
                         <div style={{ fontSize: 12.5, color: "var(--sw-text)" }}>{label}</div>
@@ -698,21 +778,19 @@ export function WorkspaceSection() {
                 {pwMsg && (
                   <p style={{ margin: "0 0 10px", fontSize: 12, color: pwMsg.ok ? "var(--sw-on-green)" : "var(--sw-on-red)" }}>{pwMsg.text}</p>
                 )}
+                {/* PasswordField carries the show/hide toggle already used on
+                    login and reset — these two were raw inputs, so Settings was
+                    the one place you had to type a password blind. */}
+                <div style={{ marginBottom: 10 }}>
+                  <SettingsPasswordField id="sw-current-pw" value={currentPw} onChange={setCurrentPw} placeholder="Current password" autoComplete="current-password" />
+                </div>
                 <div className="sw-grid-2" style={{ gap: 10, marginBottom: 10 }}>
-                  <input
-                    type="password" autoComplete="new-password" value={newPw} onChange={(e) => setNewPw(e.target.value)}
-                    placeholder="New password"
-                    style={{ height: 38, borderRadius: 8, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "0 12px", fontSize: 12.5, color: "var(--sw-text)", outline: "none" }}
-                  />
-                  <input
-                    type="password" autoComplete="new-password" value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)}
-                    placeholder="Confirm new password"
-                    style={{ height: 38, borderRadius: 8, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "0 12px", fontSize: 12.5, color: "var(--sw-text)", outline: "none" }}
-                  />
+                  <SettingsPasswordField id="sw-new-pw" value={newPw} onChange={setNewPw} placeholder="New password" autoComplete="new-password" />
+                  <SettingsPasswordField id="sw-confirm-pw" value={confirmPw} onChange={setConfirmPw} placeholder="Confirm new password" autoComplete="new-password" />
                 </div>
                 <button
                   onClick={changePassword}
-                  disabled={pwBusy || !passwordMeetsRules(newPw) || newPw !== confirmPw}
+                  disabled={pwBusy || !currentPw || !passwordMeetsRules(newPw) || newPw !== confirmPw}
                   style={{ padding: "8px 18px", borderRadius: 999, border: "none", background: (!pwBusy && passwordMeetsRules(newPw) && newPw === confirmPw) ? "var(--crimson)" : "var(--sw-muted)", color: "#fff", fontSize: 12, fontWeight: 400, cursor: (!pwBusy && passwordMeetsRules(newPw) && newPw === confirmPw) ? "pointer" : "not-allowed" }}
                 >
                   {pwBusy ? "Saving…" : "Update password"}
@@ -769,6 +847,40 @@ export function WorkspaceSection() {
                         </div>
                         <div style={{ fontSize: 11, color: "var(--sw-muted)" }}>{u.email}</div>
                       </button>
+                      {/* Department / level / manager inline. These were only
+                          editable from the Hierarchy tab (level + manager) and
+                          nowhere at all for department, so an admin looking at
+                          a person had to leave the page to change the three
+                          things they most often need to change. */}
+                      <select
+                        className="sw-select"
+                        title="Department"
+                        value={u.department_id || ""}
+                        onChange={(e) => updateUserField(u, "department_id", e.target.value || null)}
+                        style={userSelect}
+                      >
+                        <option value="">No department</option>
+                        {departments.filter((d) => !d.archived).map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+                      </select>
+                      <select
+                        className="sw-select"
+                        title="Hierarchy level"
+                        value={u.level_id}
+                        onChange={(e) => updateUserField(u, "level_id", e.target.value)}
+                        style={userSelect}
+                      >
+                        {levels.map((lo) => <option key={lo.id} value={lo.id}>{lo.name}</option>)}
+                      </select>
+                      <select
+                        className="sw-select"
+                        title="Reports to"
+                        value={u.manager_id || ""}
+                        onChange={(e) => updateUserField(u, "manager_id", e.target.value || null)}
+                        style={userSelect}
+                      >
+                        <option value="">No manager</option>
+                        {sansicoUsers.filter((m) => m.id !== u.id).map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                      </select>
                       {me?.is_super && (
                         <button
                           onClick={async () => {
@@ -1012,6 +1124,36 @@ export function WorkspaceSection() {
                             >
                               {d.archived ? "Restore" : "Archive"}
                             </button>
+                            {/* Archive is the reversible default and covers
+                                almost every real case; this is the one-way
+                                door, so it is super-admin only, shows the true
+                                blast radius from the server, and needs the
+                                name typed back before it will fire. */}
+                            {me?.is_super && (
+                              <button
+                                onClick={async () => {
+                                  const res = await fetch(`/api/admin/departments/${d.id}`).catch(() => null);
+                                  const j = res ? await res.json().catch(() => ({ ok: false })) : { ok: false };
+                                  if (!j.ok) { pushToast(`Couldn't read impact — ${j.error || "unknown error"}.`); return; }
+                                  const i = j.impact;
+                                  const lines = [
+                                    `${i.spaces} space${i.spaces === 1 ? "" : "s"}`,
+                                    `${i.boards} board${i.boards === 1 ? "" : "s"}`,
+                                    `${i.tasks} task${i.tasks === 1 ? "" : "s"} (with their subtasks, comments, attachments and approvals)`,
+                                    `${i.docs} doc${i.docs === 1 ? "" : "s"}`,
+                                  ].join(", ");
+                                  if (!(await confirm({
+                                    title: `Permanently delete "${d.name}"?`,
+                                    message: `This deletes ${lines}. ${i.people} ${i.people === 1 ? "person" : "people"} will be moved to "no department" — nobody is deleted. This cannot be undone; Archive is reversible and usually what you want.`,
+                                    confirmLabel: "Continue", danger: true,
+                                  }))) return;
+                                  setDeleteDept({ id: d.id, name: d.name, typed: "", impact: lines, people: i.people });
+                                }}
+                                style={{ ...pillBtn("var(--sw-on-red)"), marginLeft: 6 }}
+                              >
+                                Delete…
+                              </button>
+                            )}
                           </div>
                           <div className="sw-grid-2" style={{ gap: 16, paddingLeft: 18 }}>
                             <div>
@@ -1043,7 +1185,11 @@ export function WorkspaceSection() {
                                     const pid = e.target.value;
                                     if (!pid) return;
                                     patch("deptHeads", [...deptHeads, { unit_id: d.id, profile_id: pid }]);
-                                    await supabase.from("org_unit_heads").insert({ unit_id: d.id, profile_id: pid });
+                                    const { error } = await supabase.from("org_unit_heads").insert({ unit_id: d.id, profile_id: pid });
+                                    if (error) {
+                                      patch("deptHeads", deptHeads.filter((h) => !(h.unit_id === d.id && h.profile_id === pid)));
+                                      pushToast(`Couldn't add that head — ${error.message}`);
+                                    }
                                   }}
                                   style={{ height: 28, borderRadius: 7, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", fontSize: 11, color: "var(--sw-text-soft)", padding: "0 6px" }}
                                 >
@@ -1079,7 +1225,11 @@ export function WorkspaceSection() {
                                     const pid = e.target.value;
                                     if (!pid) return;
                                     patch("deptMembers", [...deptMembers, { department_id: d.id, profile_id: pid }]);
-                                    await supabase.from("org_unit_members").insert({ department_id: d.id, profile_id: pid });
+                                    const { error } = await supabase.from("org_unit_members").insert({ department_id: d.id, profile_id: pid });
+                                    if (error) {
+                                      patch("deptMembers", deptMembers.filter((m) => !(m.department_id === d.id && m.profile_id === pid)));
+                                      pushToast(`Couldn't add that member — ${error.message}`);
+                                    }
                                   }}
                                   style={{ height: 28, borderRadius: 7, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", fontSize: 11, color: "var(--sw-text-soft)", padding: "0 6px" }}
                                 >
@@ -1263,8 +1413,12 @@ export function WorkspaceSection() {
                                 patch("nominations", nominations.filter((x) => x.id !== nm.id));
                                 await supabase.from("nominations").update({ status: verdict }).eq("id", nm.id);
                                 if (verdict === "approved" && nominee && dept) {
-                                  await supabase.from("org_unit_heads").insert({ unit_id: dept.id, profile_id: nominee.id });
+                                  const { error } = await supabase.from("org_unit_heads").insert({ unit_id: dept.id, profile_id: nominee.id });
                                   await refresh();
+                                  // Approving without granting the headship leaves
+                                  // the nomination closed and the person powerless.
+                                  if (error) { pushToast(`Approved, but couldn't grant headship — ${error.message}`); return; }
+                                  pushToast(`${nominee.name} is now a head of ${dept.name}`);
                                 }
                               }}
                               style={pillBtn(verdict === "approved" ? "var(--sw-on-green)" : "var(--sw-on-red)")}
@@ -1339,11 +1493,19 @@ export function WorkspaceSection() {
                               patch("boardRequests", boardRequests.filter((x) => x.id !== b.id));
                               await supabase.from("board_requests").update({ status: "approved" }).eq("id", b.id);
                               const sp = spaces.find((s) => s.department_id === b.department_id);
-                              if (sp) {
-                                await supabase.from("lists").insert({ space_id: sp.id, name: b.board_name, sort: 99 });
-                                await refresh();
+                              // Previously this toasted "created" even when no
+                              // space existed for the department, or when the
+                              // insert was refused — the request was marked
+                              // approved either way and the board never appeared.
+                              if (!sp) {
+                                pushToast(`Approved, but ${departments.find((d) => d.id === b.department_id)?.name || "that department"} has no space yet — create one, then add the board.`);
+                                return;
                               }
-                              pushToast(`Board "${b.board_name}" created`);
+                              const { error } = await supabase.from("lists").insert({ space_id: sp.id, name: b.board_name, sort: 99 });
+                              await refresh();
+                              pushToast(error
+                                ? `Approved, but the board couldn't be created — ${error.message}`
+                                : `Board "${b.board_name}" created`);
                             }}
                             style={pillBtn("var(--sw-on-green)")}
                           >
@@ -1543,6 +1705,18 @@ export function WorkspaceSection() {
                       <textarea value={newDoc.excerpt} onChange={(e) => setNewDoc({ ...newDoc, excerpt: e.target.value })} placeholder="One or two lines about what this document covers." style={{ width: "100%", height: 70, resize: "vertical", borderRadius: 10, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "10px 12px", fontSize: 13, fontFamily: "var(--font-sans)", color: "var(--sw-text)", outline: "none", marginBottom: 18 }} />
                     </>
                   )}
+                  <label style={{ display: "block", fontSize: 12, fontWeight: 400, color: "var(--sw-text-soft)", marginBottom: 6 }}>Who can read this</label>
+                  <select
+                    className="sw-select"
+                    value={newDoc.visibility}
+                    onChange={(e) => setNewDoc({ ...newDoc, visibility: e.target.value as DocVisibility })}
+                    style={{ width: "100%", height: 40, borderRadius: 10, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "0 12px", fontSize: 13, marginBottom: 4, color: "var(--sw-text)" }}
+                  >
+                    {DOC_VISIBILITY.map((v) => <option key={v.value} value={v.value}>{v.label}</option>)}
+                  </select>
+                  <p style={{ margin: "0 0 18px", fontSize: 11.5, color: "var(--sw-muted)" }}>
+                    {DOC_VISIBILITY.find((v) => v.value === newDoc.visibility)?.help}
+                  </p>
                   <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
                     <button onClick={() => setShowNewDoc(false)} style={{ padding: "9px 16px", borderRadius: 999, border: "1px solid var(--sw-hair)", background: "none", fontSize: 13, fontWeight: 400, cursor: "pointer", color: "var(--sw-text-soft)" }}>Cancel</button>
                     <button
@@ -1558,6 +1732,7 @@ export function WorkspaceSection() {
                           const { data: doc } = await supabase.from("docs").insert({
                             title: newDoc.title.trim(), type: "SOP", category: deptName, excerpt: newDoc.excerpt || null,
                             status: "Under review", owner_id: me.id, department_id: newDoc.departmentId, is_sop: true,
+                            visibility: newDoc.visibility,
                           }).select().single();
                           if (doc && newDocFile) {
                             const path = `${doc.id}/${Date.now()}-${newDocFile.name}`;
@@ -1583,7 +1758,7 @@ export function WorkspaceSection() {
                           }
                           pushToast("SOP submitted — reviewers have been notified");
                         } else {
-                          const { data } = await supabase.from("docs").insert({ title: newDoc.title.trim(), type: newDoc.type, category: newDoc.category || null, excerpt: newDoc.excerpt || null, status: "Draft", owner_id: me.id }).select().single();
+                          const { data } = await supabase.from("docs").insert({ title: newDoc.title.trim(), type: newDoc.type, category: newDoc.category || null, excerpt: newDoc.excerpt || null, status: "Draft", owner_id: me.id, department_id: me.department_id, visibility: newDoc.visibility }).select().single();
                           if (data) {
                             let createdDoc = data as Doc;
                             if (newDocFile) {
@@ -1605,7 +1780,7 @@ export function WorkspaceSection() {
                         }
                         setCreatingDoc(false);
                         setShowNewDoc(false);
-                        setNewDoc({ title: "", type: "SOP", category: "", excerpt: "", departmentId: "", reviewDue: "", headReviewerId: "" });
+                        setNewDoc({ title: "", type: "SOP", category: "", excerpt: "", departmentId: "", reviewDue: "", headReviewerId: "", visibility: "department" });
                         setNewDocFile(null);
                       }}
                       style={{ padding: "9px 18px", borderRadius: 999, border: "none", background: "var(--crimson)", color: "#fff", fontSize: 13, fontWeight: 400, cursor: creatingDoc ? "default" : "pointer", opacity: creatingDoc ? 0.6 : 1, boxShadow: "0 8px 20px rgba(122,13,32,.3)" }}
@@ -1761,6 +1936,56 @@ export function WorkspaceSection() {
       )}
 
       {/* ===== CREATE / PROPOSE DEPARTMENT MODAL ===== */}
+      {deleteDept && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(23,18,15,0.45)", backdropFilter: "blur(2px)", zIndex: 40, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setDeleteDept(null)}>
+          <div onClick={(e) => e.stopPropagation()} style={{ width: 460, maxWidth: "92vw", background: "var(--sw-card)", borderRadius: 18, boxShadow: "0 30px 90px rgba(23,18,15,0.35)", padding: "24px 26px" }}>
+            <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
+              <h3 style={{ margin: 0, fontSize: 17, fontWeight: 400, flex: 1, color: "var(--sw-on-red)" }}>Delete &quot;{deleteDept.name}&quot;</h3>
+              <button onClick={() => setDeleteDept(null)} style={{ border: "none", background: "var(--sw-hover)", width: 26, height: 26, borderRadius: 99, cursor: "pointer", fontSize: 13, color: "var(--sw-text-soft)" }}><IconX /></button>
+            </div>
+            <p style={{ margin: "0 0 6px", fontSize: 12.5, color: "var(--sw-text-soft)" }}>
+              This permanently deletes {deleteDept.impact}.
+            </p>
+            <p style={{ margin: "0 0 16px", fontSize: 12, color: "var(--sw-muted)" }}>
+              {deleteDept.people} {deleteDept.people === 1 ? "person keeps their account" : "people keep their accounts"} and move to &quot;no department&quot;. Nothing here can be recovered.
+            </p>
+            <label style={{ display: "block", fontSize: 12, fontWeight: 400, color: "var(--sw-text-soft)", marginBottom: 6 }}>
+              Type <strong>{deleteDept.name}</strong> to confirm
+            </label>
+            <input
+              autoFocus
+              value={deleteDept.typed}
+              onChange={(e) => setDeleteDept({ ...deleteDept, typed: e.target.value })}
+              placeholder={deleteDept.name}
+              style={{ width: "100%", height: 40, borderRadius: 10, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "0 12px", fontSize: 13.5, marginBottom: 18, outline: "none", color: "var(--sw-text)" }}
+            />
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+              <button onClick={() => setDeleteDept(null)} style={{ padding: "9px 16px", borderRadius: 999, border: "1px solid var(--sw-hair)", background: "none", fontSize: 13, cursor: "pointer", color: "var(--sw-text-soft)" }}>Cancel</button>
+              <button
+                disabled={deletingDept || deleteDept.typed.trim() !== deleteDept.name}
+                onClick={async () => {
+                  setDeletingDept(true);
+                  const res = await fetch(`/api/admin/departments/${deleteDept.id}`, {
+                    method: "DELETE", headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ confirmName: deleteDept.typed.trim() }),
+                  }).catch(() => null);
+                  const j = res ? await res.json().catch(() => ({ ok: false })) : { ok: false };
+                  setDeletingDept(false);
+                  if (!j.ok) { pushToast(`Couldn't delete — ${j.error || "unknown error"}.`); return; }
+                  const name = deleteDept.name;
+                  setDeleteDept(null);
+                  await refresh();
+                  pushToast(`"${name}" deleted`);
+                }}
+                style={{ padding: "9px 16px", borderRadius: 999, border: "none", background: deleteDept.typed.trim() === deleteDept.name ? "var(--red)" : "var(--sw-hair)", color: "#fff", fontSize: 13, cursor: deleteDept.typed.trim() === deleteDept.name ? "pointer" : "not-allowed" }}
+              >
+                {deletingDept ? "Deleting…" : "Delete permanently"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {deptModal && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(23,18,15,0.45)", backdropFilter: "blur(2px)", zIndex: 40, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setDeptModal(null)}>
           <div onClick={(e) => e.stopPropagation()} style={{ width: 420, maxWidth: "92vw", background: "var(--sw-card)", borderRadius: 18, boxShadow: "0 30px 90px rgba(23,18,15,0.35)", padding: "24px 26px" }}>

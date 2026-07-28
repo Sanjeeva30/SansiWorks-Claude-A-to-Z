@@ -4,7 +4,7 @@
 // - Department efficiency = same formula, applied department-wide
 // - At-risk prediction = overdue OR (due ≤4 days AND (assignee has ≥5 open tasks OR assignee's on-time history <75%))
 // - Critical unblocker of the day = open task with the largest downstream dependency chain of other open tasks
-import { Task, Dependency, Profile, Department, Level } from "./types";
+import { Task, Dependency, Profile, Department, Level, DocVisibility } from "./types";
 import { todayIso } from "./dates";
 
 export const isOpen = (t: Task) => t.status !== "Done";
@@ -277,4 +277,22 @@ export function canViewSop(deptId: string | null, me: Profile | null, department
   if (hasExecVisibility(me, levels)) return true;
   if (isInternalAudit(me, departments)) return true;
   return !!deptId && me.department_id === deptId;
+}
+
+/* Per-doc visibility. Mirrors app_can_read_doc() in Postgres — that function is
+   the real enforcement; this exists so the list a reader sees matches what the
+   database would hand back, instead of rendering rows that silently vanish. */
+export function canViewDoc(
+  doc: { department_id: string | null; visibility?: DocVisibility; owner_id?: string | null },
+  me: Profile | null,
+  departments: Department[],
+  levels: Level[] = []
+): boolean {
+  if (!me) return false;
+  const visibility = doc.visibility || "department";
+  if (visibility === "company") return true;
+  if (hasExecVisibility(me, levels)) return true;
+  if (isInternalAudit(me, departments)) return true;
+  if (visibility === "restricted") return doc.owner_id === me.id;
+  return !!doc.department_id && me.department_id === doc.department_id;
 }

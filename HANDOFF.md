@@ -245,6 +245,58 @@ Added on top:
   browser preview, confirming DB state via direct SQL after each action, then
   reverting the account and deleting the test rows.
 
+## Scoping, admin controls and a dead-button sweep (2026-07-28)
+
+**Incident, recorded honestly:** while live-testing the new permanent user
+delete, a scripted DOM selector matched the wrong row and deleted the real
+seeded profile "Ambar" (`ambar@sansico.com`). She had no tasks, comments, docs
+or audit history, so nothing was orphaned, and she had no auth account (all the
+Jogja/vendor-org seed people are profile-only). Restored with her original
+matrix setup: sits in Vendor Organisation, level Manager (l4), reports to
+Marlina, assignment "F&A manager" scoped to Jogja cluster. **Lesson:** a
+`textContent` match is not a row identifier. Any scripted destructive test must
+enumerate candidates, assert the target's identity, and abort on mismatch —
+that guard is what caught the second near-miss during the department-delete test.
+
+**Visibility scoping (decided against the blunt "scope everything by department"):**
+- `docs.visibility` added — `company` / `department` / `restricted`. Company-wide
+  is deliberate: hiding the handbook or code of conduct causes more harm than
+  exposing it. Enforced by `app_can_read_doc(dept, is_sop, visibility)` in RLS;
+  `canViewDoc()` in `logic.ts` mirrors it so the UI list matches what the DB
+  would return. Migration preserved old behaviour exactly (SOPs → department,
+  plain docs → company) so nothing vanished for anyone on deploy.
+- **Forms were left company-wide on purpose.** A form is an intake channel — the
+  whole point of the IT/HR/Finance form is that outsiders submit to it. The real
+  hole was *submissions*: `app_is_dept_admin()` let any department head read
+  every department's submissions. Now `app_can_read_form_submission()` scopes
+  admins to their own department (form → list → space → department).
+- Sidebar "Everything"/"Overview" and the My Work company-pulse strip are gated
+  on `exec_visibility`. Staff get a personal strip instead: own capacity, own
+  on-time rate, blocking-me / waiting-on-me counts, team open+overdue — things
+  they can act on, rather than a health score they cannot move.
+- `capacity_tracking` genuinely gates workload display now; it previously only
+  hid the capacity input in the profile popup while the bars rendered anyway.
+
+**Spaces vs Departments — deliberately NOT merged.** Sidebar group is relabelled
+"Departments" (in practice every space is one), but the two stay separate
+concepts so cross-department project spaces, vendor spaces and cluster/plant
+work containers remain possible. Merging them would weld the data model shut.
+
+**Admin:** per-user department / level / reports-to dropdowns inline on the Users
+tab; super-admin permanent department delete behind server-computed impact
+counts + type-the-name confirmation (people are detached, never deleted);
+current-password required to change password, with show/hide on every password
+field in the app.
+
+**Dead-button sweep.** "+ Add unit" and "+ Add template" were not unwired — both
+silently returned on an empty field *and* never checked the insert's error, so
+an RLS refusal also did nothing visible. Same shape found and fixed at six more
+sites: form submission (worst — it showed a reference number for a submission
+that never saved), board requests, add head ×2, add member, nomination approval,
+and board-request approval (which toasted "created" even when the department had
+no space). Rule going forward: **every mutation checks its error and says
+something**; optimistic patches roll back on failure.
+
 ## Status: open
 - Phase 4 remainder: **Sansi 2.0 info-finder** and **realtime multiplayer presence**.
   (Comments/@mentions and the mention-email gap are done — see roadmap 9.)

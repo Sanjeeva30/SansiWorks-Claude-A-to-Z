@@ -4,7 +4,7 @@ import { useStore } from "@/lib/store";
 import { useUI } from "@/lib/ui";
 import { initials } from "@/lib/types";
 import { isDeptAdmin, hasExecVisibility } from "@/lib/logic";
-import { IconChevDown, IconStar, IconTrash } from "./icons";
+import { IconChevDown, IconStar, IconTrash, IconX } from "./icons";
 import { Avatar } from "./shared";
 
 const COLLAPSE_KEY = "sw-collapsed-spaces";
@@ -31,11 +31,20 @@ export function Sidebar() {
   useEffect(() => {
     try { setCollapsed(JSON.parse(localStorage.getItem(COLLAPSE_KEY) || "{}")); } catch {}
   }, []);
-  const toggleSpace = (id: string) => {
-    const next = { ...collapsed, [id]: !collapsed[id] };
+  const persistCollapsed = (next: Record<string, boolean>) => {
     setCollapsed(next);
     try { localStorage.setItem(COLLAPSE_KEY, JSON.stringify(next)); } catch {}
   };
+  const toggleSpace = (id: string) => persistCollapsed({ ...collapsed, [id]: !collapsed[id] });
+
+  /* Collapse/expand *all* — the departments themselves always stay listed;
+     what folds away is every board under them. "Any open" decides the
+     direction so one control does both jobs, the way a file tree behaves. */
+  const anyExpanded = visibleSpaces.some((s) => !collapsed[s.id]);
+  const toggleAllSpaces = () =>
+    persistCollapsed(Object.fromEntries(visibleSpaces.map((s) => [s.id, anyExpanded])));
+
+  const closeAddSpace = () => { setAddingSpace(false); setNewSpaceName(""); };
 
   const isAdmin = isDeptAdmin(me, levels);
   // "Everything" (every task company-wide) and "Overview" (the executive
@@ -62,8 +71,12 @@ export function Sidebar() {
       }
       pushToast(`"${name}" created`);
     } else {
-      await supabase.from("board_requests").insert({ board_name: name, requester_id: me.id, department_id: space.department_id });
-      pushToast(`Request sent — your Department Head will review "${name}"`);
+      // Telling someone their request was sent when the insert failed means
+      // they wait on an approval that will never appear in anyone's queue.
+      const { error } = await supabase.from("board_requests").insert({ board_name: name, requester_id: me.id, department_id: space.department_id });
+      pushToast(error
+        ? `Couldn't send the request — ${error.message}`
+        : `Request sent — your Department Head will review "${name}"`);
     }
     setAddingBoardFor(null);
     setBoardName("");
@@ -223,8 +236,21 @@ export function Sidebar() {
           </>
         )}
 
-        <div style={{ margin: "13px 0 4px", padding: "0 9px", display: "flex", alignItems: "center" }}>
-          <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--sw-muted)", flex: 1 }}>Spaces</span>
+        {/* Labelled "Departments" because in practice every one of these IS a
+            department — calling the same thing two different names was the
+            actual source of confusion. Spaces stay a separate concept
+            underneath so cross-department project spaces remain possible. */}
+        <div style={{ margin: "13px 0 4px", padding: "0 9px", display: "flex", alignItems: "center", gap: 2 }}>
+          <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--sw-muted)", flex: 1 }}>Departments</span>
+          {visibleSpaces.length > 0 && (
+            <button
+              onClick={toggleAllSpaces}
+              title={anyExpanded ? "Collapse all boards" : "Expand all boards"}
+              style={{ border: "none", background: "none", cursor: "pointer", color: "var(--sw-muted)", padding: "0 2px", display: "flex", alignItems: "center", transform: anyExpanded ? "none" : "rotate(-90deg)", transition: "transform .12s" }}
+            >
+              <IconChevDown size={11} />
+            </button>
+          )}
           {isAdmin && (
             <button
               onClick={() => { setAddingSpace(true); setNewSpaceName(""); }}
@@ -241,11 +267,17 @@ export function Sidebar() {
               autoFocus
               value={newSpaceName}
               onChange={(e) => setNewSpaceName(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") createSpace(); if (e.key === "Escape") setAddingSpace(false); }}
+              onKeyDown={(e) => { if (e.key === "Enter") createSpace(); if (e.key === "Escape") closeAddSpace(); }}
+              onBlur={() => { if (!newSpaceName.trim()) closeAddSpace(); }}
               placeholder="Space name…"
               style={{ flex: 1, minWidth: 0, height: 24, borderRadius: 6, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", fontSize: 11, padding: "0 7px", color: "var(--sw-text)", outline: "none" }}
             />
             <button onClick={createSpace} title="Save" style={{ border: "none", background: "var(--crimson)", color: "#fff", borderRadius: 6, width: 22, height: 24, fontSize: 12, cursor: "pointer" }}>✓</button>
+            {/* Escape and click-away both cancel too, but neither is discoverable
+                — there was previously no visible way out of this field at all. */}
+            <button onMouseDown={(e) => { e.preventDefault(); closeAddSpace(); }} title="Cancel" style={{ border: "1px solid var(--sw-hair)", background: "none", color: "var(--sw-muted)", borderRadius: 6, width: 22, height: 24, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <IconX size={9} />
+            </button>
           </div>
         )}
         {visibleSpaces.map((space) => {

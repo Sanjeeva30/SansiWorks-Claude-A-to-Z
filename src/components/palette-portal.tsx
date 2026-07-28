@@ -145,9 +145,18 @@ export function PublicPortal() {
     return s?.name || "General";
   };
 
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const submit = async () => {
     if (!current) return;
-    await supabase.from("form_submissions").insert({ form_id: current.id, answers });
+    // This is the one place an unchecked error is worst: the confirmation
+    // screen and reference number rendered unconditionally, so a rejected
+    // insert still told the submitter their form had gone through.
+    const { error } = await supabase.from("form_submissions").insert({ form_id: current.id, answers });
+    if (error) {
+      setSubmitError("That didn't send. Check your connection and try again — nothing has been submitted.");
+      return;
+    }
+    setSubmitError(null);
     setRefNo(`SW-${Math.floor(1000 + Math.random() * 9000)}`);
     setSent(true);
     setAnswers({});
@@ -211,6 +220,9 @@ export function PublicPortal() {
                     </label>
                   ))}
                 </div>
+                {submitError && (
+                  <p style={{ margin: "16px 0 0", fontSize: 12.5, color: "var(--sw-on-red)" }}>{submitError}</p>
+                )}
                 <button onClick={submit} style={{ marginTop: 20, padding: "10px 26px", borderRadius: 999, border: "none", background: "var(--crimson)", color: "#fff", fontSize: 13, fontWeight: 400, cursor: "pointer", boxShadow: "0 8px 20px rgba(122,13,32,.25)" }}>Send request</button>
               </div>
             </>

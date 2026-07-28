@@ -58,16 +58,37 @@ export function OrgAdmin({ tab }: { tab: "organisation" | "permissions" }) {
   const unitName = (id: string | null) => departments.find((d) => d.id === id)?.name || "—";
   const roots = departments.filter((d) => !d.archived);
 
+  /* This read as a dead button: the empty-name guard returned silently, and the
+     insert's error was never checked — so an RLS refusal also did nothing
+     visible. Both failure modes now say why. Departments and divisions get a
+     paired Space, same as createDepartmentWithSpace(), because a unit with no
+     board home is exactly the gap that left 8 departments unusable before. */
   async function createUnit() {
-    if (!newUnit.name.trim() || !me) return;
-    await supabase.from("org_units").insert({
-      name: newUnit.name.trim(), type: newUnit.type, parent_id: newUnit.parent_id || null,
+    if (!me) return;
+    const name = newUnit.name.trim();
+    if (!name) { pushToast("Give the unit a name first."); return; }
+
+    const { data, error } = await supabase.from("org_units").insert({
+      name, type: newUnit.type, parent_id: newUnit.parent_id || null,
       color: "#22409E", mode: "Workspace visible",
-    });
-    await logAudit(supabase, me.id, "created org unit", newUnit.name.trim());
+    }).select().single();
+    if (error || !data) {
+      pushToast(`Couldn't add "${name}" — ${error?.message || "the change didn't apply"}.`);
+      return;
+    }
+
+    let note = "";
+    if (newUnit.type === "department" || newUnit.type === "division") {
+      const { error: spaceErr } = await supabase.from("spaces").insert({
+        name, color: "#22409E", department_id: data.id, sort: 99,
+      });
+      note = spaceErr ? " (its space could not be created — add one from the sidebar)" : ", with its own space";
+    }
+
+    await logAudit(supabase, me.id, "created org unit", name);
     setNewUnit({ name: "", type: "department", parent_id: "" });
     await refresh();
-    pushToast(`${newUnit.name.trim()} added to the org tree`);
+    pushToast(`${name} added to the org tree${note}`);
   }
 
   async function archiveUnit(id: string, archived: boolean) {
@@ -83,8 +104,16 @@ export function OrgAdmin({ tab }: { tab: "organisation" | "permissions" }) {
 
   async function addHead(unitId: string, profileId: string) {
     if (!profileId) return;
+    // Optimistic patch, but roll it back if the write is refused — headship is
+    // a permission grant, so a UI that shows it applied when it wasn't is
+    // worse than one that never moved.
     patch("deptHeads", [...deptHeads, { unit_id: unitId, profile_id: profileId }]);
-    await supabase.from("org_unit_heads").insert({ unit_id: unitId, profile_id: profileId });
+    const { error } = await supabase.from("org_unit_heads").insert({ unit_id: unitId, profile_id: profileId });
+    if (error) {
+      patch("deptHeads", deptHeads.filter((h) => !(h.unit_id === unitId && h.profile_id === profileId)));
+      pushToast(`Couldn't add that head — ${error.message}`);
+      return;
+    }
     if (me) await logAudit(supabase, me.id, `added ${profiles.find((p) => p.id === profileId)?.name || "someone"} as head of`, unitName(unitId));
   }
   async function removeHead(unitId: string, profileId: string) {
@@ -96,13 +125,18 @@ export function OrgAdmin({ tab }: { tab: "organisation" | "permissions" }) {
   }
 
   async function createAssignment() {
-    if (!newAssign.profile_id || !newAssign.function_name.trim() || !me) return;
-    await supabase.from("assignments").insert({
+    if (!me) return;
+    if (!newAssign.profile_id || !newAssign.function_name.trim()) {
+      pushToast("Pick a person and name the function first.");
+      return;
+    }
+    const { error } = await supabase.from("assignments").insert({
       profile_id: newAssign.profile_id,
       function_name: newAssign.function_name.trim(),
       scope_unit_id: newAssign.scope_unit_id || null,
       reports_to_unit_id: newAssign.reports_to_unit_id || null,
     });
+    if (error) { pushToast(`Couldn't add the assignment — ${error.message}`); return; }
     await logAudit(supabase, me.id, `assigned ${profiles.find((p) => p.id === newAssign.profile_id)?.name || "someone"} as ${newAssign.function_name.trim()}`, unitName(newAssign.scope_unit_id) || "org-wide");
     setNewAssign({ profile_id: "", function_name: "", scope_unit_id: "", reports_to_unit_id: "" });
     await refresh();
@@ -118,12 +152,18 @@ export function OrgAdmin({ tab }: { tab: "organisation" | "permissions" }) {
     if (me) await logAudit(supabase, me.id, `removed assignment: ${person} as ${a.function_name}`, unitName(a.scope_unit_id) || "org-wide");
   }
 
+  /* Same silent-failure shape as createUnit, plus it never pushed a success
+     toast — so even a working click looked like nothing had happened. */
   async function createTemplate() {
-    if (!newTemplateName.trim() || !me) return;
-    await supabase.from("permission_templates").insert({ name: newTemplateName.trim(), screens: [], abilities: {} });
-    await logAudit(supabase, me.id, "created permission template", newTemplateName.trim());
+    if (!me) return;
+    const name = newTemplateName.trim();
+    if (!name) { pushToast("Give the template a name first."); return; }
+    const { error } = await supabase.from("permission_templates").insert({ name, screens: [], abilities: {} });
+    if (error) { pushToast(`Couldn't add "${name}" — ${error.message}`); return; }
+    await logAudit(supabase, me.id, "created permission template", name);
     setNewTemplateName("");
     await refresh();
+    pushToast(`Template "${name}" created — set its screens and abilities below`);
   }
   async function saveTemplate(t: PermissionTemplate) {
     await supabase.from("permission_templates").update({ screens: t.screens, abilities: t.abilities, description: t.description }).eq("id", t.id);
