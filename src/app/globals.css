@@ -389,7 +389,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
      instead so Sansi/notifications always open fully visible */
   .sw-popover {
     position: fixed !important;
-    top: 64px !important;
+    top: calc(64px + env(safe-area-inset-top, 0px)) !important;
     right: 12px !important;
     left: 12px !important;
     width: auto !important;
@@ -407,18 +407,29 @@ html, body { max-width: 100%; overflow-x: hidden; }
   .sw-modal-split { flex-direction: column !important; }
   .sw-modal-split-side { width: 100% !important; border-left: none !important; border-top: 1px solid var(--sw-hair) !important; }
 
-  /* modals go edge-to-edge full screen on small phones */
+  /* Modals go edge-to-edge full screen on small phones. They are inside a
+     `position: fixed` overlay, so they are measured against the VIEWPORT and do
+     not inherit the app shell's safe-area padding — a full-height modal put its
+     header under the status bar and its action row under the home indicator.
+     Reserve both insets here, and shrink the height to match so the modal still
+     fits exactly one screen instead of overflowing by the inset amount. */
   .sw-modal-card {
     width: 100% !important;
     max-width: 100% !important;
+    box-sizing: border-box !important;
     height: 100dvh !important;
     max-height: 100dvh !important;
+    padding-top: env(safe-area-inset-top, 0px) !important;
+    padding-bottom: env(safe-area-inset-bottom, 0px) !important;
     border-radius: 0 !important;
   }
   .sw-slideover-card {
     width: 100% !important;
     max-width: 100% !important;
+    box-sizing: border-box !important;
     height: 100dvh !important;
+    padding-top: env(safe-area-inset-top, 0px) !important;
+    padding-bottom: env(safe-area-inset-bottom, 0px) !important;
   }
 }
 
@@ -483,10 +494,31 @@ html, body { max-width: 100%; overflow-x: hidden; }
 }
 .sw-hscroll > * { scroll-snap-align: start; }
 
-/* safe-area padding for notch/home-indicator devices, applied to
-   the outermost app shell and the mobile drawer */
-.sw-app-shell { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
-.sw-hamburger { padding-top: env(safe-area-inset-top); }
+/* Safe-area handling for notch / Dynamic Island / home-indicator devices.
+
+   This was wrong in a way that only showed up once the PWA ran standalone: the
+   shell padded left/right but never TOP, so every topbar (+ New task, Sansi,
+   theme, bell) rendered underneath the iOS status bar. Worse, the fix had been
+   applied as `padding-top` on the fixed hamburger BUTTON, which just made the
+   button a tall white slab with the ☰ pushed to its bottom edge — exactly what
+   the phone screenshot shows.
+
+   Correct model: the shell reserves the top inset for the whole app (border-box
+   so it still fits 100dvh), and anything `position: fixed` — which is measured
+   against the viewport, not the padded shell — adds the inset to its own offset. */
+.sw-app-shell {
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+.sw-hamburger { top: calc(12px + env(safe-area-inset-top, 0px)) !important; }
+/* The drawer is fixed and full-height, so it needs both insets itself. */
+.sw-sidebar {
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  box-sizing: border-box;
+}
 
 /* ---- onboarding-flow keyframes from SansiWorks Onboarding.dc.html ---- */
 @keyframes swFadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }

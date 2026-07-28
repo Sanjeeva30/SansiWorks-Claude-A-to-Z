@@ -23,12 +23,49 @@ export function CompanySection() {
   const [peopleDensity, setPeopleDensity] = useState<"comfortable" | "compact">("comfortable");
 
   const today = todayIso();
-  const sansicoPeople = useMemo(() => profiles.filter((p) => p.email.endsWith("@sansico.com")), [profiles]);
+
+  /* Membership is two-sourced: a person's home `profiles.department_id`, and
+     `org_unit_members` rows for cross-department membership. deptStats read only
+     the second, so whole departments counted as empty — Vendor Organisation has
+     five people by home department and zero member rows. Union them. */
+  const membersOf = useMemo(() => {
+    const byDept = new Map<string, Set<string>>();
+    const add = (dept: string | null, pid: string) => {
+      if (!dept) return;
+      if (!byDept.has(dept)) byDept.set(dept, new Set());
+      byDept.get(dept)!.add(pid);
+    };
+    profiles.forEach((p) => add(p.department_id, p.id));
+    deptMembers.forEach((m) => add(m.department_id, m.profile_id));
+    return byDept;
+  }, [profiles, deptMembers]);
+
+  /* The department picker used to filter two lists and nothing else — every KPI,
+     company health, predicted-late and people figure stayed company-wide, so
+     picking a department barely changed the page. Scope everything through it. */
+  const scopedDept = useMemo(
+    () => departments.find((d) => d.name === deptFilter) || null,
+    [departments, deptFilter]
+  );
+  const inScope = useMemo(() => {
+    if (!scopedDept) return null; // null = whole company
+    return membersOf.get(scopedDept.id) || new Set<string>();
+  }, [scopedDept, membersOf]);
+
+  const scopedTasks = useMemo(
+    () => (inScope ? tasks.filter((t) => !!t.assignee_id && inScope.has(t.assignee_id)) : tasks),
+    [tasks, inScope]
+  );
+
+  const sansicoPeople = useMemo(
+    () => profiles.filter((p) => p.email.endsWith("@sansico.com") && (!inScope || inScope.has(p.id))),
+    [profiles, inScope]
+  );
 
   const personStats = useMemo(
     () =>
       sansicoPeople.map((p) => {
-        const pt = tasksOfPerson(tasks, p.id);
+        const pt = tasksOfPerson(scopedTasks, p.id);
         const { onTime, late, total } = onTimeStats(pt);
         const historyPct = total > 0 ? (onTime / total) * 100 : 100;
         const open = pt.filter(isOpen);
@@ -37,7 +74,7 @@ export function CompanySection() {
         const eff = Math.round(historyPct * 0.75 + healthPct * 0.25);
         return { p, pt, onTime, late, historyPct: Math.round(historyPct), open, overdue, healthPct: Math.round(healthPct), eff, hasData: total > 0 || open.length > 0 };
       }),
-    [sansicoPeople, tasks]
+    [sansicoPeople, scopedTasks]
   );
 
   // Foreground tokens: this colour is used as chip text and as a bar fill, and both
@@ -55,8 +92,8 @@ export function CompanySection() {
   const deptStats = useMemo(
     () =>
       departments.map((d) => {
-        const memberIds = deptMembers.filter((m) => m.department_id === d.id).map((m) => m.profile_id);
-        const dTasks = tasks.filter((t) => !!t.assignee_id && memberIds.includes(t.assignee_id));
+        const memberIds = membersOf.get(d.id) || new Set<string>();
+        const dTasks = tasks.filter((t) => !!t.assignee_id && memberIds.has(t.assignee_id));
         const open = dTasks.filter(isOpen);
         const overdue = open.filter(isOverdue);
         const risk = open.length ? Math.round((overdue.length / open.length) * 100) : 0;
@@ -66,15 +103,15 @@ export function CompanySection() {
         const eff = Math.round(historyPct * 0.75 + healthPct * 0.25);
         return { d, risk, riskLabel: risk > 50 ? "High" : risk > 20 ? "Moderate" : "Low", eff, overdue, open, onTime, late, historyPct: Math.round(historyPct), healthPct: Math.round(healthPct), hasData: total > 0 || open.length > 0 };
       }),
-    [departments, deptMembers, tasks]
+    [departments, membersOf, tasks]
   );
 
-  const openTasks = tasks.filter(isOpen);
+  const openTasks = scopedTasks.filter(isOpen);
   const overdueAll = openTasks.filter(isOverdue);
   const criticalCount = openTasks.filter((t) => t.priority === "Critical").length;
-  const { onTime: onT, total: totalDone } = onTimeStats(tasks);
+  const { onTime: onT, total: totalDone } = onTimeStats(scopedTasks);
   const onTimeRate = totalDone ? Math.round((onT / totalDone) * 100) : 100;
-  const scored = deptStats.filter((x) => x.hasData);
+  const scored = (scopedDept ? deptStats.filter((x) => x.d.id === scopedDept.id) : deptStats).filter((x) => x.hasData);
   const health = scored.length ? Math.round(scored.reduce((s, x) => s + x.eff, 0) / scored.length) : 100;
   // Only departments with actual work can be "on track" — counting the empty ones
   // turned this into a meaningless "26 depts on track".
@@ -107,7 +144,7 @@ export function CompanySection() {
     { value: String(criticalCount), label: "Critical priority", color: "var(--sw-on-crimson)", trend: "critical", upIsGood: false,
       nav: execDrill("Critical priority", openTasks.filter((t) => t.priority === "Critical"), "Open work marked Critical") },
     { value: `${onTimeRate}%`, label: "On-time rate", color: "var(--sw-on-green)", unit: "%", upIsGood: true, trend: "onTime",
-      nav: execDrill("On-time rate", tasks.filter((t) => t.status === "Done" && t.completed_at && t.due).slice(-12),
+      nav: execDrill("On-time rate", scopedTasks.filter((t) => t.status === "Done" && t.completed_at && t.due).slice(-12),
         `${onTimeRate}% of completed work met its due date — most recent completions`) },
   ];
 
@@ -134,7 +171,7 @@ export function CompanySection() {
     return out.filter((x) => (seen.has(x.t.id) ? false : (seen.add(x.t.id), true))).sort((a, b) => a.sort - b.sort).slice(0, 5);
   }, [personStats, today]);
 
-  const unblocker = useMemo(() => criticalUnblocker(tasks, deps), [tasks, deps]);
+  const unblocker = useMemo(() => criticalUnblocker(scopedTasks, deps), [scopedTasks, deps]);
   const unblockerDown = useMemo(() => {
     if (!unblocker) return [];
     return deps.filter((d) => d.depends_on === unblocker.task.id).map((d) => tasks.find((t) => t.id === d.task_id)).filter((t) => t && isOpen(t)) as Task[];
@@ -195,7 +232,9 @@ export function CompanySection() {
               <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
                 <div>
                   <h2 style={{ fontFamily: "var(--font-serif)", fontWeight: 400, fontSize: 24, margin: "0 0 3px", fontStyle: "italic" }}>Overview</h2>
-                  <p style={{ margin: 0, fontSize: 12.5, color: "var(--sw-text-soft)" }}>Company-wide performance across all departments.</p>
+                  <p style={{ margin: 0, fontSize: 12.5, color: "var(--sw-text-soft)" }}>
+                    {scopedDept ? `${scopedDept.name} — every figure on this page is scoped to this department.` : "Company-wide performance across all departments."}
+                  </p>
                 </div>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   <select className="sw-select" value={deptFilter} onChange={(e) => setDeptFilter(e.target.value)} style={{ height: 32, borderRadius: 8, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "0 10px", fontSize: 12, color: "var(--sw-text)" }}>
@@ -213,8 +252,14 @@ export function CompanySection() {
                   <div style={{ width: 50, height: 50, borderRadius: 99, background: "var(--sw-card)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 400 }}>{health}</div>
                 </div>
                 <div style={{ flex: "none" }}>
-                  <div style={{ fontSize: 13, fontWeight: 400 }}>Company health</div>
-                  <div style={{ fontSize: 11.5, color: "var(--sw-muted)" }}>{health >= 70 ? "Healthy" : "Needs attention"} — {onTrack} of {scored.length} active depts on track</div>
+                  <div style={{ fontSize: 13, fontWeight: 400 }}>{scopedDept ? "Department health" : "Company health"}</div>
+                  <div style={{ fontSize: 11.5, color: "var(--sw-muted)" }}>
+                    {!scored.length
+                      ? "No tracked work yet"
+                      : scopedDept
+                        ? `${health >= 70 ? "Healthy" : "Needs attention"} — ${onTrack ? "on track" : "at risk"}`
+                        : `${health >= 70 ? "Healthy" : "Needs attention"} — ${onTrack} of ${scored.length} active depts on track`}
+                  </div>
                 </div>
                 <div className="sw-topbar-label" style={{ width: 1, alignSelf: "stretch", background: "var(--sw-hair)" }} />
                 {execMetrics.map((m) => {
