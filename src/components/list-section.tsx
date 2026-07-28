@@ -9,7 +9,9 @@ import { updateTask } from "@/lib/actions";
 import { writeOrRevert } from "@/lib/actions";
 import { FilterState, EMPTY_FILTERS, applyFilters } from "@/lib/search";
 import { difficultyPoints } from "@/lib/logic";
+import { usePresence } from "@/lib/presence";
 import { TopIcons } from "./shared";
+import { PresenceAvatars } from "./presence";
 import { FilterBar } from "./filter-bar";
 import { IconChevLeft, IconChevRight, IconX } from "./icons";
 import { readableTextOn } from "@/lib/colors";
@@ -57,6 +59,9 @@ export function ListSection() {
   const today = todayIso();
   const list = lists.find((l) => l.id === activeList?.listId) || lists.find((l) => l.name === "Bank Docs") || lists[0];
   const space = spaces.find((s) => s.id === list?.space_id);
+  // Not scoped on the Everything page — there's no single board to attach a
+  // viewer list to there, and it would just show everyone active anywhere.
+  const boardViewers = usePresence(listPage !== "everything" && list ? `list:${list.id}` : null);
 
   const listPathOf = (t: Task) => {
     if (!t.list_id) return "My List (personal)";
@@ -208,6 +213,7 @@ export function ListSection() {
           <span style={{ fontSize: 12.5, color: "var(--sw-muted)", fontWeight: 400 }}>{space?.name} /</span>
           <h1 className="sw-topbar-title" style={{ fontSize: 16, fontWeight: 400, margin: 0 }}>{list?.name}</h1>
           <div style={{ flex: 1 }} />
+          <PresenceAvatars viewers={boardViewers} />
           <TopIcons />
           <button onClick={() => openQuickAdd()} style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--crimson)", color: "#fff", border: "none", borderRadius: 999, padding: "7px 15px", fontSize: 12.5, fontWeight: 400, cursor: "pointer", boxShadow: "0 8px 20px rgba(122,13,32,.25)" }}>
             <span style={{ fontSize: 13, lineHeight: 1 }}>+</span> <span className="sw-topbar-label">New task</span>

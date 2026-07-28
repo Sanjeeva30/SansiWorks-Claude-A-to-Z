@@ -334,9 +334,38 @@ install from the Vercel URL, not localhost. On iPhone, install via **Safari**
 from Safari, and a home-screen app runs in WebKit regardless of which browser
 installed it.
 
+## Realtime presence + assignee-picker fix (2026-07-28)
+**Lightweight presence** (not live collaborative editing — that was explicitly
+scoped out): `lib/presence.ts` exports `usePresence(scopeKey)`, joining a Realtime
+presence channel (`presence:task:<id>` or `presence:list:<id>`) and returning
+everyone else currently tracked on it. `components/presence.tsx` renders that as
+an overlapping avatar stack (`PresenceAvatars`, capped at 4 + "+N"), wired into
+the task detail header and the board header (not the Everything page — there's
+no single board to attach a viewer list to there). No polling, no heartbeat
+interval of our own: presence is tied to the channel's own socket lifecycle, so
+a closed tab drops out on its own. This reuses the one Realtime connection the
+app already holds for row-sync — a second channel *topic* on the same socket,
+not a second connection — so it costs nothing against the free-tier concurrent-
+connection quota (200) and only a small fraction of the message quota (2M/mo).
+Verified live with a synthetic second client (raw supabase-js, phantom presence
+key) joining the same channel: appeared with correct name/color, disappeared
+within ~3s of `removeChannel`, and a task-scoped viewer never leaked into the
+board list or vice versa.
+
+**Assignee (R) picker no longer dumps the whole department below the field.**
+`AssigneePicker` previously rendered every `deptScoped` profile as a permanent
+row of chips underneath the input, unconditionally — fine at a handful of
+people, unusable at 100 (100 always-visible chips). It now matches the
+collapsed/capped pattern `RaciRows` already used for C/I: closed until the
+field is focused, capped at 8 results with a "+N more — keep typing" hint,
+selection via `onMouseDown` so it fires before the input's `onBlur` closes the
+list. Verified live: focusing an empty board's R field showed exactly the
+department's members and nothing else; clicking one selected it and closed
+the list.
+
 ## Status: open
-- Phase 4 remainder: **Sansi 2.0 info-finder** and **realtime multiplayer presence**.
-  (Comments/@mentions and the mention-email gap are done — see roadmap 9.)
+- Phase 4 remainder: **Sansi 2.0 info-finder**. (Presence, comments/@mentions,
+  and the mention-email gap are done — see above and roadmap 9.)
 - 30-user seed — explicitly deferred by user ("don't build the seed data now").
 - User's screenshot backlog (feedback given, plan pending user prioritization): drill-down
   everywhere, Sansi info-finder, efficiency ranking dashboard, collapse/expand-all spaces,

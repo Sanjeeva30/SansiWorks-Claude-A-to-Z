@@ -25,6 +25,8 @@ import { FileDropZone } from "./dropzone";
 import { IconLink, IconX, IconTrash } from "./icons";
 import { Avatar } from "./shared";
 import { useFocusTrap } from "@/lib/a11y";
+import { usePresence } from "@/lib/presence";
+import { PresenceAvatars } from "./presence";
 
 const label: React.CSSProperties = { fontSize: 12, fontWeight: 400, color: "var(--sw-muted)" };
 
@@ -63,6 +65,7 @@ export function TaskDetailSlideOver() {
     listAttachments(supabase, t.id).then(setAttachments);
   }, [t?.id, supabase]);
   const trapRef = useFocusTrap(!!t, () => setActiveTaskId(null));
+  const viewers = usePresence(t ? `task:${t.id}` : null);
 
   if (!t) return null;
 
@@ -192,6 +195,7 @@ export function TaskDetailSlideOver() {
           {t.milestone && <span style={{ fontSize: 10, fontWeight: 400, color: "var(--sw-on-crimson)", border: "1px solid var(--crimson)", borderRadius: 99, padding: "1px 8px" }}>◆ Milestone</span>}
           <span style={{ fontSize: 11.5, fontWeight: 400, color: "var(--sw-text-soft)" }}>{listPath}</span>
           <div style={{ flex: 1 }} />
+          <PresenceAvatars viewers={viewers} />
           <button
             onClick={() => {
               try { navigator.clipboard.writeText(taskLink(t.task_number)); pushToast("Task link copied"); } catch {}
