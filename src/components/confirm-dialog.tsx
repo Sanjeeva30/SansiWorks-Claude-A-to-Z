@@ -10,7 +10,9 @@ const overlay: React.CSSProperties = { position: "fixed", inset: 0, background: 
    firing immediately — see the note on ConfirmOptions in lib/ui.tsx. */
 export function ConfirmDialog() {
   const { confirmRequest, resolveConfirm } = useUI();
-  const trapRef = useFocusTrap(!!confirmRequest);
+  // Esc cancels — never confirms. A destructive action must not be one
+  // stray keypress away from happening.
+  const trapRef = useFocusTrap(!!confirmRequest, () => resolveConfirm(false));
   if (!confirmRequest) return null;
   const { title, message, confirmLabel = "Confirm", cancelLabel = "Cancel", danger } = confirmRequest;
 

@@ -62,7 +62,7 @@ export function TaskDetailSlideOver() {
     if (!t) { setAttachments([]); return; }
     listAttachments(supabase, t.id).then(setAttachments);
   }, [t?.id, supabase]);
-  const trapRef = useFocusTrap(!!t);
+  const trapRef = useFocusTrap(!!t, () => setActiveTaskId(null));
 
   if (!t) return null;
 

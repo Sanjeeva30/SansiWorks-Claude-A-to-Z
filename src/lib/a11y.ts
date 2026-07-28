@@ -3,8 +3,14 @@ import { useEffect, useRef } from "react";
 /** Traps Tab/Shift+Tab focus inside a modal panel and restores focus to
  *  whatever was focused before it opened, on close. Attach the returned ref
  *  to the modal's outer panel element. `active` gates it — pass the
- *  condition that means the modal is actually mounted. */
-export function useFocusTrap(active: boolean) {
+ *  condition that means the modal is actually mounted.
+ *
+ *  Pass `onEscape` to close on Esc. Nothing handled Esc before, so every modal
+ *  in the app — task detail, profile, confirm, doc detail, email preview —
+ *  could only be dismissed by finding the X or clicking the backdrop. Esc is
+ *  the first thing people try, and for a keyboard-only user it was the only
+ *  exit that didn't exist. */
+export function useFocusTrap(active: boolean, onEscape?: () => void) {
   const ref = useRef<HTMLDivElement>(null);
   const prevFocus = useRef<HTMLElement | null>(null);
 
@@ -18,6 +24,11 @@ export function useFocusTrap(active: boolean) {
     focusable()[0]?.focus();
 
     const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && onEscape) {
+        e.preventDefault();
+        onEscape();
+        return;
+      }
       if (e.key !== "Tab") return;
       const els = focusable();
       if (!els.length) return;
@@ -36,7 +47,7 @@ export function useFocusTrap(active: boolean) {
       document.removeEventListener("keydown", onKey);
       prevFocus.current?.focus?.();
     };
-  }, [active]);
+  }, [active, onEscape]);
 
   return ref;
 }

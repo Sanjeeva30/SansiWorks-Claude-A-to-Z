@@ -28,7 +28,7 @@ export function EntityDetailModal() {
   const { profiles, departments, deptHeads, assignments, levels, audit, invites, forms, lists, spaces, tasks, ensureDeferred } = useStore();
   // audit + invites are deferred; fetch only once the modal is actually opened.
   useEffect(() => { if (detailPopup) ensureDeferred(); }, [detailPopup, ensureDeferred]);
-  const trapRef = useFocusTrap(!!detailPopup);
+  const trapRef = useFocusTrap(!!detailPopup, closeDetail);
   if (!detailPopup) return null;
   const { type, id } = detailPopup;
 
@@ -181,7 +181,7 @@ export function DocDetailModal() {
   const [reviewNoteFile, setReviewNoteFile] = useState<File | null>(null);
   const [requestingRevisions, setRequestingRevisions] = useState<"head" | "audit" | null>(null);
   const [busy, setBusy] = useState(false);
-  const trapRef = useFocusTrap(!!docDetailId);
+  const trapRef = useFocusTrap(!!docDetailId, () => setDocDetailId(null));
 
   const d = docs.find((x) => x.id === docDetailId);
   if (!d) return null;

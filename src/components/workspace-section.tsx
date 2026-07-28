@@ -4,6 +4,7 @@ import { useStore } from "@/lib/store";
 import { useUI } from "@/lib/ui";
 import { initials, Doc, PRIORITY_COLORS, Space, List, DocVisibility, DOC_VISIBILITY } from "@/lib/types";
 import { writeOrRevert } from "@/lib/actions";
+import { useFocusTrap } from "@/lib/a11y";
 import { relTime, fmtShort, todayIso } from "@/lib/dates";
 import { isOpen, isOverdue, onTimeStats, tasksOfPerson, canViewSop, canViewDoc, isSeniorRank, isInternalAudit, isInternalAuditManager, isDeptHead, internalAuditDept, isMultiDeptAdmin, isDeptAdmin, hasExecVisibility } from "@/lib/logic";
 import { TopIcons } from "./shared";
@@ -2110,9 +2111,12 @@ function EmailPreview({ kind, digestTime, onClose, dueSoon, myOpen, firstName, e
   }[kind];
   const h4: React.CSSProperties = { margin: "0 0 8px", fontSize: 11, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--sw-muted)" };
   const rowStyle: React.CSSProperties = { display: "flex", justifyContent: "space-between", gap: 12, padding: "8px 0", borderBottom: "1px solid var(--sw-hair)", fontSize: 12.5 };
+  // This modal had neither a focus trap nor an Esc exit, unlike every other
+  // one in the app — the only ways out were the X or the backdrop.
+  const trapRef = useFocusTrap(true, onClose);
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(23,18,15,0.45)", backdropFilter: "blur(2px)", zIndex: 55, display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ width: 600, maxWidth: "94vw", maxHeight: "88vh", overflowY: "auto", background: "var(--sw-card)", borderRadius: 16, boxShadow: "0 30px 90px rgba(23,18,15,0.35)", animation: "swModalIn .18s ease" }}>
+      <div ref={trapRef} onClick={(e) => e.stopPropagation()} style={{ width: 600, maxWidth: "94vw", maxHeight: "88vh", overflowY: "auto", background: "var(--sw-card)", borderRadius: 16, boxShadow: "0 30px 90px rgba(23,18,15,0.35)", animation: "swModalIn .18s ease" }}>
         <div style={{ padding: "14px 22px", borderBottom: "1px solid var(--sw-hair)", display: "flex", alignItems: "center" }}>
           <span style={{ fontSize: 12, color: "var(--sw-muted)", flex: 1 }}>Email preview</span>
           <button onClick={onClose} style={{ border: "none", background: "var(--sw-hover)", width: 24, height: 24, borderRadius: 99, cursor: "pointer", fontSize: 12, color: "var(--sw-text-soft)" }}><IconX /></button>

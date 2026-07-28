@@ -328,7 +328,7 @@ export function ProfileModal() {
     });
   };
   const p = profiles.find((x) => x.id === profileTarget);
-  const trapRef = useFocusTrap(!!p);
+  const trapRef = useFocusTrap(!!p, () => openProfile(null));
   if (!p) return null;
   const canManage = !!me?.is_super || me?.level_id === "l1" || me?.level_id === "l2";
   const overrideAbilities = p.permission_overrides?.abilities || {};
@@ -514,7 +514,7 @@ export function ProfileModal() {
 export function MetricModal() {
   const { metricModal, setMetricModal, setActiveTaskId } = useUI();
   const { tasks, profiles, lists, spaces } = useStore();
-  const trapRef = useFocusTrap(!!metricModal);
+  const trapRef = useFocusTrap(!!metricModal, () => setMetricModal(null));
   if (!metricModal) return null;
 
   const close = () => setMetricModal(null);
