@@ -172,6 +172,41 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  /* Info-finder: "where's the SOP for X", "who owns the vendor onboarding
+     form" — questions about a DOCUMENT or FORM rather than a task, person or
+     org unit, which nothing above searches. Uses the same significant-word
+     extraction as the person/unit matching above, ilike-searched against
+     title/excerpt/category. The query runs through the user's own session
+     (createClient() carries their cookies), so RLS — not this route — is what
+     keeps a restricted doc from surfacing here; this never needs its own
+     visibility check. */
+  const stopwords = new Set(["where", "what", "when", "does", "have", "about", "with", "this", "that", "form", "forms", "sansi", "document", "documents"]);
+  const searchTerms = Array.from(new Set(
+    query.toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter((w) => w.length >= 4 && !stopwords.has(w))
+  )).slice(0, 6);
+
+  if (searchTerms.length) {
+    const orFilter = searchTerms.map((w) => `title.ilike.%${w}%,excerpt.ilike.%${w}%,category.ilike.%${w}%`).join(",");
+    const [docsRes, formsRes] = await Promise.all([
+      supabase.from("docs").select("title,type,category,status,is_sop,review_date").or(orFilter).limit(8),
+      supabase.from("forms").select("title,active,default_assignee_id").or(searchTerms.map((w) => `title.ilike.%${w}%`).join(",")).limit(5),
+    ]);
+    const foundDocs = docsRes.data || [];
+    const foundForms = formsRes.data || [];
+    if (foundDocs.length) {
+      sections.push(
+        `Docs & SOPs matching this question (only ones ${me?.name || "the user"} can actually open):\n` +
+        foundDocs.map((d) => `- "${d.title}" [${d.is_sop ? "SOP" : d.type}${d.category ? `, ${d.category}` : ""}, ${d.status}]`).join("\n")
+      );
+    }
+    if (foundForms.length) {
+      sections.push(
+        `Forms matching this question:\n` +
+        foundForms.map((f) => `- "${f.title}" [${f.active ? "live" : "paused"}]${f.default_assignee_id ? ` — notifies ${nameOf.get(f.default_assignee_id) || "its owner"}` : ""}`).join("\n")
+      );
+    }
+  }
+
   const pendingForMe = (approvalsRes.data || []).filter((a) => a.requester_id === auth.user.id);
   if (pendingForMe.length) sections.push(`Your pending approval requests:\n${pendingForMe.map((a) => `- ${a.kind} → ${a.requested_due}, still pending`).join("\n")}`);
 

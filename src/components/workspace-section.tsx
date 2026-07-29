@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useStore } from "@/lib/store";
 import { useUI } from "@/lib/ui";
-import { initials, Doc, PRIORITY_COLORS, Space, List, DocVisibility, DOC_VISIBILITY } from "@/lib/types";
+import { initials, Doc, PRIORITY_COLORS, Space, List, DocVisibility, DOC_VISIBILITY, TicketStatus, TICKET_STATUSES, TICKET_STATUS_LABELS } from "@/lib/types";
 import { writeOrRevert } from "@/lib/actions";
 import { useFocusTrap } from "@/lib/a11y";
 import { relTime, fmtShort, todayIso } from "@/lib/dates";
@@ -100,7 +100,7 @@ export function WorkspaceSection() {
   useEffect(() => { ensureDeferred(); }, [ensureDeferred]);
 
   const {
-    me, profiles, tasks, lists, spaces, departments, deptHeads, deptMembers, levels, docs, docVersions, forms, formSubmissions,
+    me, profiles, tasks, lists, spaces, departments, deptHeads, deptMembers, levels, docs, docVersions, forms, formSubmissions, memos,
     notifications, prefs, approvals, invites, boardRequests, nominations, proposals, audit, features,
     patch, supabase, refresh,
   } = store;
@@ -118,6 +118,8 @@ export function WorkspaceSection() {
   const [newDocFile, setNewDocFile] = useState<File | null>(null);
   const [creatingDoc, setCreatingDoc] = useState(false);
   const [showNewForm, setShowNewForm] = useState(false);
+  const [showNewMemo, setShowNewMemo] = useState(false);
+  const [newMemo, setNewMemo] = useState({ title: "", body: "", departmentId: "", pinned: false });
   const [newForm, setNewForm] = useState({ title: "", listId: "", ownerId: "", fields: [{ id: 1, label: "What do you need?", type: "Short answer" }] });
   const [copiedFormId, setCopiedFormId] = useState<string | null>(null);
   const [editingForm, setEditingForm] = useState<{ id: string; title: string; listId: string; ownerId: string; fields: { id: number; label: string; type: string }[] } | null>(null);
@@ -140,6 +142,7 @@ export function WorkspaceSection() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteLevel, setInviteLevel] = useState("l6");
   const [inviteDept, setInviteDept] = useState<string | null>(null);
+  const [reminderSending, setReminderSending] = useState<string | null>(null);
 
   /* One writer for the three inline user dropdowns. Writes go through the
      server first and only patch the store on success — an RLS refusal here is
@@ -184,7 +187,7 @@ export function WorkspaceSection() {
 
   const pageTitle =
     workspacePage === "inbox" ? "Inbox" : workspacePage === "docs" ? "SOPs & Docs" : workspacePage === "forms" ? "Forms" :
-    workspacePage === "settings" ? "Settings" : "Admin console";
+    workspacePage === "memos" ? "Memos" : workspacePage === "settings" ? "Settings" : "Admin console";
 
   /* ------- account: password change + sign out ------- */
   const [currentPw, setCurrentPw] = useState("");
@@ -326,15 +329,23 @@ export function WorkspaceSection() {
       description: summary,
     });
     if (created) {
-      patch("formSubmissions", formSubmissions.map((s) => (s.id === submissionId ? { ...s, task_id: created.id } : s)));
+      patch("formSubmissions", formSubmissions.map((s) => (s.id === submissionId ? { ...s, task_id: created.id, status: "in_progress" as const } : s)));
       // The task exists either way; if the link write fails the submission
       // stays unconverted and would be converted twice on the next click.
-      const linked = await writeOrRevert(supabase.from("form_submissions").update({ task_id: created.id }).eq("id", submissionId), {
+      const linked = await writeOrRevert(supabase.from("form_submissions").update({ task_id: created.id, status: "in_progress" }).eq("id", submissionId), {
         toast: pushToast, what: "link the submission to its new task",
       });
       if (linked) pushToast("Submission converted to a task");
     }
     setConvertingSubmission(null);
+  };
+
+  const setTicketStatus = async (submissionId: string, status: TicketStatus) => {
+    const prev = formSubmissions;
+    patch("formSubmissions", formSubmissions.map((s) => (s.id === submissionId ? { ...s, status } : s)));
+    await writeOrRevert(supabase.from("form_submissions").update({ status }).eq("id", submissionId), {
+      toast: pushToast, what: "change that ticket's status", revert: () => patch("formSubmissions", prev),
+    });
   };
 
   /* ------- audit package export ------- */
@@ -566,7 +577,7 @@ export function WorkspaceSection() {
               </div>
               {filteredForms.map((f) => {
                 const subs = submissionsFor(f.id);
-                const pendingSubs = subs.filter((s) => !s.task_id);
+                const pendingSubs = subs.filter((s) => s.status !== "resolved");
                 const owner = profiles.find((p) => p.id === f.default_assignee_id);
                 const showSubs = expandedSubmissionsFor === f.id;
                 return (
@@ -642,6 +653,17 @@ export function WorkspaceSection() {
                         <div key={s.id} style={{ padding: "8px 0", borderBottom: "1px solid var(--sw-hair)" }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
                             <span style={{ flex: 1, fontSize: 11, color: "var(--sw-muted)" }}>{relTime(s.submitted_at)}</span>
+                            {/* Status is independent of conversion — a ticket can be
+                                resolved directly (spam, duplicate, answered by reply)
+                                without ever becoming a task. */}
+                            <select
+                              className="sw-select"
+                              value={s.status}
+                              onChange={(e) => setTicketStatus(s.id, e.target.value as TicketStatus)}
+                              style={{ height: 26, borderRadius: 999, border: "1px solid var(--sw-hair)", background: s.status === "resolved" ? "rgba(38,143,38,0.08)" : s.status === "in_progress" ? "rgba(122,13,32,0.06)" : "var(--sw-hover)", padding: "0 8px", fontSize: 10.5, color: s.status === "resolved" ? "var(--sw-on-green)" : s.status === "in_progress" ? "var(--sw-on-crimson)" : "var(--sw-text-soft)" }}
+                            >
+                              {TICKET_STATUSES.map((st) => <option key={st} value={st}>{TICKET_STATUS_LABELS[st]}</option>)}
+                            </select>
                             {s.task_id ? (
                               <button onClick={() => setActiveTaskId(s.task_id)} style={pillBtn("var(--sw-on-green)")}>View task</button>
                             ) : (
@@ -684,6 +706,101 @@ export function WorkspaceSection() {
                   <div style={{ fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 19, color: "var(--sw-text-soft)", marginBottom: 6 }}>Nothing here yet.</div>
                   <p style={{ margin: "0 0 16px", fontSize: 12, color: "var(--sw-muted)" }}>No forms match these filters.</p>
                   <button onClick={() => { setNewForm((f) => ({ ...f, ownerId: f.ownerId || me?.id || "" })); setShowNewForm(true); }} style={{ padding: "8px 18px", borderRadius: 999, border: "1px solid var(--crimson)", background: "none", color: "var(--sw-on-crimson)", fontSize: 12, fontWeight: 400, cursor: "pointer" }}>+ New form</button>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* ============ MEMOS ============ */}
+          {workspacePage === "memos" && (
+            <>
+              <h2 style={{ fontFamily: "var(--font-serif)", fontWeight: 400, fontSize: 24, margin: "0 0 3px", fontStyle: "italic" }}>Memos</h2>
+              <p style={{ margin: "0 0 16px", fontSize: 12.5, color: "var(--sw-text-soft)" }}>Internal announcements — company-wide, or scoped to one department.</p>
+
+              {isAdmin && (
+                <section style={{ ...card, marginBottom: 14 }}>
+                  {!showNewMemo ? (
+                    <button onClick={() => setShowNewMemo(true)} style={{ padding: "8px 16px", borderRadius: 999, border: "none", background: "var(--crimson)", color: "#fff", fontSize: 12.5, fontWeight: 400, cursor: "pointer" }}>+ Post a memo</button>
+                  ) : (
+                    <>
+                      <input value={newMemo.title} onChange={(e) => setNewMemo({ ...newMemo, title: e.target.value })} placeholder="Title" style={{ width: "100%", height: 38, borderRadius: 9, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "0 12px", fontSize: 13, marginBottom: 10, outline: "none", color: "var(--sw-text)" }} />
+                      <textarea value={newMemo.body} onChange={(e) => setNewMemo({ ...newMemo, body: e.target.value })} placeholder="What does everyone need to know?" style={{ width: "100%", height: 90, resize: "vertical", borderRadius: 9, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "10px 12px", fontSize: 13, fontFamily: "var(--font-sans)", color: "var(--sw-text)", outline: "none", marginBottom: 10 }} />
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
+                        <select
+                          className="sw-select"
+                          value={newMemo.departmentId}
+                          onChange={(e) => setNewMemo({ ...newMemo, departmentId: e.target.value })}
+                          disabled={!canPickInviteDept}
+                          title={canPickInviteDept ? undefined : "Only exec visibility can post company-wide — this posts to your own department"}
+                          style={{ height: 34, borderRadius: 8, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "0 10px", fontSize: 12, color: "var(--sw-text)" }}
+                        >
+                          {canPickInviteDept && <option value="">Company-wide</option>}
+                          {departments.filter((d) => !d.archived).map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+                        </select>
+                        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--sw-text-soft)" }}>
+                          <input type="checkbox" checked={newMemo.pinned} onChange={(e) => setNewMemo({ ...newMemo, pinned: e.target.checked })} />
+                          Pin to top
+                        </label>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+                        <button onClick={() => { setShowNewMemo(false); setNewMemo({ title: "", body: "", departmentId: "", pinned: false }); }} style={{ padding: "8px 16px", borderRadius: 999, border: "1px solid var(--sw-hair)", background: "none", fontSize: 12.5, color: "var(--sw-text-soft)", cursor: "pointer" }}>Cancel</button>
+                        <button
+                          onClick={async () => {
+                            if (!me || !newMemo.title.trim() || !newMemo.body.trim()) { pushToast("Add a title and a body first."); return; }
+                            const departmentId = canPickInviteDept ? (newMemo.departmentId || null) : me.department_id;
+                            const { data, error } = await supabase.from("memos").insert({
+                              title: newMemo.title.trim(), body: newMemo.body.trim(), author_id: me.id, department_id: departmentId, pinned: newMemo.pinned,
+                            }).select().single();
+                            if (error || !data) { pushToast(`Couldn't post that memo — ${error?.message || "unknown error"}.`); return; }
+                            patch("memos", [data, ...memos]);
+                            setShowNewMemo(false);
+                            setNewMemo({ title: "", body: "", departmentId: "", pinned: false });
+                            pushToast("Memo posted");
+                          }}
+                          style={{ padding: "8px 16px", borderRadius: 999, border: "none", background: "var(--crimson)", color: "#fff", fontSize: 12.5, cursor: "pointer" }}
+                        >
+                          Post
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </section>
+              )}
+
+              {[...memos].sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.created_at.localeCompare(a.created_at)).map((m) => {
+                const author = profiles.find((p) => p.id === m.author_id);
+                const dept = departments.find((d) => d.id === m.department_id);
+                const canDelete = !!me && (me.id === m.author_id || me.is_super);
+                return (
+                  <section key={m.id} style={{ ...card, marginBottom: 12 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                      {m.pinned && <span title="Pinned" style={{ fontSize: 11, color: "var(--sw-on-crimson)" }}>📌</span>}
+                      <h3 style={{ margin: 0, fontSize: 14, fontWeight: 400, flex: 1 }}>{m.title}</h3>
+                      <span style={{ fontSize: 10.5, fontWeight: 400, color: "var(--sw-muted)", background: "var(--sw-hover)", border: "1px solid var(--sw-hair)", borderRadius: 999, padding: "2px 9px" }}>{dept ? dept.name : "Company-wide"}</span>
+                      {canDelete && (
+                        <button
+                          onClick={async () => {
+                            if (!(await confirm({ title: `Delete "${m.title}"?`, message: "This can't be undone.", confirmLabel: "Delete", danger: true }))) return;
+                            const prev = memos;
+                            patch("memos", memos.filter((x) => x.id !== m.id));
+                            await writeOrRevert(supabase.from("memos").delete().eq("id", m.id), { toast: pushToast, what: `delete "${m.title}"`, revert: () => patch("memos", prev) });
+                          }}
+                          title="Delete memo"
+                          style={{ border: "none", background: "none", color: "var(--sw-muted)", cursor: "pointer", padding: 2, display: "flex" }}
+                        >
+                          <IconX size={11} />
+                        </button>
+                      )}
+                    </div>
+                    <p style={{ margin: "0 0 8px", fontSize: 12.5, color: "var(--sw-text-soft)", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{m.body}</p>
+                    <div style={{ fontSize: 11, color: "var(--sw-muted)" }}>{author?.name || "—"} · {relTime(m.created_at)}</div>
+                  </section>
+                );
+              })}
+              {!memos.length && (
+                <div style={{ textAlign: "center", padding: "44px 0 34px" }}>
+                  <div style={{ fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 19, color: "var(--sw-text-soft)", marginBottom: 6 }}>No memos yet.</div>
+                  <p style={{ margin: 0, fontSize: 12, color: "var(--sw-muted)" }}>{isAdmin ? "Post one above." : "Your department heads haven't posted anything yet."}</p>
                 </div>
               )}
             </>
@@ -1427,22 +1544,31 @@ export function WorkspaceSection() {
                   </section>
 
                   <section style={{ ...card, marginBottom: 14 }}>
-                    <h3 style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 400 }}>Form submissions waiting to be converted</h3>
-                    {formSubmissions.filter((s) => !s.task_id).map((s) => {
+                    <h3 style={{ margin: "0 0 2px", fontSize: 13, fontWeight: 400 }}>Form submissions (tickets)</h3>
+                    <p style={{ margin: "0 0 12px", fontSize: 11.5, color: "var(--sw-muted)" }}>Open across every form — resolved ones drop off this list.</p>
+                    {formSubmissions.filter((s) => s.status !== "resolved").map((s) => {
                       const f = forms.find((x) => x.id === s.form_id);
                       if (!f) return null;
                       const owner = profiles.find((p) => p.id === f.default_assignee_id);
                       return (
                         <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 11, padding: "10px 0", borderBottom: "1px solid var(--sw-hair)" }}>
                           <span style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 12.5, fontWeight: 400 }}>&quot;{f.title}&quot; — new submission {relTime(s.submitted_at)}</div>
-                            <div style={{ fontSize: 11, color: "var(--sw-muted)" }}>{owner ? `Assigned to ${owner.name} on conversion` : "No owner set on this form"}</div>
+                            <div style={{ fontSize: 12.5, fontWeight: 400 }}>&quot;{f.title}&quot; — submitted {relTime(s.submitted_at)}</div>
+                            <div style={{ fontSize: 11, color: "var(--sw-muted)" }}>{s.task_id ? `Converted to a task${owner ? ` — ${owner.name}` : ""}` : owner ? `Assigned to ${owner.name} on conversion` : "No owner set on this form"}</div>
                           </span>
+                          <select
+                            className="sw-select"
+                            value={s.status}
+                            onChange={(e) => setTicketStatus(s.id, e.target.value as TicketStatus)}
+                            style={{ height: 28, borderRadius: 999, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "0 9px", fontSize: 11, color: "var(--sw-text-soft)" }}
+                          >
+                            {TICKET_STATUSES.map((st) => <option key={st} value={st}>{TICKET_STATUS_LABELS[st]}</option>)}
+                          </select>
                           <button onClick={() => { setSection("workspace"); setWorkspacePage("forms"); setExpandedSubmissionsFor(f.id); }} style={pillBtn("var(--sw-on-crimson)")}>Open in Forms</button>
                         </div>
                       );
                     })}
-                    {!formSubmissions.some((s) => !s.task_id) && <p style={{ margin: "8px 0 0", fontSize: 12, color: "var(--sw-muted)" }}>No form submissions waiting.</p>}
+                    {!formSubmissions.some((s) => s.status !== "resolved") && <p style={{ margin: "8px 0 0", fontSize: 12, color: "var(--sw-muted)" }}>No open tickets.</p>}
                   </section>
 
                   <section style={{ ...card, marginBottom: 14 }}>
@@ -1640,13 +1766,30 @@ export function WorkspaceSection() {
                   <section style={card}>
                     <h3 style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 400 }}>Invites</h3>
                     {invites.map((i) => (
-                      <button key={i.id} onClick={() => openDetail("invite", i.id)} className="sw-row" style={{ display: "flex", alignItems: "center", gap: 11, padding: "9px 0", width: "100%", border: "none", borderBottom: "1px solid var(--sw-hair)", background: "none", cursor: "pointer", textAlign: "left" }}>
-                        <span style={{ flex: 1, fontSize: 12.5, fontWeight: 400 }}>{i.email}</span>
-                        <span style={{ fontSize: 11, fontWeight: 400, color: i.status === "registered" ? "var(--sw-on-green)" : "var(--sw-on-amber)" }}>
-                          {i.status === "registered" ? "Registered · active" : "Email sent · not registered"}
-                        </span>
-                        <span style={{ fontSize: 11, color: "var(--sw-muted)" }}>{fmtShort(i.created_at.slice(0, 10))}</span>
-                      </button>
+                      <div key={i.id} className="sw-row" style={{ display: "flex", alignItems: "center", gap: 11, padding: "9px 0", width: "100%", borderBottom: "1px solid var(--sw-hair)" }}>
+                        <button onClick={() => openDetail("invite", i.id)} style={{ flex: 1, display: "flex", alignItems: "center", gap: 11, border: "none", background: "none", cursor: "pointer", textAlign: "left", padding: 0 }}>
+                          <span style={{ flex: 1, fontSize: 12.5, fontWeight: 400 }}>{i.email}</span>
+                          <span style={{ fontSize: 11, fontWeight: 400, color: i.status === "registered" ? "var(--sw-on-green)" : "var(--sw-on-amber)" }}>
+                            {i.status === "registered" ? "Registered · active" : "Email sent · not registered"}
+                          </span>
+                          <span style={{ fontSize: 11, color: "var(--sw-muted)" }}>{fmtShort(i.created_at.slice(0, 10))}</span>
+                        </button>
+                        {isAdmin && i.status !== "registered" && (
+                          <button
+                            disabled={reminderSending === i.id}
+                            onClick={async () => {
+                              setReminderSending(i.id);
+                              const res = await fetch("/api/notify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: "invite", inviteId: i.id }) }).catch(() => null);
+                              const ok = res ? (await res.json().catch(() => ({ ok: false }))).ok : false;
+                              setReminderSending(null);
+                              pushToast(ok ? `Reminder sent to ${i.email}` : `Couldn't send the reminder to ${i.email}.`);
+                            }}
+                            style={{ fontSize: 11, fontWeight: 400, color: "var(--sw-on-navy)", border: "1px solid var(--sw-hair)", borderRadius: 6, padding: "4px 9px", background: "none", cursor: reminderSending === i.id ? "default" : "pointer", opacity: reminderSending === i.id ? 0.5 : 1, whiteSpace: "nowrap" }}
+                          >
+                            {reminderSending === i.id ? "Sending…" : "Send reminder"}
+                          </button>
+                        )}
+                      </div>
                     ))}
                   </section>
                 </>

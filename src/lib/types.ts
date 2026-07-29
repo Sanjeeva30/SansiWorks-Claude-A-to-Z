@@ -175,6 +175,7 @@ export interface Task {
   raci_i: string[];
   difficulty: number | null; // 1 Trivial .. 5 Complex
   difficulty_set_by: string | null;
+  sort: number; // manual drag order within a status group/column — independent of due date or creation order
 }
 
 export interface Subtask {
@@ -280,12 +281,21 @@ export interface FormDef {
   default_assignee_id: string | null;
 }
 
+export type TicketStatus = "new" | "in_progress" | "resolved";
+export const TICKET_STATUSES: TicketStatus[] = ["new", "in_progress", "resolved"];
+export const TICKET_STATUS_LABELS: Record<TicketStatus, string> = { new: "New", in_progress: "In progress", resolved: "Resolved" };
+
 export interface FormSubmission {
   id: string;
   form_id: string | null;
   answers: Record<string, string>;
   submitted_at: string;
   task_id: string | null;
+  /* Independent of task conversion — a submission can be resolved directly
+     (duplicate, spam, answered by reply) without ever becoming a task, which
+     is what makes this a real ticket queue rather than a binary "converted
+     or not" list. */
+  status: TicketStatus;
 }
 
 export interface Notification {
@@ -295,6 +305,16 @@ export interface Notification {
   body: string;
   reason: string | null;
   read: boolean;
+  created_at: string;
+}
+
+export interface Memo {
+  id: string;
+  title: string;
+  body: string;
+  author_id: string | null;
+  department_id: string | null; // null = company-wide announcement
+  pinned: boolean;
   created_at: string;
 }
 

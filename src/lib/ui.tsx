@@ -6,7 +6,7 @@ export type Section = "home" | "list" | "company" | "workspace";
 export type HomePage = "today" | "myweek" | "all" | "personal";
 export type ListPage = "list" | "everything";
 export type CompanyPage = "executive" | "people";
-export type WorkspacePage = "inbox" | "docs" | "forms" | "settings" | "admin";
+export type WorkspacePage = "inbox" | "docs" | "forms" | "memos" | "settings" | "admin";
 
 interface Route {
   section: Section;
@@ -118,7 +118,7 @@ export const useUI = () => {
 
 /* ---------- URL <-> route mapping ---------- */
 const HOME_PATHS: Record<HomePage, string> = { today: "/", myweek: "/my-week", all: "/my-tasks", personal: "/personal" };
-const WORKSPACE_PATHS: Record<WorkspacePage, string> = { inbox: "/inbox", docs: "/docs", forms: "/forms", settings: "/settings", admin: "/admin" };
+const WORKSPACE_PATHS: Record<WorkspacePage, string> = { inbox: "/inbox", docs: "/docs", forms: "/forms", memos: "/memos", settings: "/settings", admin: "/admin" };
 
 interface StoreSlices {
   lists: { id: string; space_id: string; slug: string }[];

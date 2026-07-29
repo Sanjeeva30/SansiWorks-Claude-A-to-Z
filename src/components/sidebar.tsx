@@ -23,6 +23,8 @@ export function Sidebar() {
   } = useUI();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [hoverList, setHoverList] = useState<string | null>(null);
+  const [dragListId, setDragListId] = useState<string | null>(null);
+  const [dragOverListId, setDragOverListId] = useState<string | null>(null);
   const [hoverSpace, setHoverSpace] = useState<string | null>(null);
   const [addingBoardFor, setAddingBoardFor] = useState<string | null>(null);
   const [boardName, setBoardName] = useState("");
@@ -127,6 +129,18 @@ export function Sidebar() {
     setAddingSpace(false);
     pushToast(`"${name}" created`);
   };
+  /* Drag-to-reorder boards within a space. `orderedIds` is the space's full new
+     order; re-spaced by 10 so a later single-item move never needs to
+     renumber its neighbours. Reverts the optimistic patch on any write failure. */
+  const reorderLists = async (orderedIds: string[]) => {
+    const prev = lists;
+    const sortOf = new Map(orderedIds.map((id, i) => [id, (i + 1) * 10]));
+    patch("lists", lists.map((l) => (sortOf.has(l.id) ? { ...l, sort: sortOf.get(l.id)! } : l)));
+    const results = await Promise.all(orderedIds.map((id) => supabase.from("lists").update({ sort: sortOf.get(id) }).eq("id", id)));
+    const failed = results.find((r) => r.error);
+    if (failed?.error) { patch("lists", prev); pushToast(`Couldn't save that order — ${failed.error.message}`); }
+  };
+
   const unread = notifications.filter((n) => !n.read).length;
   const openCount = (listId: string) => tasks.filter((t) => t.list_id === listId && t.status !== "Done").length;
   const pinnedListIds = pins.filter((p) => p.kind === "list").map((p) => p.target_id);
@@ -164,7 +178,7 @@ export function Sidebar() {
     <div style={{ margin: "13px 0 4px", padding: "0 9px", fontSize: 9.5, fontWeight: 800, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--sw-muted)" }}>{label}</div>
   );
 
-  const listRow = (l: (typeof lists)[number], indent: boolean) => {
+  const listRow = (l: (typeof lists)[number], indent: boolean, reorder?: { draggable: boolean; isOver: boolean }) => {
     const active = section === "list" && listPage === "list" && activeList?.listId === l.id;
     const pinned = pinnedListIds.includes(l.id);
     const n = openCount(l.id);
@@ -173,7 +187,26 @@ export function Sidebar() {
         key={l.id}
         onMouseEnter={() => setHoverList(l.id)}
         onMouseLeave={() => setHoverList(null)}
-        style={{ position: "relative", display: "flex", alignItems: "center" }}
+        draggable={reorder?.draggable}
+        onDragStart={reorder?.draggable ? (e) => { e.stopPropagation(); setDragListId(l.id); e.dataTransfer.effectAllowed = "move"; } : undefined}
+        onDragOver={reorder?.draggable ? (e) => { e.preventDefault(); e.stopPropagation(); if (dragOverListId !== l.id) setDragOverListId(l.id); } : undefined}
+        onDrop={reorder?.draggable ? (e) => {
+          e.preventDefault(); e.stopPropagation();
+          if (dragListId && dragListId !== l.id) {
+            const group = lists.filter((x) => x.space_id === l.space_id).sort((a, b) => a.sort - b.sort);
+            const from = group.findIndex((x) => x.id === dragListId);
+            const to = group.findIndex((x) => x.id === l.id);
+            if (from !== -1 && to !== -1) {
+              const next = [...group];
+              const [moved] = next.splice(from, 1);
+              next.splice(to, 0, moved);
+              reorderLists(next.map((x) => x.id));
+            }
+          }
+          setDragListId(null); setDragOverListId(null);
+        } : undefined}
+        onDragEnd={reorder?.draggable ? () => { setDragListId(null); setDragOverListId(null); } : undefined}
+        style={{ position: "relative", display: "flex", alignItems: "center", borderTop: reorder?.isOver ? "2px solid var(--crimson)" : "2px solid transparent" }}
       >
         <button
           onClick={() => setActiveList({ spaceId: l.space_id, listId: l.id })}
@@ -239,6 +272,7 @@ export function Sidebar() {
         {sectionLabel("Workspace")}
         {navBtn("SOPs & Docs", section === "workspace" && workspacePage === "docs", () => setWorkspacePage("docs"))}
         {navBtn("Forms", section === "workspace" && workspacePage === "forms", () => setWorkspacePage("forms"))}
+        {navBtn("Memos", section === "workspace" && workspacePage === "memos", () => setWorkspacePage("memos"))}
 
         {pinnedLists.length > 0 && (
           <>
@@ -293,7 +327,7 @@ export function Sidebar() {
         )}
         {visibleSpaces.map((space) => {
           const isCollapsed = !!collapsed[space.id];
-          const spaceLists = lists.filter((l) => l.space_id === space.id);
+          const spaceLists = lists.filter((l) => l.space_id === space.id).sort((a, b) => a.sort - b.sort);
           return (
             <div
               key={space.id}
@@ -323,7 +357,7 @@ export function Sidebar() {
                   </button>
                 )}
               </div>
-              {!isCollapsed && spaceLists.map((l) => listRow(l, true))}
+              {!isCollapsed && spaceLists.map((l) => listRow(l, true, { draggable: isAdmin, isOver: dragOverListId === l.id && dragListId !== l.id }))}
               {!isCollapsed && (
                 addingBoardFor === space.id ? (
                   <div style={{ display: "flex", gap: 4, padding: "3px 9px 3px 24px" }}>

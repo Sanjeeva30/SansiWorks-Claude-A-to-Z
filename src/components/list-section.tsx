@@ -6,7 +6,7 @@ import { useUI } from "@/lib/ui";
 import { STATUS_COLORS, PRIORITY_COLORS, STATUSES, initials, Task } from "@/lib/types";
 import { iso, fmtShort, todayIso } from "@/lib/dates";
 import { updateTask } from "@/lib/actions";
-import { writeOrRevert } from "@/lib/actions";
+import { writeOrRevert, reorderTasks } from "@/lib/actions";
 import { FilterState, EMPTY_FILTERS, applyFilters } from "@/lib/search";
 import { difficultyPoints } from "@/lib/logic";
 import { usePresence } from "@/lib/presence";
@@ -39,6 +39,21 @@ export function ListSection() {
   const [ganttSpan, setGanttSpan] = useState(14);
   const [dragId, setDragId] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
+  const [dragOverTaskId, setDragOverTaskId] = useState<string | null>(null);
+
+  /* Drop ON a card reorders within its status group (table) or column
+     (kanban) instead of just changing status — the group/column the dropped
+     card was ALREADY in, so a same-status drag never touches status at all. */
+  const reorderOnDrop = (groupRows: Task[], targetId: string) => {
+    if (!dragId || dragId === targetId) return;
+    const from = groupRows.findIndex((t) => t.id === dragId);
+    const to = groupRows.findIndex((t) => t.id === targetId);
+    if (from === -1 || to === -1) return;
+    const next = [...groupRows];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    reorderTasks(supabase, tasks, patch, pushToast, next.map((t) => t.id));
+  };
   const [showSaveView, setShowSaveView] = useState(false);
   const [saveViewName, setSaveViewName] = useState("");
   const [showFields, setShowFields] = useState(false);
@@ -90,7 +105,7 @@ export function ListSection() {
   const statusGroups = STATUSES.map((s) => ({
     name: s,
     color: STATUS_COLORS[s],
-    rows: filtered.filter((t) => t.status === s),
+    rows: filtered.filter((t) => t.status === s).sort((a, b) => a.sort - b.sort),
   })).filter((g) => g.rows.length > 0 || g.name !== "Done");
 
   /* ------- calendar computed ------- */
@@ -293,7 +308,26 @@ export function ListSection() {
               </div>
               <div style={{ border: "1px solid var(--sw-hair)", borderRadius: 12, overflow: "hidden", background: "var(--sw-card)", boxShadow: "var(--shadow-card)", marginTop: 8 }}>
                 {grp.rows.map((t) => (
-                  <div key={t.id} onClick={() => setActiveTaskId(t.id)} role="button" tabIndex={0} className="sw-row" style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left", padding: rowPad, borderBottom: "1px solid var(--sw-hair)", background: "none", cursor: "pointer" }}>
+                  <div
+                    key={t.id}
+                    onClick={() => setActiveTaskId(t.id)}
+                    role="button"
+                    tabIndex={0}
+                    className="sw-row"
+                    draggable
+                    onDragStart={(e) => { e.stopPropagation(); setDragId(t.id); e.dataTransfer.effectAllowed = "move"; }}
+                    onDragEnd={() => { setDragId(null); setDragOverTaskId(null); }}
+                    onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); if (dragOverTaskId !== t.id) setDragOverTaskId(t.id); }}
+                    onDrop={(e) => { e.preventDefault(); e.stopPropagation(); reorderOnDrop(grp.rows, t.id); setDragOverTaskId(null); }}
+                    style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left", padding: rowPad, borderBottom: "1px solid var(--sw-hair)", borderTop: dragOverTaskId === t.id && dragId !== t.id ? "2px solid var(--crimson)" : "1px solid transparent", background: "none", cursor: "pointer" }}
+                  >
+                    <span
+                      title="Drag to reorder"
+                      onClick={(e) => e.stopPropagation()}
+                      style={{ cursor: "grab", color: "var(--sw-muted)", fontSize: 11, flex: "none", lineHeight: 1, letterSpacing: "-1px" }}
+                    >
+                      ⠿
+                    </span>
                     <span style={{ width: 7, height: 7, borderRadius: 99, background: STATUS_COLORS[t.status], flex: "none" }} />
                     <span className="sw-ticket-no" style={{ fontSize: 10, color: "var(--sw-muted)", width: 46, flex: "none" }}>SW-{t.task_number}</span>
                     <span style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 8 }}>
@@ -328,7 +362,7 @@ export function ListSection() {
         {view === "board" && (
           <div className="sw-hscroll" style={{ display: "flex", gap: 14, marginTop: 18, paddingBottom: 20, overflowX: "auto" }}>
             {STATUSES.map((s) => {
-              const rows = filtered.filter((t) => t.status === s);
+              const rows = filtered.filter((t) => t.status === s).sort((a, b) => a.sort - b.sort);
               return (
                 <div key={s} style={{ width: 264, flex: "none" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "2px 4px 10px", borderTop: `3px solid ${STATUS_COLORS[s]}` }}>
@@ -352,12 +386,22 @@ export function ListSection() {
                         onClick={() => setActiveTaskId(t.id)}
                         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setActiveTaskId(t.id); } }}
                         draggable
+                        onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); if (dragOverTaskId !== t.id) setDragOverTaskId(t.id); if (dragOver !== s) setDragOver(s); }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          // Dropped onto a card already in this column: reorder in place.
+                          // Dropped from another column: let it fall through to the
+                          // column's own onDrop below, which just changes status.
+                          const draggedTask = tasks.find((x) => x.id === dragId);
+                          if (draggedTask?.status === s) { e.stopPropagation(); reorderOnDrop(rows, t.id); }
+                          setDragOverTaskId(null);
+                        }}
                         onDragStart={(e) => { setDragId(t.id); e.dataTransfer.effectAllowed = "move"; }}
-                        onDragEnd={() => { setDragId(null); setDragOver(null); }}
+                        onDragEnd={() => { setDragId(null); setDragOver(null); setDragOverTaskId(null); }}
                         role="button"
                         tabIndex={0}
                         aria-label={`${t.name}, ${t.status}, priority ${t.priority}${t.due ? `, due ${t.due}` : ""}`}
-                        style={{ display: "block", width: "100%", textAlign: "left", padding: "12px 13px", border: "1px solid var(--sw-hair)", borderRadius: 11, background: "var(--sw-card)", boxShadow: "var(--shadow-card)", cursor: "grab" }}
+                        style={{ display: "block", width: "100%", textAlign: "left", padding: "12px 13px", border: `1px solid ${dragOverTaskId === t.id && dragId !== t.id ? "var(--crimson)" : "var(--sw-hair)"}`, borderRadius: 11, background: "var(--sw-card)", boxShadow: "var(--shadow-card)", cursor: "grab" }}
                       >
                         <div style={{ fontSize: 12.5, fontWeight: 400, marginBottom: 8, lineHeight: 1.35 }}>{t.name}</div>
                         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>

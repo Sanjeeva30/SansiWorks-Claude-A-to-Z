@@ -127,6 +127,32 @@ export async function updateTask(
   }
 }
 
+/** Drag-to-reorder within one status group/column. `orderedIds` is the full
+ *  new order for that group only — everything outside it is untouched.
+ *  Re-spaces sort values by 10 so a later single-item move never needs to
+ *  renumber its neighbours. Reverts the optimistic patch if any write fails,
+ *  since a partially-applied reorder (some rows moved, some not) would be
+ *  worse than the drag visually snapping back. */
+export async function reorderTasks(
+  supabase: Supabase,
+  tasks: Task[],
+  patch: Patch,
+  toast: (msg: string) => void,
+  orderedIds: string[]
+) {
+  const prev = tasks;
+  const sortOf = new Map(orderedIds.map((id, i) => [id, (i + 1) * 10]));
+  patch("tasks", tasks.map((t) => (sortOf.has(t.id) ? { ...t, sort: sortOf.get(t.id)! } : t)));
+  const results = await Promise.all(
+    orderedIds.map((id) => supabase.from("tasks").update({ sort: sortOf.get(id) }).eq("id", id))
+  );
+  const failed = results.find((r) => r.error);
+  if (failed?.error) {
+    patch("tasks", prev);
+    toast(`Couldn't save that order — ${failed.error.message}`);
+  }
+}
+
 /** Soft-delete: sets tasks.archived so the row drops out of the live store
  *  (see the store's fetch filter and realtime guard) without destroying it —
  *  history, subtasks, comments, and attachments all stay in place in case it

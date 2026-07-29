@@ -63,7 +63,7 @@ export function OnboardingChecklist() {
       )}
 
       {stage === "checklist" && !allDone && (
-        <div style={{ position: "fixed", bottom: 24, right: 24, width: 340, maxWidth: "88vw", background: "var(--sw-card)", borderRadius: 16, boxShadow: "0 30px 90px rgba(23,18,15,0.28)", border: "1px solid var(--sw-hair)", overflow: "hidden", animation: "swFadeUp .25s ease", zIndex: 88 }}>
+        <div style={{ position: "fixed", bottom: "calc(24px + env(safe-area-inset-bottom))", right: "calc(24px + env(safe-area-inset-right))", left: 24, width: 340, maxWidth: "88vw", marginLeft: "auto", background: "var(--sw-card)", borderRadius: 16, boxShadow: "0 30px 90px rgba(23,18,15,0.28)", border: "1px solid var(--sw-hair)", overflow: "hidden", animation: "swFadeUp .25s ease", zIndex: 88 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "16px 18px", borderBottom: "1px solid var(--sw-hair)" }}>
             <span style={{ color: "var(--sw-on-crimson)", fontSize: 15 }}>✦</span>
             <div style={{ flex: 1 }}>
@@ -124,7 +124,7 @@ export function OnboardingChecklist() {
       )}
 
       {stage === "checklist" && allDone && (
-        <div style={{ position: "fixed", bottom: 24, right: 24, left: 24, width: 300, maxWidth: "calc(100vw - 48px)", marginLeft: "auto", background: "#17120F", color: "#fff", borderRadius: 14, padding: "16px 18px", boxShadow: "0 20px 60px rgba(23,18,15,0.4)", display: "flex", alignItems: "center", gap: 10, animation: "swToastIn .25s ease", zIndex: 88 }}>
+        <div style={{ position: "fixed", bottom: "calc(24px + env(safe-area-inset-bottom))", right: "calc(24px + env(safe-area-inset-right))", left: 24, width: 300, maxWidth: "calc(100vw - 48px)", marginLeft: "auto", background: "#17120F", color: "#fff", borderRadius: 14, padding: "16px 18px", boxShadow: "0 20px 60px rgba(23,18,15,0.4)", display: "flex", alignItems: "center", gap: 10, animation: "swToastIn .25s ease", zIndex: 88 }}>
           <span style={{ color: "#BDDA5F", fontSize: 18 }}>✓</span>
           <span style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.4 }}>You&apos;re all set — welcome to SansiWorks.</span>
         </div>
@@ -134,7 +134,7 @@ export function OnboardingChecklist() {
         <button
           onClick={() => setStage("checklist")}
           title="Getting started"
-          style={{ position: "fixed", bottom: 24, right: 24, width: 52, height: 52, borderRadius: 99, border: "none", background: "var(--crimson)", color: "#fff", fontSize: 19, cursor: "pointer", boxShadow: "0 8px 20px rgba(122,13,32,.35)", zIndex: 88 }}
+          style={{ position: "fixed", bottom: "calc(24px + env(safe-area-inset-bottom))", right: "calc(24px + env(safe-area-inset-right))", width: 52, height: 52, borderRadius: 99, border: "none", background: "var(--crimson)", color: "#fff", fontSize: 19, cursor: "pointer", boxShadow: "0 8px 20px rgba(122,13,32,.35)", zIndex: 88 }}
         >
           ✦
         </button>

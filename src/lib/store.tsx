@@ -3,7 +3,7 @@ import React, { createContext, useContext, useCallback, useEffect, useRef, useSt
 import { createClient } from "./supabase/client";
 import {
   Approval, AuditEntry, Automation, Assignment, BoardRequest, Comment, CustomField, Department, DeptProposal,
-  Dependency, Doc, DocVersion, FormDef, FormSubmission, Invite, Level, List, Nomination, Notification, PermissionTemplate, Pin, Profile, Space,
+  Dependency, Doc, DocVersion, FormDef, FormSubmission, Invite, Level, List, Memo, Nomination, Notification, PermissionTemplate, Pin, Profile, Space,
   Reminder, Subtask, Task, TaskActivity, Template,
 } from "./types";
 
@@ -133,6 +133,7 @@ export interface StoreData {
   savedViews: { id: string; name: string; config: Record<string, unknown> }[];
   pins: Pin[];
   comments: Comment[];
+  memos: Memo[];
 }
 
 interface StoreCtx extends StoreData {
@@ -160,7 +161,7 @@ const EMPTY: StoreData = {
   spaces: [], lists: [], tasks: [], subtasks: [], reminders: [], deps: [], activity: [], docs: [], docVersions: [], forms: [], formSubmissions: [],
   notifications: [], prefs: {}, approvals: [], invites: [], boardRequests: [],
   nominations: [], proposals: [], audit: [], templates: [], customFields: [],
-  automations: [], features: {}, savedViews: [], pins: [], comments: [],
+  automations: [], features: {}, savedViews: [], pins: [], comments: [], memos: [],
 };
 
 export function StoreProvider({ children }: { children: React.ReactNode }) {
@@ -181,7 +182,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const [
       profiles, levels, departments, deptHeads, deptMembers, assignments, spaces, lists,
       tasks, raci, subtasks, reminders, deps, activity, docs, forms, notifications, prefs,
-      approvals, features, savedViews, pins, comments,
+      approvals, features, savedViews, pins, comments, memos,
     ] = await Promise.all([
       supabase.from("profiles").select("*").order("name"),
       supabase.from("levels").select("*").order("sort"),
@@ -206,6 +207,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       supabase.from("saved_views").select("*").eq("profile_id", uid).order("created_at"),
       supabase.from("pins").select("*").eq("profile_id", uid).order("sort"),
       supabase.from("comments").select("*").order("created_at"),
+      supabase.from("memos").select("*").order("created_at", { ascending: false }),
     ]);
 
     const raciC = new Map<string, string[]>();
@@ -253,6 +255,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       savedViews: savedViews.data || [],
       pins: (pins.data || []) as Pin[],
       comments: (comments.data || []) as Comment[],
+      memos: (memos.data || []) as Memo[],
     }));
     setLoading(false);
   }, [supabase]);

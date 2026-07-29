@@ -363,15 +363,90 @@ list. Verified live: focusing an empty board's R field showed exactly the
 department's members and nothing else; clicking one selected it and closed
 the list.
 
+## Overview department-filter fix + PWA safe-area + 7-item backlog batch (2026-07-28)
+**Overview didn't scope to the department dropdown.** Two root causes in
+`company-section.tsx`: only two of the several lists driving the page were
+being filtered by department, and department-membership lookup ignored the
+home-department fallback (a person assigned only via `profile.department_id`,
+with no separate `Assignment` row, fell out of scope). Fixed with a single
+`membersOf` Map and `scopedTasks`/`inScope` derivation that every card on the
+page now reads from. Verified against direct SQL counts for Sourcing & Trade.
+
+**PWA rendered under the iOS status bar, hamburger button malformed.** The
+shell had no top safe-area padding at all — an earlier "fix" had wrongly
+padded the hamburger button itself instead of the shell. Fixed via
+`.sw-app-shell { padding-top: env(safe-area-inset-top) }`, repositioned
+`.sw-hamburger`, and matching insets on `.sw-modal-card`/`.sw-slideover-card`
+for full-screen mobile modals. Verified with simulated iPhone-15-Pro-inset CSS
+at 393×852 and a scripted DOM scanner for intrusions into the unsafe zones —
+found and fixed one real bug (the "Create new task" modal's header/footer sat
+under the status bar/home indicator).
+
+**Then the remaining backlog was built in one batch, in order, skipping the
+org Excel round-trip (separate in-flight item below) and the 30-user seed
+(still explicitly deferred):**
+1. **Sansi 2.0 info-finder** — `app/api/sansi/route.ts` now extracts search
+   terms from the user's question (stopword-filtered, 4+ chars) and greps
+   `docs`/`forms` by title/excerpt/category before answering, so "where's the
+   SOP for X" grounds in real matching documents. RLS (cookie-scoped client)
+   naturally limits what it can see — no extra visibility check needed.
+2. **Drag-to-reorder everywhere** — new `sort` column on `tasks` (and reused
+   on `lists`), `reorderTasks()`/`reorderLists()` in `actions.ts` re-space by
+   `(i+1)*10` per move via individual `.update()` calls (not `upsert` — that
+   validates NOT NULL columns on the insert path even when only an UPDATE
+   would occur). Wired into the tasks table view, kanban (same-column reorder
+   vs. cross-column status-change disambiguated via `stopPropagation()`), and
+   admin-gated sidebar board reordering.
+3. **Efficiency ranking dashboard** — `company-section.tsx`'s "People
+   efficiency" card rewritten into a ranked list (crimson rank for top 3) with
+   a separate "not ranked" sub-list for people with no tracked work, reusing
+   the existing department-scoping from item above.
+4. **Forms → ticket system** — `form_submissions.status` (`new` /
+   `in_progress` / `resolved`), independent of task conversion, so a
+   submission can be resolved directly (duplicate, spam, answered by reply)
+   without ever becoming a task. Per-submission status `<select>` in both the
+   per-form list and the admin "Form submissions (tickets)" panel.
+5. **Internal memo section** — new `memos` table + `/memos` page. RLS
+   deliberately split: `memos_insert` allows any dept admin, but
+   `memos_update`/`memos_delete` are author-or-super only — a blanket
+   `app_is_dept_admin()` on all commands would have let one dept head edit or
+   delete another's memo (the same class of bug already caught once this
+   session in `form_submissions`).
+6. **Invite reminders** — "Send reminder" button on non-registered invite rows
+   in the admin Invites tab, reusing the exact same `/api/notify` `kind:
+   "invite"` path the original "Send invite" button uses (idempotent —
+   re-sends the same invite email against the existing `inviteId`, no new
+   invite row).
+7. **Responsive walkthrough** — `onboarding.tsx`'s bottom-fixed elements
+   (checklist card, completion toast, reopen bubble) now add
+   `env(safe-area-inset-bottom)`/`env(safe-area-inset-right)`, matching the
+   PWA safe-area fix above; the completion toast's conflicting
+   `left`+`right`+`width`+`marginLeft` mix was simplified.
+
+**Verified live** (Sansi Test User temporarily elevated to super admin via
+direct SQL, then reverted): posted and deleted a memo (RLS insert/delete both
+exercised — delete correctly limited to author/super), changed a ticket's
+status to `resolved` and confirmed the DB row (`task_id` stayed `null` —
+resolved without conversion) and that it correctly dropped off the "pending"
+count, clicked "Send reminder" on a real non-registered invite (route fired,
+failed only on `Brevo error 401 Key not found` — a local-dev credential gap
+already present for the original "Send invite" button, not a new bug), and
+confirmed the efficiency ranking card renders with the right formula subtitle
+and rank order on `/overview`. **Not verified live**: drag-to-reorder — native
+HTML5 `draggable`/`dragover`/`drop` events don't fire from synthetic mouse
+clicks in browser automation (confirmed: a simulated drag only produced a
+text-selection highlight, no reorder), so this is typecheck+test-verified but
+not confirmed by an actual drag in a real browser session. Do that manually
+before treating item 2 fully done.
+
+Full-batch `npx tsc --noEmit` and `npx vitest run` (38/38) both clean after
+every change above, run together as a final pass, not just per-feature.
+
 ## Status: open
-- Phase 4 remainder: **Sansi 2.0 info-finder**. (Presence, comments/@mentions,
-  and the mention-email gap are done — see above and roadmap 9.)
+- **Drag-to-reorder**: needs one real manual drag test (table row, kanban
+  card, sidebar board) — browser automation can't simulate native HTML5 DnD.
 - 30-user seed — explicitly deferred by user ("don't build the seed data now").
-- User's screenshot backlog (feedback given, plan pending user prioritization): drill-down
-  everywhere, Sansi info-finder, efficiency ranking dashboard, collapse/expand-all spaces,
-  admin delete w/ confirmations, invite reminders, dropdown visibility, registration flow
-  compulsory fields, org Excel round-trip, drag-reorder, forms→ticket system, responsive
-  walkthrough, internal memo section.
+- Org Excel round-trip — separate in-flight item, see below.
 
 ## In flight right now
 - **`Sansico-Org-Setup.xlsx`** (project root, one level above `sansiworks/`): 6-sheet workbook

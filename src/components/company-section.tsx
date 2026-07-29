@@ -89,6 +89,17 @@ export function CompanySection() {
     [personStats]
   );
 
+  /* Efficiency ranking — the "People efficiency" card used to list everyone in
+     whatever order sansicoPeople happened to come back in, which is exactly
+     the opposite of a ranking. People with no tracked work yet are excluded
+     from the numbered list entirely (there's nothing to rank them by) rather
+     than sorted to the bottom on a fake 0, and shown separately underneath. */
+  const rankedByEfficiency = useMemo(
+    () => [...personStats].filter((s) => s.hasData).sort((a, b) => b.eff - a.eff || a.p.name.localeCompare(b.p.name)),
+    [personStats]
+  );
+  const unrankedNoData = useMemo(() => personStats.filter((s) => !s.hasData), [personStats]);
+
   const deptStats = useMemo(
     () =>
       departments.map((d) => {
@@ -388,9 +399,11 @@ export function CompanySection() {
                 </section>
 
                 <section style={{ background: "var(--sw-card)", border: "1px solid var(--sw-hair)", borderRadius: 12, padding: "16px 18px", boxShadow: "var(--shadow-card)" }}>
-                  <h3 style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 400 }}>People efficiency</h3>
-                  {personStats.map((st) => (
+                  <h3 style={{ margin: "0 0 2px", fontSize: 13, fontWeight: 400 }}>Efficiency ranking</h3>
+                  <p style={{ margin: "0 0 10px", fontSize: 10.5, color: "var(--sw-muted)" }}>75% on-time history + 25% current health. Ranked highest first.</p>
+                  {rankedByEfficiency.map((st, i) => (
                     <div key={st.p.id} onClick={() => setMetricModal({ title: `${st.p.name} — efficiency (75% × ${st.historyPct}% + 25% × ${st.healthPct}% = ${st.eff}%)`, taskIds: st.pt.filter(isOpen).map((t) => t.id) })} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderBottom: "1px solid var(--sw-hair)", cursor: "pointer" }}>
+                      <span style={{ width: 16, flex: "none", fontSize: 11, fontWeight: 400, color: i < 3 ? "var(--sw-on-crimson)" : "var(--sw-muted)", textAlign: "right" }}>{i + 1}</span>
                       <button onClick={(e) => { e.stopPropagation(); openProfile(st.p.id); }} title="View profile" style={{ width: 24, height: 24, borderRadius: 99, background: st.p.color, color: readableTextOn(st.p.color), fontSize: 9.5, fontWeight: 400, display: "flex", alignItems: "center", justifyContent: "center", flex: "none", border: "none", cursor: "pointer", padding: 0 }}>{initials(st.p.name)}</button>
                       <span style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 12, fontWeight: 400, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{st.p.name}</div>
@@ -398,9 +411,23 @@ export function CompanySection() {
                           <div style={{ height: "100%", borderRadius: 99, background: effColor(st.eff), width: `${st.eff}%` }} />
                         </div>
                       </span>
-                      <span style={{ fontSize: 11, fontWeight: 400, color: "var(--sw-muted)", flex: "none", width: 34, textAlign: "right" }}>{st.hasData ? `${st.eff}%` : "—"}</span>
+                      <span style={{ fontSize: 11, fontWeight: 400, color: "var(--sw-muted)", flex: "none", width: 34, textAlign: "right" }}>{st.eff}%</span>
                     </div>
                   ))}
+                  {!rankedByEfficiency.length && <p style={{ margin: "0 0 8px", fontSize: 12, color: "var(--sw-muted)" }}>Nobody has tracked work yet.</p>}
+                  {unrankedNoData.length > 0 && (
+                    <>
+                      <div style={{ fontSize: 10, fontWeight: 400, color: "var(--sw-muted)", margin: "10px 0 4px" }}>No tracked work yet — not ranked</div>
+                      {unrankedNoData.map((st) => (
+                        <div key={st.p.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "5px 0" }}>
+                          <span style={{ width: 16, flex: "none" }} />
+                          <button onClick={() => openProfile(st.p.id)} title="View profile" style={{ width: 22, height: 22, borderRadius: 99, background: st.p.color, color: readableTextOn(st.p.color), fontSize: 9, fontWeight: 400, display: "flex", alignItems: "center", justifyContent: "center", flex: "none", border: "none", cursor: "pointer", padding: 0, opacity: 0.6 }}>{initials(st.p.name)}</button>
+                          <span style={{ flex: 1, minWidth: 0, fontSize: 12, color: "var(--sw-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{st.p.name}</span>
+                          <span style={{ fontSize: 11, color: "var(--sw-muted)", flex: "none" }}>—</span>
+                        </div>
+                      ))}
+                    </>
+                  )}
                 </section>
               </div>
 

@@ -21,7 +21,7 @@ function task(fields: Partial<Task> = {}): Task {
     status: "Not Started", priority: "Medium", due: null, blocked: false,
     description: null, reminder_at: null, recur: "none", accountable_id: null,
     completed_at: null, created_at: iso(0), milestone: false, assignee_id: "p1",
-    raci_c: [], raci_i: [], difficulty: null, difficulty_set_by: null,
+    raci_c: [], raci_i: [], difficulty: null, difficulty_set_by: null, sort: 0,
     ...fields,
   };
 }
