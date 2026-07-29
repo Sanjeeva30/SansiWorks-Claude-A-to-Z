@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from "react";
 import { useStore } from "@/lib/store";
 import { useUI } from "@/lib/ui";
-import { OrgUnitType, ORG_UNIT_TYPES, PermissionTemplate } from "@/lib/types";
+import { OrgUnitType, ORG_UNIT_TYPES, PermissionTemplate, PermissionOverrides } from "@/lib/types";
 import { colorForPerson } from "@/lib/colors";
 import { logAudit, writeOrRevert } from "@/lib/actions";
 import { isMultiDeptAdmin } from "@/lib/logic";
@@ -54,6 +54,8 @@ export function OrgAdmin({ tab }: { tab: "organisation" | "permissions" }) {
   const [newAssign, setNewAssign] = useState<{ profile_id: string; function_name: string; scope_unit_id: string; reports_to_unit_id: string }>({ profile_id: "", function_name: "", scope_unit_id: "", reports_to_unit_id: "" });
   const [editingTemplate, setEditingTemplate] = useState<PermissionTemplate | null>(null);
   const [newTemplateName, setNewTemplateName] = useState("");
+  const [editingPersonId, setEditingPersonId] = useState<string | null>(null);
+  const [editingOverrides, setEditingOverrides] = useState<PermissionOverrides>({});
 
   const unitName = (id: string | null) => departments.find((d) => d.id === id)?.name || "—";
   const roots = departments.filter((d) => !d.archived);
@@ -207,6 +209,15 @@ export function OrgAdmin({ tab }: { tab: "organisation" | "permissions" }) {
       await logAudit(supabase, me.id, `set permission template to "${templateName}" for`, profiles.find((p) => p.id === profileId)?.name || "someone");
     }
   }
+  async function saveOverrides(profileId: string, overrides: PermissionOverrides | null) {
+    const prevProfiles = profiles;
+    patch("profiles", profiles.map((p) => (p.id === profileId ? { ...p, permission_overrides: overrides } : p)));
+    if (!await writeOrRevert(supabase.from("profiles").update({ permission_overrides: overrides }).eq("id", profileId), {
+      toast: pushToast, what: "save that person's permission overrides", revert: () => patch("profiles", prevProfiles),
+    })) return;
+    if (me) await logAudit(supabase, me.id, overrides ? "edited permission overrides for" : "cleared permission overrides for", profiles.find((p) => p.id === profileId)?.name || "someone");
+    pushToast(overrides ? "Overrides saved" : "Overrides cleared — back to template/level defaults");
+  }
 
   if (!canManage) {
     return <section style={card}><p style={{ fontSize: 12.5, color: "var(--sw-muted)", margin: 0 }}>Only Board / Group Heads or super admins can manage {tab === "organisation" ? "the organisation structure" : "permissions"}.</p></section>;
@@ -261,17 +272,73 @@ export function OrgAdmin({ tab }: { tab: "organisation" | "permissions" }) {
 
         <section style={card}>
           <h3 style={{ margin: "0 0 4px", fontSize: 13, fontWeight: 400 }}>Assign templates &amp; overrides</h3>
-          <p style={{ margin: "0 0 14px", fontSize: 11.5, color: "var(--sw-muted)" }}>Per-person overrides are edited on that person's profile card and always show as "differs from template" there.</p>
-          {profiles.map((p) => (
-            <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "1px solid var(--sw-hair)" }}>
-              <span style={{ flex: 1, fontSize: 12.5 }}>{p.name}</span>
-              {p.permission_overrides && <span style={{ fontSize: 10.5, color: "var(--sw-on-crimson)", border: "1px solid var(--crimson)", borderRadius: 999, padding: "2px 8px" }}>overrides set</span>}
-              <select style={selectSt} value={p.template_id || ""} onChange={(e) => assignTemplate(p.id, e.target.value)}>
-                <option value="">No template</option>
-                {permissionTemplates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </select>
-            </div>
-          ))}
+          <p style={{ margin: "0 0 14px", fontSize: 11.5, color: "var(--sw-muted)" }}>Assign a template, or click a person to set their screens and abilities directly — a template is optional, not required.</p>
+          {profiles.map((p) => {
+            const template = permissionTemplates.find((t) => t.id === p.template_id) || null;
+            const isEditing = editingPersonId === p.id;
+            return (
+              <div key={p.id} style={{ padding: "8px 0", borderBottom: "1px solid var(--sw-hair)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ flex: 1, fontSize: 12.5 }}>{p.name}</span>
+                  {p.permission_overrides && <span style={{ fontSize: 10.5, color: "var(--sw-on-crimson)", border: "1px solid var(--crimson)", borderRadius: 999, padding: "2px 8px" }}>overrides set</span>}
+                  <select style={selectSt} value={p.template_id || ""} onChange={(e) => assignTemplate(p.id, e.target.value)}>
+                    <option value="">No template</option>
+                    {permissionTemplates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  </select>
+                  <button
+                    onClick={() => {
+                      if (isEditing) { setEditingPersonId(null); return; }
+                      setEditingPersonId(p.id);
+                      setEditingOverrides(p.permission_overrides ? { ...p.permission_overrides, abilities: { ...p.permission_overrides.abilities } } : {});
+                    }}
+                    style={pillBtn("var(--sw-text-soft)")}
+                  >
+                    {isEditing ? "Close" : "Edit permissions"}
+                  </button>
+                </div>
+                {isEditing && (
+                  <div className="sw-grid-2" style={{ paddingLeft: 12, paddingTop: 12, gap: 16 }}>
+                    <div>
+                      <div style={label}>Screens {!editingOverrides.screens && <span style={{ color: "var(--sw-muted)", fontWeight: 400, textTransform: "none" }}>· inheriting from {template ? `"${template.name}"` : "level default"}</span>}</div>
+                      {SCREENS.map(([key, lbl]) => {
+                        const effective = editingOverrides.screens ?? template?.screens ?? [];
+                        return (
+                          <label key={key} style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 11.5, padding: "3px 0" }}>
+                            <input type="checkbox" checked={effective.includes(key)}
+                              onChange={(e) => {
+                                const base = editingOverrides.screens ?? template?.screens ?? [];
+                                const next = e.target.checked ? [...base, key] : base.filter((s) => s !== key);
+                                setEditingOverrides({ ...editingOverrides, screens: next });
+                              }} />
+                            {lbl}
+                          </label>
+                        );
+                      })}
+                      {editingOverrides.screens && (
+                        <button onClick={() => setEditingOverrides({ ...editingOverrides, screens: undefined })} style={{ ...pillBtn("var(--sw-text-soft)"), marginTop: 6 }}>Revert screens to template/level default</button>
+                      )}
+                    </div>
+                    <div>
+                      <div style={label}>Abilities</div>
+                      {ABILITIES.map(([key, lbl]) => (
+                        <label key={key} style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 11.5, padding: "3px 0" }}>
+                          <input type="checkbox" checked={!!(editingOverrides.abilities?.[key] ?? template?.abilities?.[key])}
+                            onChange={(e) => setEditingOverrides({ ...editingOverrides, abilities: { ...editingOverrides.abilities, [key]: e.target.checked } })} />
+                          {lbl}
+                        </label>
+                      ))}
+                      <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                        <button onClick={async () => { await saveOverrides(p.id, editingOverrides); setEditingPersonId(null); }} style={{ padding: "6px 14px", borderRadius: 999, border: "none", background: "var(--green)", color: "#fff", fontSize: 11.5, cursor: "pointer" }}>Save overrides</button>
+                        {p.permission_overrides && (
+                          <button onClick={async () => { await saveOverrides(p.id, null); setEditingPersonId(null); }} style={pillBtn("var(--sw-on-red)")}>Clear overrides</button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </section>
       </>
     );

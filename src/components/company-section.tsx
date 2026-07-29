@@ -274,7 +274,7 @@ export function CompanySection() {
                 </div>
                 <div className="sw-topbar-label" style={{ width: 1, alignSelf: "stretch", background: "var(--sw-hair)" }} />
                 {execMetrics.map((m) => {
-                  const series = metricTrend(tasks, m.trend);
+                  const series = metricTrend(scopedTasks, m.trend);
                   const delta = trendDelta(series);          // null when not comparable
                   const diff = delta?.diff ?? 0;
                   const { line, area, lastX, lastY } = sparkPath(series, 120, 26);
