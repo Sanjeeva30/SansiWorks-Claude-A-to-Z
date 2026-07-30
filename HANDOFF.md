@@ -1,7 +1,7 @@
 # SansiWorks — Session Handoff
 
 > Kept current at every major milestone so any fresh session (or fresh context window)
-> can pick up without re-deriving state. Last updated: **2026-07-28** (company-wide data-visibility incident).
+> can pick up without re-deriving state. Last updated: **2026-07-29** (pre-launch security & performance hardening).
 
 ## What this project is
 1:1 rebuild of the SansiWorks design (Sansico Group PM workspace) on Next.js 16 + Supabase
@@ -362,6 +362,115 @@ selection via `onMouseDown` so it fires before the input's `onBlur` closes the
 list. Verified live: focusing an empty board's R field showed exactly the
 department's members and nothing else; clicking one selected it and closed
 the list.
+
+## Pre-launch security & performance hardening (2026-07-29)
+
+A full audit before live testing. **Everything below was verified by simulating
+real authenticated sessions in Postgres** (`set local role authenticated` +
+`request.jwt.claims`), not by reading code — because RLS does not apply to the
+service-role connection the MCP tools use, so a code read proves nothing.
+
+### Privilege escalation (was: any Department Head → Super Admin)
+`profiles` UPDATE was `USING ((id = auth.uid()) OR app_is_dept_admin())` with no
+`WITH CHECK`, and `app_is_dept_admin()` is a **global** flag that is true for l3
+(Department Heads) — so any Department Head could edit every profile in the
+company. The guard trigger `prevent_self_privilege_escalation` then *exempted*
+every dept_admin from its own check, so they could set `is_super = true` on
+themselves and demote the real super admins.
+
+Fixed: the trigger now raises (never silently clamps) — `is_super` is
+super-admin-only in both directions, nobody below super may edit a super's row,
+no self rank change, no granting a rank more senior than your own, and
+template/overrides changes are held to the same bar as the Permissions tab.
+`profiles` UPDATE gained a matching `WITH CHECK` and l3 is scoped to their own
+department via a new `app_my_department()`. Verified: 4 escalation paths blocked,
+control (editing own phone) still works.
+
+### Four forgeable write paths
+All were `INSERT ... WITH CHECK (true)` for authenticated — the same class of gap
+already fixed on `form_submissions`:
+- **`doc_versions`** (worst): anyone could insert a version onto *any* doc,
+  including ones they cannot read, with `head_status`/`audit_status = 'approved'`
+  — **fabricating the head-reviewer and Internal Audit sign-off** the SOP
+  workflow exists to record. Now: parent doc must be readable, `submitted_by`
+  must be self, review attribution columns must be empty, and an SOP version
+  must enter as `pending`. Non-SOP plain attachments keep straight-to-approved
+  (the only legitimate use — `attachPlainFile` renders under `!d.is_sop`).
+- **`audit_log`**: could be written with any `actor_id` → forged compliance
+  trail. Now `actor_id = auth.uid()`.
+- **`notifications`**: fully anonymous sends to anyone. Now carries an
+  `actor_id` (DB default `auth.uid()`, pinned by RLS) so no in-app notification
+  can be anonymous, plus a body length cap. Cross-user sends still work — they
+  are legitimate (reviewer/reassignment alerts) — they are just attributable now.
+- **`docs`**: `owner_id` could be set to a colleague. Now must be self.
+- **`form_submissions`**: kept open on *who* (the portal is unauthenticated) but
+  closed on *what* — `task_id` must be null and `status` must be `'new'`, so a
+  request can no longer arrive pre-linked or pre-resolved, skipping the queue.
+
+Verified: 5 forgeries blocked, 5 legitimate flows unaffected.
+
+### Cross-user reminder deletion (found while fixing perf lints)
+`reminders` had two policy sets that OR'd together: `own_reminders_*`
+(`profile_id = auth.uid()`) and `reminders_*` (`app_can_write_task(task_id)`).
+Since permissive policies OR, anyone with write access to the related task could
+INSERT, UPDATE or **DELETE another person's private reminder** — while
+`own_reminders_select` meant they could not even read it. Every
+`createReminder()` call site passes `profile_id: me.id`, so the task-based set
+was unused leftover. Dropped.
+
+### Robustness / abuse
+- **No error boundary existed at all** — one render throw white-screened the
+  entire app with no recovery. Added `app/error.tsx` and `app/global-error.tsx`.
+  Note Next 16 renamed the retry prop to `unstable_retry` (`reset` still exists
+  but only re-renders; `unstable_retry` re-fetches, which is what a transient
+  Supabase failure needs).
+- **Rate limiting**: `/api/sansi` already had a limiter (named `allowRequest`,
+  which an earlier grep for "rateLimit" missed). It was missing on
+  `summarize-sop` (also Gemini-backed) and `notify` (sends Brevo email).
+  Extracted to `lib/server/rate-limit.ts` and applied to all three. The public
+  portal inserts straight into Postgres and never passes through a route, so its
+  throttle lives in a `form_submissions` BEFORE INSERT trigger: 10/min per form,
+  60/min global, 20KB payload cap, signed-in users exempt. Verified: 10 accepted
+  then blocked at 11; oversized blocked; 15/15 accepted for a signed-in user.
+- **`avatars` bucket** allowed any signed-in user to enumerate every avatar file.
+  Scoped to own folder (+supers); public-bucket URLs bypass RLS so avatars still
+  render, and `upsert: true` still works. Added a missing DELETE policy so a
+  replaced avatar can be cleaned up. Verified: non-super went from 5 visible → 1.
+
+### Performance: 125 lints → 36 → 0
+- **58 unindexed foreign keys → 0.** Postgres never creates these automatically.
+- **30 `auth_rls_initplan` → 0.** Argument-free calls (`auth.uid()`,
+  `app_is_super()`, `app_rank()`, …) now sit in a scalar sub-select so they are
+  evaluated once per statement instead of once per row. Row-dependent calls
+  (`app_rank_of(requester_id)`, `app_can_read_doc(d.department_id, …)`) were
+  deliberately left alone — they cannot be hoisted.
+- **36 `multiple_permissive_policies` → 0.** All from one shape: an admin write
+  policy declared `FOR ALL` sitting beside a dedicated SELECT policy, so every
+  read evaluated two predicates. Split into explicit INSERT/UPDATE/DELETE; where
+  the read policy was narrower, the ALL policy's read branch was folded in with
+  OR so effective permissions are **unchanged**.
+- The 59 new `unused_index` INFO lints are simply those FK indexes not yet
+  scanned at seed volume; they resolve themselves under real traffic.
+
+**Verification method worth reusing:** before each RLS migration, a
+per-role × per-table visible-row-count baseline was captured for 4 users
+(super / dept head / internal audit / staff), then re-run afterwards and diffed —
+**0 mismatches** across 104 and then 64 checks. Admin writes were re-tested with
+`GET DIAGNOSTICS row_count`, not exception-catching: an UPDATE blocked by RLS
+affects 0 rows *without raising*, so exception-based tests give false passes in
+both directions. Full `tsc`, `vitest` (38/38) and `next build` clean after.
+
+### Still open (needs the dashboard, cannot be done over SQL)
+- **Leaked-password protection is OFF.** One toggle: Supabase → Authentication →
+  Policies → enable "Leaked password protection" (checks HaveIBeenPwned).
+- Deliberately unchanged: `read_all_profiles USING (true)` — every employee can
+  read every colleague's phone/WhatsApp/birthday. Defensible as a company
+  directory, but it should be a conscious decision, not a default.
+- The remaining `SECURITY DEFINER` advisories on `app_*()` are inherent to the
+  helper-function pattern: RLS evaluation requires the calling role to hold
+  EXECUTE, and they only return facts about the caller's own privileges.
+  `get_invite`/`complete_invite` are anon-callable by design for pre-auth invite
+  redemption and are gated on a 122-bit token.
 
 ## Overview department-filter fix + PWA safe-area + 7-item backlog batch (2026-07-28)
 **Overview didn't scope to the department dropdown.** Two root causes in

@@ -3,31 +3,9 @@ import { createClient } from "@/lib/supabase/server";
 
 /* Per-user rate limit on the Gemini-backed endpoint. Without it one person
    holding a key down — or a buggy retry loop — can burn the whole project's AI
-   quota and budget in a few seconds.
-
-   This is deliberately in-memory: the cap is per warm serverless instance, not
-   global, so it is a cheap brake rather than a hard guarantee. That is the right
-   trade at this headcount; if Sansi ever needs a true global limit, move the
-   counter into Postgres or Upstash. */
-const RATE_WINDOW_MS = 60_000;
-const RATE_MAX = 15;
-const hits = new Map<string, number[]>();
-
-function allowRequest(userId: string): boolean {
-  const now = Date.now();
-  const recent = (hits.get(userId) || []).filter((t) => now - t < RATE_WINDOW_MS);
-  if (recent.length >= RATE_MAX) {
-    hits.set(userId, recent);
-    return false;
-  }
-  recent.push(now);
-  hits.set(userId, recent);
-  // Opportunistic cleanup so the map can't grow without bound on a long-lived instance.
-  if (hits.size > 500) {
-    for (const [k, v] of hits) if (!v.some((t) => now - t < RATE_WINDOW_MS)) hits.delete(k);
-  }
-  return true;
-}
+   quota and budget in a few seconds. Now shared with summarize-sop (also
+   Gemini-backed) and notify (sends email), which had no brake at all. */
+import { allowRequest, AI_LIMIT } from "@/lib/server/rate-limit";
 
 // Mirrors accountableCandidates() in lib/actions.ts — duplicated rather than
 // imported because that module is "use client" and can't be called from a
@@ -65,7 +43,7 @@ export async function POST(req: NextRequest) {
   const { data: auth } = await supabase.auth.getUser();
   if (!auth.user) return NextResponse.json({ reply: "Please sign in first." }, { status: 401 });
 
-  if (!allowRequest(auth.user.id)) {
+  if (!allowRequest(`sansi:${auth.user.id}`, AI_LIMIT)) {
     return NextResponse.json(
       { reply: "You're asking faster than I can think — give me a few seconds and try again." },
       { status: 429 }

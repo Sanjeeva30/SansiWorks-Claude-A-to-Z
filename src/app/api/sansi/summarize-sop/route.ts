@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { allowRequest, AI_LIMIT } from "@/lib/server/rate-limit";
 
 // Sansi's SOP summary — author-assisted, not file-parsing. Word/PPT/PDF are
 // binary; we don't extract their text. Sansi cleans up the submitter's own
@@ -14,8 +15,16 @@ export async function POST(req: NextRequest) {
   const { data: auth } = await supabase.auth.getUser();
   if (!auth.user) return NextResponse.json({ summary: "" }, { status: 401 });
 
-  const key = process.env.GEMINI_API_KEY;
   const fallback = (changeNote || "").trim();
+
+  /* Same Gemini brake as the chat endpoint. Falling back to the author's own
+     note (rather than 429-ing) keeps SOP submission working when the limit is
+     hit — the summary is a nicety, the submission is the point. */
+  if (!allowRequest(`summarize:${auth.user.id}`, AI_LIMIT)) {
+    return NextResponse.json({ summary: fallback, rateLimited: true });
+  }
+
+  const key = process.env.GEMINI_API_KEY;
   if (!key) return NextResponse.json({ summary: fallback });
 
   const prompt = isRevision

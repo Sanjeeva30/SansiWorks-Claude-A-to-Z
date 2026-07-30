@@ -306,6 +306,11 @@ export interface Notification {
   reason: string | null;
   read: boolean;
   created_at: string;
+  /* Who sent it. Defaults to auth.uid() in Postgres and is pinned to the caller
+     by RLS, so an in-app notification can never be anonymous — that is what
+     stops one employee impersonating the system to another. Null only for
+     server-side sends (cron digests, the public form portal). */
+  actor_id: string | null;
 }
 
 export interface Memo {

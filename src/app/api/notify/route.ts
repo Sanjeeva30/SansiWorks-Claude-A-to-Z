@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { sendEmail, wrapEmailHtml } from "@/lib/server/email";
+import { allowRequest, EMAIL_LIMIT } from "@/lib/server/rate-limit";
 
 // Instant alerts: assignment / invite. Respects per-category channel prefs.
 export async function POST(req: NextRequest) {
@@ -8,6 +9,13 @@ export async function POST(req: NextRequest) {
   const supabase = await createClient();
   const { data: auth } = await supabase.auth.getUser();
   if (!auth.user) return NextResponse.json({ ok: false }, { status: 401 });
+
+  /* This route sends real outbound email. Unbraked, a stuck retry loop (or
+     somebody leaning on "Send reminder") could pour hundreds of messages into a
+     colleague's inbox and burn the Brevo quota. */
+  if (!allowRequest(`notify:${auth.user.id}`, EMAIL_LIMIT)) {
+    return NextResponse.json({ ok: false, error: "rate_limited" }, { status: 429 });
+  }
 
   if (body.kind === "assigned" && body.taskId) {
     const [{ data: task }, { data: actor }] = await Promise.all([
