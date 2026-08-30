@@ -811,8 +811,17 @@ type EverythingRow = { kind: "header"; name: string } | { kind: "row"; task: Tas
 
 function EverythingView() {
   const { tasks, lists, spaces, profiles, me } = useStore();
-  const { setActiveTaskId } = useUI();
+  const { setActiveTaskId, paletteIntent, setPaletteIntent } = useUI();
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
+
+  /* A verb from the command palette lands here as a filter, then clears itself
+     so it can't silently narrow a later visit to this screen. */
+  useEffect(() => {
+    if (!paletteIntent || !me) return;
+    if (paletteIntent === "accountable") setFilters({ ...EMPTY_FILTERS, raciRole: "accountable", raciFor: me.id });
+    if (paletteIntent === "stuck") setFilters({ ...EMPTY_FILTERS, statuses: ["Stuck"] });
+    setPaletteIntent("");
+  }, [paletteIntent, me, setPaletteIntent]);
   const today = todayIso();
   const scrollRef = useRef<HTMLDivElement>(null);
 

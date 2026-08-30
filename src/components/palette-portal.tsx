@@ -7,7 +7,7 @@ import { isDeptAdmin } from "@/lib/logic";
 
 /* ---------- Command palette: pages, actions, and workspace-wide search ---------- */
 export function CommandPalette() {
-  const { showPalette, setShowPalette, setHomePage, setListPage, setCompanyPage, setWorkspacePage, setActiveTaskId, setActiveList, setShowQuickAdd, toggleTheme, setShowPortal } = useUI();
+  const { showPalette, setShowPalette, setHomePage, setListPage, setCompanyPage, setWorkspacePage, setActiveTaskId, setActiveList, setShowQuickAdd, toggleTheme, setShowPortal, setPaletteIntent } = useUI();
   const store = useStore();
   const { openProfile, setDocDetailId, openDetail } = useUI();
   const [query, setQuery] = useState("");
@@ -43,8 +43,18 @@ export function CommandPalette() {
       ["Settings", () => setWorkspacePage("settings")],
       ...(isAdmin ? [["Admin console", () => setWorkspacePage("admin")] as [string, () => void]] : []),
     ];
+    /* The palette could only navigate — every verb still meant finding the
+       screen first. These are the things people actually do all day, reachable
+       by typing the verb: "stuck" gets you your blocked work, "overdue" the
+       list that matters most, "answerable" the A column a Department Head is
+       judged on. Each one lands on a real filtered view rather than inventing
+       a new surface. */
     const actions: [string, string, () => void][] = [
       ["New task", "Ctrl+T or N", () => setShowQuickAdd(true)],
+      ["My overdue work", "verb · everything I am late on", () => { setHomePage("all"); setPaletteIntent("overdue"); }],
+      ["What I'm answerable for", "verb · the A column, not the R", () => { setListPage("everything"); setPaletteIntent("accountable"); }],
+      ["What's stuck", "verb · blocked work needing help", () => { setListPage("everything"); setPaletteIntent("stuck"); }],
+      ["Due this week", "verb", () => setHomePage("myweek")],
       ["Toggle dark mode", "", () => toggleTheme()],
       ["Open request portal", "public form", () => setShowPortal(true)],
     ];

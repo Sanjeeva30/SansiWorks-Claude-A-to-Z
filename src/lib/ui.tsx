@@ -55,6 +55,11 @@ interface UIState {
   setActiveTaskId: (id: string | null) => void;
   showQuickAdd: boolean;
   setShowQuickAdd: (v: boolean) => void;
+  /* A verb chosen in the command palette. The palette navigates to the right
+     screen and leaves this behind; the screen applies it as a filter and clears
+     it, so a verb never sticks around and silently narrow a later visit. */
+  paletteIntent: "" | "overdue" | "accountable" | "stuck";
+  setPaletteIntent: (v: "" | "overdue" | "accountable" | "stuck") => void;
   quickAddStatus: string;
   setQuickAddStatus: (s: string) => void;
   showPalette: boolean;
@@ -180,6 +185,7 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
   const [viewerLevel, setViewerLevel] = useState<"staff" | "admin">("staff");
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [showQuickAdd, setShowQuickAdd] = useState(false);
+  const [paletteIntent, setPaletteIntent] = useState<"" | "overdue" | "accountable" | "stuck">("");
   const [quickAddStatus, setQuickAddStatus] = useState("Not Started");
   const [showPalette, setShowPalette] = useState(false);
   const [metricModal, setMetricModal] = useState<{
@@ -356,7 +362,7 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
         activeList: route.activeList, setActiveList,
         theme, toggleTheme, toasts, pushToast, dismissToast,
         profileTarget, openProfile, viewerLevel, setViewerLevel,
-        activeTaskId, setActiveTaskId, showQuickAdd, setShowQuickAdd,
+        activeTaskId, setActiveTaskId, showQuickAdd, setShowQuickAdd, paletteIntent, setPaletteIntent,
         quickAddStatus, setQuickAddStatus, showPalette, setShowPalette,
         metricModal, setMetricModal, showPortal, setShowPortal, escStack,
         detailPopup, openDetail, closeDetail, docDetailId, setDocDetailId, mobileNavOpen, setMobileNavOpen,

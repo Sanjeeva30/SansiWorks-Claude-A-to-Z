@@ -1,5 +1,5 @@
 "use client";
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { useStore } from "@/lib/store";
 import { useUI } from "@/lib/ui";
 import { STATUS_COLORS, PRIORITY_COLORS, STATUSES, Task, initials } from "@/lib/types";
@@ -24,11 +24,19 @@ export function HomeSection() {
   const {
     homePage, setHomePage, setShowQuickAdd, setActiveTaskId,
     setCompanyPage, setWorkspacePage, openProfile, setMetricModal, setActiveList,
+    paletteIntent, setPaletteIntent,
   } = useUI();
   const [statusTab, setStatusTab] = useState("Not Started");
   const [density, setDensity] = useState<"comfortable" | "compact">("comfortable");
   const [missedDismissed, setMissedDismissed] = useState(false);
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
+
+  // "My overdue work" from the command palette.
+  useEffect(() => {
+    if (paletteIntent !== "overdue") return;
+    setFilters({ ...EMPTY_FILTERS, due: "overdue" });
+    setPaletteIntent("");
+  }, [paletteIntent, setPaletteIntent]);
 
   const today = todayIso();
   const myTasks = useMemo(() => (me ? tasksOfPerson(tasks, me.id) : []), [tasks, me]);

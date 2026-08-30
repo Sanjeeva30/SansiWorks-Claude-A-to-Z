@@ -2,6 +2,7 @@
 import React from "react";
 import { StoreProvider, useStore } from "@/lib/store";
 import { UIProvider, useUI } from "@/lib/ui";
+import { MobileTabBar } from "@/components/mobile-tabbar";
 import { Sidebar } from "@/components/sidebar";
 import { HomeSection } from "@/components/home-section";
 import { ListSection } from "@/components/list-section";
@@ -57,6 +58,7 @@ function AppShell() {
       <PublicPortal />
       <OnboardingChecklist />
       <ReminderEngine />
+      <MobileTabBar />
       <Toasts />
       <ConfirmDialog />
     </div>

@@ -1,7 +1,7 @@
 # SansiWorks — Session Handoff
 
 > Kept current at every major milestone so any fresh session (or fresh context window)
-> can pick up without re-deriving state. Last updated: **2026-07-30** (recurrence engine, opt-in efficiency ranking, RACI visibility).
+> can pick up without re-deriving state. Last updated: **2026-07-30** (UX pass: decision-queue Overview, admin/sidebar scale, mobile tab bar).
 
 ## What this project is
 1:1 rebuild of the SansiWorks design (Sansico Group PM workspace) on Next.js 16 + Supabase
@@ -362,6 +362,64 @@ selection via `onMouseDown` so it fires before the input's `onBlur` closes the
 list. Verified live: focusing an empty board's R field showed exactly the
 department's members and nothing else; clicking one selected it and closed
 the list.
+
+## UX pass — decision queue, scale, mobile (2026-07-30, later)
+
+Completed the five-item UX list plus the quick wins.
+
+- **RACI hover card** (`raci-badge.tsx`) replaces the native tooltip: R, A, C and
+  I with counts. A native `title` cannot carry C/I, and those were reachable
+  only by opening the task.
+- **Overview is now actionable.** At-risk/overdue rows and the critical-unblocker
+  card carry Nudge / Reassign / Give time inline (`risk-actions.tsx`), on
+  plumbing that already existed. A narrative line above the numbers states what
+  needs attention, derived from the same figures shown below.
+- **Admin console at scale.** Users gained search + department/level filters;
+  Suspend and Delete moved behind a per-row `⋯` (Delete sat inline beside routine
+  dropdowns, one mis-click from irreversible). The nine-tab strip clipped
+  mid-word below ~700px and is now a left rail (`.sw-admin-shell`) folding to a
+  wrapping row on mobile.
+- **Sidebar at 26 departments.** Type-to-filter (a department survives if it or
+  a board matches, and force-expands so the match is visible), a Recent list,
+  and short codes via `unitCode()` — hue alone cannot identify 26 units and none
+  of it survives colourblindness or greyscale. `pins.sort` was never read, so
+  pinned boards came back arbitrarily ordered and could not be reordered; fixed.
+- **Permissions screens** grouped under the same Company / Workspace headings the
+  sidebar uses, replacing the flat prefixed list.
+- **Command palette verbs**: "My overdue work", "What I'm answerable for",
+  "What's stuck", "Due this week". A verb navigates and leaves a `paletteIntent`
+  the destination applies as a filter, then clears — so it never silently
+  narrows a later visit.
+- **Mobile tab bar** (`mobile-tabbar.tsx`): My Work / Inbox (unread badge) /
+  Search / New, above the home indicator. The hamburger stays for departments
+  and admin.
+- **Gantt** bars now carry a blocked notch and a "frees N" badge with blockers
+  named on hover. Not arrows — bars are per-assignee lanes, so cross-lane arrow
+  geometry breaks on scroll and zoom.
+- **Memos** are badged NEW until seen (local per-browser; "have I read this" is a
+  convenience, not something to audit).
+
+**Drag-to-reorder** still cannot be exercised without a real browser — synthetic
+mouse events do not produce native HTML5 drag events. The part that can actually
+be wrong is the splice arithmetic, so it is now `moveInOrder()` in `lib/logic.ts`
+with 8 tests, shared by all three drag sites instead of reimplemented in each.
+The gesture itself remains unverified.
+
+**GitHub audit (asked for separately).** Code backup is working — `main` matches
+`origin/main`, every push landed. Two real findings, neither of which is git
+failing:
+1. **The repository is PUBLIC.** No credentials leak (`.env*` is ignored, nothing
+   secret-shaped is tracked, no env file ever entered history), but it does
+   expose the Supabase project ref, the full schema and RLS design, and real
+   employee names in the docs. For an internal workspace it should be private.
+2. **There is no database backup at all** — no GitHub Action, and `db-backups/`
+   holds a single manual restore script from the July dedup incident. The code
+   is backed up; the data is not. A scheduled `pg_dump` workflow is the fix, but
+   it must not be added while the repo is public.
+
+**Verification:** `tsc` clean, 71/71 tests, `next build` clean, portal re-checked
+at 375px. The authenticated UI is still not visually verified — the session
+expired and credentials are never entered.
 
 ## Recurrence engine, opt-in efficiency ranking, RACI visibility (2026-07-30)
 
