@@ -549,7 +549,10 @@ html, body { max-width: 100%; overflow-x: hidden; }
    and the scroll containers gain matching bottom padding so the last row of a
    list is never trapped underneath it. */
 .sw-tabbar { display: none; }
-@media (max-width: 900px) {
+/* 768px, not 900px: that is where .sw-sidebar goes off-canvas. Between the two
+   the sidebar and the tab bar were both on screen at once — two navigations
+   competing for the same job. */
+@media (max-width: 768px) {
   .sw-tabbar {
     display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 34;
     background: var(--sw-card); border-top: 1px solid var(--sw-hair);
