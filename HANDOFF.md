@@ -1,7 +1,7 @@
 # SansiWorks — Session Handoff
 
 > Kept current at every major milestone so any fresh session (or fresh context window)
-> can pick up without re-deriving state. Last updated: **2026-07-29** (pre-launch security & performance hardening).
+> can pick up without re-deriving state. Last updated: **2026-07-30** (recurrence engine, opt-in efficiency ranking, RACI visibility).
 
 ## What this project is
 1:1 rebuild of the SansiWorks design (Sansico Group PM workspace) on Next.js 16 + Supabase
@@ -362,6 +362,70 @@ selection via `onMouseDown` so it fires before the input's `onBlur` closes the
 list. Verified live: focusing an empty board's R field showed exactly the
 department's members and nothing else; clicking one selected it and closed
 the list.
+
+## Recurrence engine, opt-in efficiency ranking, RACI visibility (2026-07-30)
+
+### Recurrence, rebuilt
+`recur` was three words (daily/weekly/monthly) that stepped from the **due**
+date, so completing a task three weeks overdue produced a successor that was
+*already overdue* — people then ticked off two or three phantom occurrences to
+catch up. The spawned occurrence also dropped the checklist, so a "monthly
+close" task was rebuilt by hand every cycle.
+
+`lib/recurrence.ts` now supports interval ("every 2 weeks"), weekday selection,
+monthly by date **or** by nth weekday ("last Friday"), end conditions (never /
+after N / until date), weekend skipping, and anchoring to the completion date
+rather than the schedule — "every 3 days after I last did it" is a different
+rule from "the 1st of the month" and both are now expressible. It keeps stepping
+until the next date actually clears today, and subtasks are copied forward
+unticked. 31 tests cover the edge cases (month-end clamping 31 Jan → 28 Feb,
+nth/last weekday, DST, end conditions, the overdue case).
+
+Stored as `tasks.recurrence` jsonb plus `recurrence_series_id` /
+`recurrence_index` so "ends after N" counts across the whole chain. The legacy
+`recur` column still resolves via `recurrenceOf()`, so old rows keep working.
+`RecurrenceEditor` (quick-add + task detail) always echoes the rule in plain
+English — a repeat rule you cannot read back is one you do not trust.
+
+### Efficiency ranking is now opt-in
+A public 1..N leaderboard of individuals, spanning departments whose workloads
+are not comparable, reliably produces gaming rather than performance: people
+avoid hard tasks, inflate difficulty, and stop marking things Stuck. Behind
+`public_efficiency_ranking`, **off by default**: each person sees only their own
+score against the **team median** (median, not mean, so one person drowning does
+not drag the reference point), department averages stay public, and admins keep
+the full list with an "Admin view" note. On: the full per-person leaderboard.
+
+### RACI made visible
+Single-R RACI with a rank-checked A is the model the app is built on, and it was
+invisible in every list — you had to open a task to learn who was answerable.
+Table rows and kanban cards now show A as a dashed-ring avatar behind R. A new
+**"My role"** filter (R/A/C/I) means a Department Head can finally ask "what am I
+answerable for but not doing" — every view previously filtered on R only.
+
+### Smaller fixes
+- **Load at assign time.** `workloadPct()` already existed and drove the
+  Overview's "Dewi at 10 open"; it just was not shown at the one moment it could
+  prevent an overload. The assignee picker now shows open count and flags "full".
+- **Stuck** is the most valuable signal in the system — someone saying "I cannot
+  move this" — and was styled like any other status dot. Now a red STUCK chip.
+- **Notifications say who sent them**, using the `actor_id` added during the
+  security pass. Previously alerts arrived from nowhere.
+- **Permissions screen labels** used internal route names ("my-week", "my-list")
+  that matched nothing in the nav. They now read `My Work › This Week`,
+  `Company › Overview`, so an admin granting access never has to translate.
+
+**Verification:** `tsc` clean, 63/63 tests, `next build` clean, routes smoke-
+tested 200, no server errors. **Not visually verified** — the browser session had
+expired and credentials are never entered, so the recurrence editor, RACI
+avatars and workload badges are type-correct and unit-tested but have not been
+seen rendered. Worth a look before trusting them.
+
+**Still open from the UX list:** Overview inline actions (Nudge / Reassign /
+Request extension); sidebar pinned-order, recent boards, collapse+filter; admin
+Users search + destructive actions behind an overflow menu; command-palette
+verbs; mobile bottom nav; memo read-state; Gantt dependency chain; department
+short codes.
 
 ## Pre-launch security & performance hardening (2026-07-29)
 

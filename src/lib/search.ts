@@ -117,14 +117,19 @@ export interface FilterState {
      difficulty scale directly, so the label a user picks here is the same word
      they see on the task itself. */
   difficulty: "" | "light" | "medium" | "heavy"; // Trivial-Easy / Moderate / Hard-Complex
+  /* "Work I'm answerable for but not doing." A Department Head's actual job is
+     the A column, and there was no way to see it — every view filtered on R. */
+  raciRole: "" | "responsible" | "accountable" | "consulted" | "informed";
+  raciFor: string | null; // whose role to filter by; null = nobody selected
 }
 
-export const EMPTY_FILTERS: FilterState = { text: "", assignees: [], statuses: [], priorities: [], due: "", difficulty: "" };
+export const EMPTY_FILTERS: FilterState = { text: "", assignees: [], statuses: [], priorities: [], due: "", difficulty: "", raciRole: "", raciFor: null };
 
 export function countActiveFilters(f: FilterState): number {
   return (
     (f.text ? 1 : 0) + (f.assignees.length ? 1 : 0) + (f.statuses.length ? 1 : 0) +
-    (f.priorities.length ? 1 : 0) + (f.due ? 1 : 0) + (f.difficulty ? 1 : 0)
+    (f.priorities.length ? 1 : 0) + (f.due ? 1 : 0) + (f.difficulty ? 1 : 0) +
+    (f.raciRole && f.raciFor ? 1 : 0)
   );
 }
 
@@ -133,6 +138,18 @@ export function applyFilters(tasks: Task[], f: FilterState, today: string): Task
   const q = f.text.trim().toLowerCase();
   if (q) rows = rows.filter((t) => t.name.toLowerCase().includes(q) || `sw-${t.task_number}`.includes(q));
   if (f.assignees.length) rows = rows.filter((t) => !!t.assignee_id && f.assignees.includes(t.assignee_id));
+  if (f.raciRole && f.raciFor) {
+    const who = f.raciFor;
+    rows = rows.filter((t) => {
+      switch (f.raciRole) {
+        case "responsible": return t.assignee_id === who;
+        case "accountable": return t.accountable_id === who;
+        case "consulted":   return (t.raci_c || []).includes(who);
+        case "informed":    return (t.raci_i || []).includes(who);
+        default: return true;
+      }
+    });
+  }
   if (f.statuses.length) rows = rows.filter((t) => f.statuses.includes(t.status));
   if (f.priorities.length) rows = rows.filter((t) => f.priorities.includes(t.priority));
   if (f.due) {

@@ -223,6 +223,7 @@ export function HomeSection() {
           value={filters}
           onChange={setFilters}
           people={profiles}
+            me={me}
           resultCount={allFiltered.length}
           extra={
             <button onClick={() => setDensity(density === "compact" ? "comfortable" : "compact")} style={{ padding: "6px 12px", borderRadius: 999, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", color: "var(--sw-text-soft)", fontSize: 11.5, fontWeight: 400, cursor: "pointer" }}>

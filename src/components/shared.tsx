@@ -205,7 +205,7 @@ export function SansiPopover({ onClose }: { onClose: () => void }) {
 
 /* ---------- Notifications popover ---------- */
 export function NotifPopover({ onClose }: { onClose: () => void }) {
-  const { notifications, tasks } = useStore();
+  const { notifications, tasks, profiles } = useStore();
   const { setSection, setWorkspacePage, setActiveTaskId } = useUI();
   const preview = notifications.slice(0, 3);
   return (
@@ -225,7 +225,13 @@ export function NotifPopover({ onClose }: { onClose: () => void }) {
           style={{ display: "block", width: "100%", textAlign: "left", border: "none", background: "none", padding: "10px 14px", borderBottom: "1px solid var(--sw-hair)", cursor: "pointer", fontSize: 12, color: "var(--sw-text)" }}
         >
           {n.body}
-          <div style={{ fontSize: 10.5, color: "var(--sw-muted)", marginTop: 2 }}>{relTime(n.created_at)}</div>
+          <div style={{ fontSize: 10.5, color: "var(--sw-muted)", marginTop: 2 }}>
+            {(() => {
+              const from = n.actor_id ? profiles.find((p) => p.id === n.actor_id) : null;
+              return from ? `${from.name.split(" ")[0]} · ` : "";
+            })()}
+            {relTime(n.created_at)}
+          </div>
         </button>
       ))}
       <a

@@ -1,5 +1,7 @@
 "use client";
 import React, { useEffect, useMemo, useState } from "react";
+import { RecurrenceEditor } from "./recurrence-editor";
+import { recurrenceOf, describeRecurrence } from "@/lib/recurrence";
 import { useStore } from "@/lib/store";
 import { useUI } from "@/lib/ui";
 import { initials, STATUS_COLORS, PRIORITY_COLORS, Status, Priority, Task, Attachment, Profile } from "@/lib/types";
@@ -287,6 +289,24 @@ export function TaskDetailSlideOver() {
                     onChange={(v) => set({ accountable_id: v.a, raci_c: v.c, raci_i: v.i })}
                   />
                 </div>
+
+                <span style={label}>Repeats</span>
+                <span>
+                  {mayEditDue ? (
+                    <RecurrenceEditor
+                      value={recurrenceOf(t)}
+                      onChange={(r) => set({ recurrence: r, recur: r ? r.freq : "none" })}
+                      presetWeekday={t.due ? new Date(`${t.due}T12:00:00Z`).getUTCDay() : undefined}
+                    />
+                  ) : (
+                    <span style={{ fontSize: 12.5, color: "var(--sw-text-soft)" }}>{describeRecurrence(recurrenceOf(t))}</span>
+                  )}
+                  {recurrenceOf(t) && (
+                    <div style={{ fontSize: 11, color: "var(--sw-muted)", marginTop: 5 }}>
+                      Changes apply to future occurrences{(t.recurrence_index || 0) > 0 ? ` · occurrence ${(t.recurrence_index || 0) + 1} of this series` : ""}.
+                    </div>
+                  )}
+                </span>
 
                 <span style={label}>Due date</span>
                 <span style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-start" }}>

@@ -1,3 +1,5 @@
+import type { Recurrence } from "./recurrence";
+
 export type Status = "Not Started" | "Working on it" | "Stuck" | "Done";
 export type Priority = "Low" | "Medium" | "High" | "Critical";
 
@@ -176,6 +178,11 @@ export interface Task {
   difficulty: number | null; // 1 Trivial .. 5 Complex
   difficulty_set_by: string | null;
   sort: number; // manual drag order within a status group/column — independent of due date or creation order
+  /* Structured repeat rule. `recur` above stays for rows created before this
+     existed; recurrenceOf() in lib/recurrence.ts resolves whichever is set. */
+  recurrence: Recurrence | null;
+  recurrence_series_id: string | null; // groups every occurrence spawned from one rule
+  recurrence_index: number;            // 0-based position, so "ends after N" can stop
 }
 
 export interface Subtask {

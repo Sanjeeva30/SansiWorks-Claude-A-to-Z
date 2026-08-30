@@ -56,8 +56,10 @@ const FEATURE_LABELS: Record<string, string> = {
   member_can_create_board: "Members can create boards",
   capacity_tracking: "Capacity tracking (per-person workload limits)",
   overseas_teams: "Overseas teams (Minneapolis, Foshan units — hidden until on)",
+  public_efficiency_ranking: "Public efficiency leaderboard (per-person, visible to everyone)",
 };
 const FEATURE_HELP: Record<string, string> = {
+  public_efficiency_ranking: "Off (recommended): each person sees only their own efficiency against the team median, and department averages stay public — admins still see the full list. On: the ranked per-person leaderboard is visible to everyone. A visible individual ranking across departments with different workloads tends to encourage avoiding hard tasks and under-reporting Stuck, so this is off unless you deliberately want it.",
   capacity_tracking: "The workload math is built and correct — this just decides whether people see a capacity number and whether it's used to flag overload. Off by default until you're ready to switch it on.",
   overseas_teams: "Trends & BD, Design & Product Development, and other overseas-reporting units exist in the org tree but stay invisible everywhere until this is on.",
   member_can_create_board: "Off: a member's \"+ Board\" click goes to their Department Head as a request to approve, same queue as Approvals. On: it creates the board immediately, no approval step.",
@@ -488,6 +490,13 @@ export function WorkspaceSection() {
                       <div style={{ fontSize: 12.5, fontWeight: n.read ? 400 : 700, lineHeight: 1.4 }}>{n.body}</div>
                       <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
                         <span style={{ fontSize: 9.5, fontWeight: 400, color: "var(--sw-on-crimson)", border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "1px 8px", borderRadius: 999 }}>{n.reason}</span>
+                        {/* Alerts used to arrive from nowhere. actor_id is now set
+                            by Postgres and pinned by RLS, so every in-app alert can
+                            say who it came from; server-sent ones stay unattributed. */}
+                        {(() => {
+                          const from = n.actor_id ? profiles.find((p) => p.id === n.actor_id) : null;
+                          return from ? <span style={{ fontSize: 11, color: "var(--sw-muted)" }}>from {from.name.split(" ")[0]}</span> : null;
+                        })()}
                         <span style={{ fontSize: 11, color: "var(--sw-muted)" }}>{relTime(n.created_at)}</span>
                       </div>
                     </span>

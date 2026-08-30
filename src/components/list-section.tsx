@@ -98,7 +98,17 @@ export function ListSection() {
 
   const rowPad = density === "compact" ? "7px 16px" : "12px 16px";
   const dueColor = (t: Task) => (t.due && t.due < today && t.status !== "Done" ? "var(--sw-on-red)" : "var(--sw-text-soft)");
-  const avatarsOf = (t: Task) => [t.assignee_id].map((id) => profiles.find((p) => p.id === id)).filter(Boolean) as typeof profiles;
+  /* R and A, not R alone. Single-R RACI with a rank-checked A is the model this
+     app is built on, and it was invisible in every list — you had to open a task
+     to find out who was answerable for it. R is shown solid; A sits behind it
+     with a ring, so "who is doing it / who is answerable" reads at a glance. */
+  const raciOf = (t: Task) => {
+    const r = profiles.find((p) => p.id === t.assignee_id) || null;
+    const a = t.accountable_id && t.accountable_id !== t.assignee_id
+      ? profiles.find((p) => p.id === t.accountable_id) || null
+      : null;
+    return { r, a };
+  };
 
   const openQuickAdd = (status?: string) => { setQuickAddStatus(status || "Not Started"); setShowQuickAdd(true); };
 
@@ -254,6 +264,7 @@ export function ListSection() {
             value={filters}
             onChange={setFilters}
             people={profiles}
+            me={me}
             resultCount={filtered.length}
             extra={
               <>
@@ -337,18 +348,39 @@ export function ListSection() {
                         const st = subtasks.filter((x) => x.task_id === t.id);
                         return st.length ? <span title="Subtasks done" style={{ fontSize: 9.5, fontWeight: 400, color: "var(--sw-muted)", border: "1px solid var(--sw-hair)", padding: "1px 6px", borderRadius: 999, flex: "none" }}>{st.filter((x) => x.done).length}/{st.length}</span> : null;
                       })()}
+                      {/* Stuck is the single most valuable signal in the system —
+                          it is someone saying "I cannot move this" — and it was
+                          styled exactly like the other three statuses, so it read
+                          as just another colour of dot. */}
+                      {t.status === "Stuck" && (
+                        <span title="Marked Stuck — someone is blocked and needs help" style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: "0.04em", color: "var(--sw-on-red)", background: "rgba(243,38,62,0.12)", border: "1px solid var(--sw-on-red)", padding: "1px 7px", borderRadius: 999, flex: "none" }}>STUCK</span>
+                      )}
                       {(() => {
                         const openBlockers = deps.filter((d) => d.task_id === t.id).map((d) => tasks.find((x) => x.id === d.depends_on)).filter((x) => x && x.status !== "Done");
                         return openBlockers.length ? <span title="Blocked by open tasks" style={{ fontSize: 9.5, fontWeight: 400, color: "var(--sw-on-red)", background: "rgba(243,38,62,0.1)", padding: "1px 6px", borderRadius: 999, flex: "none" }}>BLOCKED ·{openBlockers.length}</span> : null;
                       })()}
                     </span>
-                    <span style={{ display: "flex", marginRight: 2 }}>
-                      {avatarsOf(t).map((p) => (
-                        <button key={p!.id} onClick={(e) => { e.stopPropagation(); openProfile(p!.id); }} title="View profile" style={{ width: 22, height: 22, borderRadius: 99, background: p!.color, color: "#fff", fontSize: 9, fontWeight: 400, display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid var(--sw-card)", marginLeft: -7, cursor: "pointer", padding: 0 }}>
-                          {initials(p!.name)}
-                        </button>
-                      ))}
-                    </span>
+                    {(() => {
+                      const { r, a } = raciOf(t);
+                      return (
+                        <span style={{ display: "flex", marginRight: 2, alignItems: "center" }}>
+                          {a && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); openProfile(a.id); }}
+                              title={`Accountable: ${a.name}`}
+                              style={{ width: 20, height: 20, borderRadius: 99, background: a.color, color: readableTextOn(a.color), fontSize: 8, fontWeight: 400, display: "flex", alignItems: "center", justifyContent: "center", border: "1.5px dashed var(--sw-muted)", marginLeft: -7, cursor: "pointer", padding: 0, opacity: 0.9 }}
+                            >{initials(a.name)}</button>
+                          )}
+                          {r && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); openProfile(r.id); }}
+                              title={`Responsible: ${r.name}${a ? ` · Accountable: ${a.name}` : ""}`}
+                              style={{ width: 22, height: 22, borderRadius: 99, background: r.color, color: readableTextOn(r.color), fontSize: 9, fontWeight: 400, display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid var(--sw-card)", marginLeft: -7, cursor: "pointer", padding: 0 }}
+                            >{initials(r.name)}</button>
+                          )}
+                        </span>
+                      );
+                    })()}
                     <span style={{ fontSize: 11.5, color: dueColor(t), width: 64, textAlign: "right", flex: "none", fontWeight: 400 }}>{t.due ? fmtShort(t.due) : ""}</span>
                     <span style={{ fontSize: 10, fontWeight: 400, letterSpacing: "0.03em", color: PRIORITY_COLORS[t.priority], width: 56, textAlign: "right", flex: "none" }}>{t.priority}</span>
                   </div>
@@ -406,13 +438,25 @@ export function ListSection() {
                         <div style={{ fontSize: 12.5, fontWeight: 400, marginBottom: 8, lineHeight: 1.35 }}>{t.name}</div>
                         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                           <span style={{ fontSize: 9.5, fontWeight: 400, color: PRIORITY_COLORS[t.priority], flex: 1 }}>{t.priority}</span>
-                          <span style={{ display: "flex" }}>
-                            {avatarsOf(t).map((p) => (
-                              <button key={p!.id} onClick={(e) => { e.stopPropagation(); openProfile(p!.id); }} title="View profile" style={{ width: 19, height: 19, borderRadius: 99, background: p!.color, color: "#fff", fontSize: 8, fontWeight: 400, display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid var(--sw-card)", marginLeft: -6, cursor: "pointer", padding: 0 }}>
-                                {initials(p!.name)}
-                              </button>
-                            ))}
-                          </span>
+                          {(() => {
+                            const { r, a } = raciOf(t);
+                            return (
+                              <span style={{ display: "flex", alignItems: "center" }}>
+                                {a && (
+                                  <button onClick={(e) => { e.stopPropagation(); openProfile(a.id); }} title={`Accountable: ${a.name}`}
+                                    style={{ width: 17, height: 17, borderRadius: 99, background: a.color, color: readableTextOn(a.color), fontSize: 7, display: "flex", alignItems: "center", justifyContent: "center", border: "1.5px dashed var(--sw-muted)", marginLeft: -6, cursor: "pointer", padding: 0, opacity: 0.9 }}>
+                                    {initials(a.name)}
+                                  </button>
+                                )}
+                                {r && (
+                                  <button onClick={(e) => { e.stopPropagation(); openProfile(r.id); }} title={`Responsible: ${r.name}${a ? ` · Accountable: ${a.name}` : ""}`}
+                                    style={{ width: 19, height: 19, borderRadius: 99, background: r.color, color: readableTextOn(r.color), fontSize: 8, display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid var(--sw-card)", marginLeft: -6, cursor: "pointer", padding: 0 }}>
+                                    {initials(r.name)}
+                                  </button>
+                                )}
+                              </span>
+                            );
+                          })()}
                           <span style={{ fontSize: 10.5, color: dueColor(t), fontWeight: 400 }}>{t.due ? fmtShort(t.due) : ""}</span>
                         </div>
                         <select
@@ -798,7 +842,7 @@ export function ListSection() {
 type EverythingRow = { kind: "header"; name: string } | { kind: "row"; task: Task };
 
 function EverythingView() {
-  const { tasks, lists, spaces, profiles } = useStore();
+  const { tasks, lists, spaces, profiles, me } = useStore();
   const { setActiveTaskId } = useUI();
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
   const today = todayIso();
@@ -846,7 +890,7 @@ function EverythingView() {
           <TopIcons />
         </div>
         <div style={{ padding: "0 22px 10px" }}>
-          <FilterBar value={filters} onChange={setFilters} people={profiles} resultCount={everythingRows.length} />
+          <FilterBar value={filters} onChange={setFilters} people={profiles} me={me} resultCount={everythingRows.length} />
         </div>
       </header>
       <main ref={scrollRef} style={{ flex: 1, overflowY: "auto", padding: "16px 22px 40px", position: "relative" }}>

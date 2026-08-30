@@ -4,7 +4,7 @@ import { useStore } from "@/lib/store";
 import { useUI } from "@/lib/ui";
 import { STATUS_COLORS, PRIORITY_COLORS, STATUSES, initials, Task } from "@/lib/types";
 import { fmtShort, todayIso } from "@/lib/dates";
-import { isOpen, isOverdue, onTimeStats, tasksOfPerson, criticalUnblocker, metricTrend, trendDelta, sparkPath, type TrendKind } from "@/lib/logic";
+import { isOpen, isOverdue, onTimeStats, tasksOfPerson, criticalUnblocker, metricTrend, trendDelta, sparkPath, isMultiDeptAdmin, type TrendKind } from "@/lib/logic";
 import { TopIcons } from "./shared";
 import { IconX } from "./icons";
 import { readableTextOn } from "@/lib/colors";
@@ -12,7 +12,19 @@ import { readableTextOn } from "@/lib/colors";
 
 export function CompanySection() {
   const store = useStore();
-  const { tasks, profiles, departments, deptMembers, deps, docs } = store;
+  const { tasks, profiles, departments, deptMembers, deps, docs, me, levels, features } = store;
+
+  /* Efficiency visibility. A public 1..N leaderboard of individuals — across
+     departments whose workloads aren't comparable — reliably produces gaming
+     rather than performance: people avoid hard tasks, inflate difficulty and
+     stop marking things Stuck. So it is OFF by default and admins opt in.
+
+     Off: you see your own standing against the team median, and nothing about
+     any named colleague; department averages stay public because a team average
+     carries the accountability without the scoreboard. Admins still see the
+     full list, since someone has to be able to spot a person who is drowning. */
+  const rankingIsPublic = !!features.public_efficiency_ranking;
+  const canSeeFullRanking = rankingIsPublic || isMultiDeptAdmin(me, levels) || !!me?.is_super;
   const { companyPage, setSection, setListPage, setActiveTaskId, setMetricModal, openProfile, setDocDetailId } = useUI();
   const [deptFilter, setDeptFilter] = useState("All departments");
   const [showAllWidgets, setShowAllWidgets] = useState(false);
@@ -99,6 +111,21 @@ export function CompanySection() {
     [personStats]
   );
   const unrankedNoData = useMemo(() => personStats.filter((s) => !s.hasData), [personStats]);
+
+  /* Used when the public leaderboard is off: your own position and the team
+     median. The median (not the mean) because one person drowning in overdue
+     work shouldn't drag the reference point everyone measures against. */
+  const myStanding = useMemo(() => {
+    if (!me) return null;
+    const idx = rankedByEfficiency.findIndex((s) => s.p.id === me.id);
+    if (idx === -1) return null;
+    const sorted = rankedByEfficiency.map((s) => s.eff).sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    const median = sorted.length
+      ? (sorted.length % 2 ? sorted[mid] : Math.round((sorted[mid - 1] + sorted[mid]) / 2))
+      : 0;
+    return { rank: idx + 1, of: rankedByEfficiency.length, me: rankedByEfficiency[idx], median };
+  }, [rankedByEfficiency, me]);
 
   const deptStats = useMemo(
     () =>
@@ -399,9 +426,44 @@ export function CompanySection() {
                 </section>
 
                 <section style={{ background: "var(--sw-card)", border: "1px solid var(--sw-hair)", borderRadius: 12, padding: "16px 18px", boxShadow: "var(--shadow-card)" }}>
-                  <h3 style={{ margin: "0 0 2px", fontSize: 13, fontWeight: 400 }}>Efficiency ranking</h3>
-                  <p style={{ margin: "0 0 10px", fontSize: 10.5, color: "var(--sw-muted)" }}>75% on-time history + 25% current health. Ranked highest first.</p>
-                  {rankedByEfficiency.map((st, i) => (
+                  <h3 style={{ margin: "0 0 2px", fontSize: 13, fontWeight: 400 }}>{canSeeFullRanking ? "Efficiency ranking" : "Your efficiency"}</h3>
+                  <p style={{ margin: "0 0 10px", fontSize: 10.5, color: "var(--sw-muted)" }}>
+                    75% on-time history + 25% current health.{canSeeFullRanking ? " Ranked highest first." : " Compared with your team's median."}
+                  </p>
+
+                  {!canSeeFullRanking && (
+                    myStanding ? (
+                      <>
+                        <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                          <span style={{ fontSize: 26, fontWeight: 400, color: effColor(myStanding.me.eff), lineHeight: 1 }}>{myStanding.me.eff}%</span>
+                          <span style={{ fontSize: 11.5, color: "var(--sw-muted)" }}>
+                            team median {myStanding.median}%
+                          </span>
+                        </div>
+                        <div style={{ height: 6, borderRadius: 99, background: "var(--sw-hover)", overflow: "hidden", margin: "10px 0 4px", position: "relative" }}>
+                          <div style={{ height: "100%", borderRadius: 99, background: effColor(myStanding.me.eff), width: `${myStanding.me.eff}%` }} />
+                          <div title={`Team median ${myStanding.median}%`} style={{ position: "absolute", top: -2, bottom: -2, left: `calc(${myStanding.median}% - 1px)`, width: 2, background: "var(--sw-text-soft)", opacity: 0.75 }} />
+                        </div>
+                        <button
+                          onClick={() => setMetricModal({ title: `Your efficiency (75% × ${myStanding.me.historyPct}% + 25% × ${myStanding.me.healthPct}% = ${myStanding.me.eff}%)`, taskIds: myStanding.me.pt.filter(isOpen).map((t) => t.id) })}
+                          style={{ border: "none", background: "none", padding: 0, fontSize: 11.5, color: "var(--sw-on-crimson)", cursor: "pointer" }}
+                        >See what this is made of →</button>
+                        <p style={{ margin: "12px 0 0", fontSize: 11, color: "var(--sw-muted)", lineHeight: 1.5 }}>
+                          Individual scores aren&apos;t shown company-wide. Department averages are on the card to the left.
+                        </p>
+                      </>
+                    ) : (
+                      <p style={{ margin: 0, fontSize: 12, color: "var(--sw-muted)" }}>No tracked work yet, so there&apos;s nothing to score.</p>
+                    )
+                  )}
+
+                  {canSeeFullRanking && !rankingIsPublic && (
+                    <div style={{ fontSize: 10.5, color: "var(--sw-muted)", background: "var(--sw-hover)", border: "1px solid var(--sw-hair)", borderRadius: 7, padding: "6px 9px", marginBottom: 10 }}>
+                      Admin view — colleagues see only their own score.
+                    </div>
+                  )}
+
+                  {canSeeFullRanking && rankedByEfficiency.map((st, i) => (
                     <div key={st.p.id} onClick={() => setMetricModal({ title: `${st.p.name} — efficiency (75% × ${st.historyPct}% + 25% × ${st.healthPct}% = ${st.eff}%)`, taskIds: st.pt.filter(isOpen).map((t) => t.id) })} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderBottom: "1px solid var(--sw-hair)", cursor: "pointer" }}>
                       <span style={{ width: 16, flex: "none", fontSize: 11, fontWeight: 400, color: i < 3 ? "var(--sw-on-crimson)" : "var(--sw-muted)", textAlign: "right" }}>{i + 1}</span>
                       <button onClick={(e) => { e.stopPropagation(); openProfile(st.p.id); }} title="View profile" style={{ width: 24, height: 24, borderRadius: 99, background: st.p.color, color: readableTextOn(st.p.color), fontSize: 9.5, fontWeight: 400, display: "flex", alignItems: "center", justifyContent: "center", flex: "none", border: "none", cursor: "pointer", padding: 0 }}>{initials(st.p.name)}</button>
@@ -414,8 +476,8 @@ export function CompanySection() {
                       <span style={{ fontSize: 11, fontWeight: 400, color: "var(--sw-muted)", flex: "none", width: 34, textAlign: "right" }}>{st.eff}%</span>
                     </div>
                   ))}
-                  {!rankedByEfficiency.length && <p style={{ margin: "0 0 8px", fontSize: 12, color: "var(--sw-muted)" }}>Nobody has tracked work yet.</p>}
-                  {unrankedNoData.length > 0 && (
+                  {canSeeFullRanking && !rankedByEfficiency.length && <p style={{ margin: "0 0 8px", fontSize: 12, color: "var(--sw-muted)" }}>Nobody has tracked work yet.</p>}
+                  {canSeeFullRanking && unrankedNoData.length > 0 && (
                     <>
                       <div style={{ fontSize: 10, fontWeight: 400, color: "var(--sw-muted)", margin: "10px 0 4px" }}>No tracked work yet — not ranked</div>
                       {unrankedNoData.map((st) => (

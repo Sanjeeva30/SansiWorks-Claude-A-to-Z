@@ -3,6 +3,8 @@ import React, { useState } from "react";
 import { Profile, initials } from "@/lib/types";
 import { IconX } from "./icons";
 import { readableTextOn } from "@/lib/colors";
+import { workloadPct, tasksOfPerson, isOpen } from "@/lib/logic";
+import { useStore } from "@/lib/store";
 
 /* Single-select "R" picker — exactly one person. Department members are the default
    pool; anyone outside the department only appears once 2+ letters are typed (lazy
@@ -53,6 +55,7 @@ export function AssigneePicker({
 
   const q = query.trim().toLowerCase();
   const searching = q.length >= 2;
+  const { tasks } = useStore();
   const pool = searching ? allProfiles : deptScoped;
   const matches = pool.filter((p) => !q || p.name.toLowerCase().includes(q) || p.email.toLowerCase().includes(q));
   const candidates = matches.slice(0, CAP);
@@ -79,6 +82,25 @@ export function AssigneePicker({
                   style={{ display: "flex", alignItems: "center", gap: 5, padding: "4px 10px 4px 4px", borderRadius: 999, border: "1.5px solid var(--sw-hair)", background: "none", cursor: "pointer" }}>
                   <span style={{ width: 18, height: 18, borderRadius: 99, background: p.color, color: readableTextOn(p.color), fontSize: 7.5, display: "flex", alignItems: "center", justifyContent: "center" }}>{initials(p.name)}</span>
                   <span style={{ fontSize: 11.5, color: "var(--sw-text-soft)" }}>{p.name}</span>
+                  {/* Load at the moment of assigning. workloadPct() already existed
+                      and drove the Overview's "Dewi at 10 open" — it just was not
+                      shown at the one moment it could prevent the overload. */}
+                  {(() => {
+                    const load = workloadPct(tasks, p);
+                    const open = tasksOfPerson(tasks, p.id).filter(isOpen).length;
+                    if (!open) return null;
+                    const heavy = load >= 100, busy = load >= 75;
+                    return (
+                      <span
+                        title={`${open} open · ${load}% of capacity`}
+                        style={{
+                          fontSize: 8.5, borderRadius: 999, padding: "1px 6px",
+                          color: heavy ? "var(--sw-on-red)" : busy ? "var(--sw-on-amber)" : "var(--sw-muted)",
+                          background: heavy ? "rgba(243,38,62,0.12)" : "var(--sw-hover)",
+                        }}
+                      >{open} open{heavy ? " · full" : ""}</span>
+                    );
+                  })()}
                   {crossDept && <span style={{ fontSize: 8.5, color: "var(--sw-muted)", background: "var(--sw-hover)", borderRadius: 999, padding: "1px 6px" }}>{deptLabel(p) || "other dept"}</span>}
                 </button>
               );

@@ -4,6 +4,8 @@ import { useStore } from "@/lib/store";
 import { useUI } from "@/lib/ui";
 import { initials } from "@/lib/types";
 import { parseNLDate } from "@/lib/dates";
+import { RecurrenceEditor } from "./recurrence-editor";
+import type { Recurrence } from "@/lib/recurrence";
 import { createTask, eligibleAssignees, accountableCandidates, suggestAssignees, addSubtask, createReminder, uploadAttachment } from "@/lib/actions";
 import { AssigneePicker } from "./assignee-picker";
 import { RaciRows, RaciValue, raciNote } from "./raci";
@@ -36,7 +38,7 @@ export function QuickAddModal() {
   const [dueLabel, setDueLabel] = useState("");
   const [priority, setPriority] = useState("Medium");
   const [reminder, setReminder] = useState("");
-  const [recur, setRecur] = useState("none");
+  const [recurrence, setRecurrence] = useState<Recurrence | null>(null);
   const [raci, setRaci] = useState<RaciValue>({ a: null, c: [], i: [] });
   const [difficulty, setDifficulty] = useState<number | null>(null);
   const [description, setDescription] = useState("");
@@ -73,7 +75,7 @@ export function QuickAddModal() {
       raci_c: raci.c,
       raci_i: raci.i,
       reminder_at: reminder || null,
-      recur,
+      recurrence,
       difficulty,
       difficulty_set_by: difficulty ? me.id : null,
     });
@@ -111,12 +113,6 @@ export function QuickAddModal() {
     { label: "High", dot: "var(--sw-on-crimson)" },
     { label: "Critical", dot: "var(--sw-on-red)" },
   ];
-  const recurRows = [
-    { value: "none", label: "Doesn't repeat" },
-    { value: "daily", label: "Daily" },
-    { value: "weekly", label: "Weekly" },
-    { value: "monthly", label: "Monthly" },
-  ];
 
   const label = (text: React.ReactNode) => (
     <label style={{ display: "block", fontSize: 12.5, fontWeight: 400, color: "var(--sw-text-soft)", marginBottom: 6 }}>{text}</label>
@@ -151,7 +147,6 @@ export function QuickAddModal() {
   );
 
   const currentListLabel = listOptions.find((o) => o.value === listVal)?.label || "My List (personal)";
-  const currentRecurLabel = recurRows.find((r) => r.value === recur)?.label || "Doesn't repeat";
 
   return (
     <div
@@ -230,7 +225,8 @@ export function QuickAddModal() {
               </div>
               <div>
                 {label("Repeats")}
-                {dd("recur", currentRecurLabel, recurRows, setRecur)}
+                <RecurrenceEditor value={recurrence} onChange={setRecurrence}
+                  presetWeekday={due ? new Date(`${due}T12:00:00Z`).getUTCDay() : undefined} />
               </div>
             </div>
 

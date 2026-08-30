@@ -2,6 +2,7 @@
 // Mutation helpers: optimistic local patch + Supabase write + instant-alert hook.
 import { StoreData } from "./store";
 import { Attachment, Comment, Task } from "./types";
+import { nextOccurrence, recurrenceOf, type Recurrence } from "./recurrence";
 import { createClient } from "./supabase/client";
 
 type Supabase = ReturnType<typeof createClient>;
@@ -32,35 +33,28 @@ export async function createDepartmentWithSpace(
 }
 
 /* ---- recurrence ----
-   `recur` has been collected in quick-add and stored on every task since the
-   beginning, but nothing ever read it: picking "Repeats weekly" saved the word
-   and produced no second occurrence. The control promised a feature the app did
-   not have. Completing a recurring task now rolls the next one forward. */
-const RECUR_STEP: Record<string, (d: Date) => void> = {
-  daily:   (d) => d.setDate(d.getDate() + 1),
-  weekly:  (d) => d.setDate(d.getDate() + 7),
-  monthly: (d) => d.setMonth(d.getMonth() + 1),
-};
-
-/** Next due date for a recurring task, or null if it doesn't recur / has no due. */
-export function nextRecurrenceDue(recur: string | null, due: string | null): string | null {
-  const step = recur ? RECUR_STEP[recur] : undefined;
-  if (!step || !due) return null;
-  // Parse as UTC midday so a DST shift can't roll the date backwards a day.
-  const d = new Date(`${due}T12:00:00Z`);
-  if (Number.isNaN(d.getTime())) return null;
-  step(d);
-  return d.toISOString().slice(0, 10);
-}
+   Rules live in lib/recurrence.ts (frequency, interval, weekday selection,
+   nth-weekday, end conditions, weekend skipping) and are unit-tested there.
+   This file only handles the side effects of completing an occurrence. */
 
 /** Spawn the next occurrence of a recurring task once this one is completed. */
 async function rollRecurrence(supabase: Supabase, task: Task) {
-  const due = nextRecurrenceDue(task.recur, task.due);
-  if (!due) return;
+  const rule = recurrenceOf(task);
+  if (!rule) return;
+
+  const today = new Date().toISOString().slice(0, 10);
+  const due = nextOccurrence({
+    rule,
+    due: task.due,
+    completedOn: today,
+    index: task.recurrence_index || 0,
+  });
+  if (!due) return; // series ended, or nothing to schedule from
+
   // The unique index on (list_id, name, due) is the guard against double-spawning
   // when a task is toggled Done -> not Done -> Done: the second insert simply
   // conflicts and is ignored rather than creating a duplicate.
-  await supabase.from("tasks").insert({
+  const { data: spawned } = await supabase.from("tasks").insert({
     name: task.name,
     list_id: task.list_id,
     owner_id: task.owner_id,
@@ -71,9 +65,28 @@ async function rollRecurrence(supabase: Supabase, task: Task) {
     due,
     description: task.description,
     recur: task.recur,
+    recurrence: task.recurrence,
+    // The series is identified by its first occurrence, so "ends after N" can
+    // count across the whole chain rather than restarting each time.
+    recurrence_series_id: task.recurrence_series_id || task.id,
+    recurrence_index: (task.recurrence_index || 0) + 1,
     difficulty: task.difficulty,
     difficulty_set_by: task.difficulty_set_by,
-  });
+    milestone: task.milestone,
+  }).select().single();
+
+  /* A recurring task is usually a checklist — "monthly close", "weekly safety
+     walk". Previously the next occurrence arrived with the checklist missing,
+     so people rebuilt it by hand every cycle. Copy it back, unticked. */
+  if (spawned) {
+    const { data: subs } = await supabase
+      .from("subtasks").select("name,assignee_id,accountable_id,sort,difficulty").eq("task_id", task.id);
+    if (subs && subs.length) {
+      await supabase.from("subtasks").insert(
+        subs.map((sub) => ({ ...sub, task_id: spawned.id, done: false }))
+      );
+    }
+  }
 }
 
 export async function updateTask(
@@ -181,6 +194,7 @@ export async function createTask(
     raci_i?: string[];
     reminder_at?: string | null;
     recur?: string;
+    recurrence?: Recurrence | null;
     difficulty?: number | null;
     difficulty_set_by?: string | null;
   }
@@ -199,6 +213,7 @@ export async function createTask(
       accountable_id: input.accountable_id || null,
       reminder_at: input.reminder_at || null,
       recur: input.recur || "none",
+      recurrence: input.recurrence ?? null,
       difficulty: input.difficulty || null,
       difficulty_set_by: input.difficulty ? input.difficulty_set_by || input.owner_id : null,
     })

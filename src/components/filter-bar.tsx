@@ -70,12 +70,20 @@ function CheckRow({ checked, onToggle, children }: { checked: boolean; onToggle:
   );
 }
 
+const RACI_ROLE_LABELS: Record<string, string> = {
+  responsible: "I'm doing it (R)",
+  accountable: "I'm answerable (A)",
+  consulted: "I'm consulted (C)",
+  informed: "I'm informed (I)",
+};
+
 export function FilterBar({
-  value, onChange, people, resultCount, extra,
+  value, onChange, people, resultCount, extra, me,
 }: {
   value: FilterState;
   onChange: (f: FilterState) => void;
   people: Profile[];
+  me?: Profile | null;
   resultCount: number;
   extra?: React.ReactNode; // right-hand extras (density toggle, save-view etc.)
 }) {
@@ -94,6 +102,31 @@ export function FilterBar({
         placeholder="Filter by name…"
         style={{ width: 180, height: 32, borderRadius: 8, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "0 12px", fontSize: 12, color: "var(--sw-text)", outline: "none" }}
       />
+
+      {/* The A column is a Department Head's real job and had no filter of its
+          own — everything filtered on R. "My role" reads the RACI columns
+          directly, so "what am I answerable for but not doing" is one click. */}
+      {me && (
+        <Chip
+          label="My role"
+          active={!!f.raciRole && f.raciFor === me.id}
+          activeLabel={RACI_ROLE_LABELS[f.raciRole] || "My role"}
+          onClear={() => onChange({ ...f, raciRole: "", raciFor: null })}
+        >
+          {(["responsible", "accountable", "consulted", "informed"] as const).map((role) => (
+            <CheckRow
+              key={role}
+              checked={f.raciRole === role && f.raciFor === me.id}
+              onToggle={() =>
+                onChange(f.raciRole === role && f.raciFor === me.id
+                  ? { ...f, raciRole: "", raciFor: null }
+                  : { ...f, raciRole: role, raciFor: me.id })}
+            >
+              {RACI_ROLE_LABELS[role]}
+            </CheckRow>
+          ))}
+        </Chip>
+      )}
 
       <Chip
         label="Assignee"

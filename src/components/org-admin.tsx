@@ -14,11 +14,25 @@ const label: React.CSSProperties = { fontSize: 10.5, fontWeight: 800, letterSpac
 const selectSt: React.CSSProperties = { height: 30, borderRadius: 7, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", fontSize: 11.5, color: "var(--sw-text-soft)", padding: "0 6px" };
 const inputSt: React.CSSProperties = { height: 30, borderRadius: 7, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", fontSize: 11.5, color: "var(--sw-text)", padding: "0 8px" };
 
+/* These are shown to admins granting access, so they read exactly as the person
+   navigating sees them — including the tab a page sits under. The internal route
+   names ("my-week", "my-list") leaked into this list before and made admins
+   translate: "My week" is not a sidebar item, it is the This Week tab of My Work. */
 export const SCREENS: [string, string][] = [
-  ["home", "My work / home"], ["my-week", "My week"], ["inbox", "Inbox"], ["my-list", "My list"],
-  ["everything", "Everything"], ["overview", "Overview & reports"], ["people", "People"],
-  ["docs", "Docs"], ["forms", "Forms"], ["spaces", "Spaces"], ["admin", "Admin panel"],
+  ["home", "My Work"],
+  ["my-week", "My Work › This Week"],
+  ["my-list", "My Work › Personal"],
+  ["inbox", "Inbox"],
+  ["everything", "Company › Everything"],
+  ["overview", "Company › Overview"],
+  ["people", "Company › People"],
+  ["docs", "Workspace › SOPs & Docs"],
+  ["forms", "Workspace › Forms"],
+  ["memos", "Workspace › Memos"],
+  ["spaces", "Departments & boards"],
+  ["admin", "Admin console"],
 ];
+
 export const ABILITIES: [string, string][] = [
   ["create_task", "Create tasks"],
   ["edit_any_task", "Edit tasks they're not R/A on"],
