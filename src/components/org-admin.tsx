@@ -14,24 +14,17 @@ const label: React.CSSProperties = { fontSize: 10.5, fontWeight: 800, letterSpac
 const selectSt: React.CSSProperties = { height: 30, borderRadius: 7, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", fontSize: 11.5, color: "var(--sw-text-soft)", padding: "0 6px" };
 const inputSt: React.CSSProperties = { height: 30, borderRadius: 7, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", fontSize: 11.5, color: "var(--sw-text)", padding: "0 8px" };
 
-/* These are shown to admins granting access, so they read exactly as the person
-   navigating sees them — including the tab a page sits under. The internal route
-   names ("my-week", "my-list") leaked into this list before and made admins
-   translate: "My week" is not a sidebar item, it is the This Week tab of My Work. */
-export const SCREENS: [string, string][] = [
-  ["home", "My Work"],
-  ["my-week", "My Work › This Week"],
-  ["my-list", "My Work › Personal"],
-  ["inbox", "Inbox"],
-  ["everything", "Company › Everything"],
-  ["overview", "Company › Overview"],
-  ["people", "Company › People"],
-  ["docs", "Workspace › SOPs & Docs"],
-  ["forms", "Workspace › Forms"],
-  ["memos", "Workspace › Memos"],
-  ["spaces", "Departments & boards"],
-  ["admin", "Admin console"],
+/* Shown to admins granting access, so they are grouped and labelled exactly as
+   the sidebar groups and labels them. The internal route names ("my-week",
+   "my-list") leaked into this list before, and an admin had to translate. */
+export const SCREEN_GROUPS: { group: string; screens: [string, string][] }[] = [
+  { group: "", screens: [["home", "My Work"], ["my-week", "This Week"], ["my-list", "Personal"], ["inbox", "Inbox"]] },
+  { group: "Company", screens: [["everything", "Everything"], ["overview", "Overview"], ["people", "People"]] },
+  { group: "Workspace", screens: [["docs", "SOPs & Docs"], ["forms", "Forms"], ["memos", "Memos"]] },
+  { group: "Departments", screens: [["spaces", "Departments & boards"], ["admin", "Admin console"]] },
 ];
+
+export const SCREENS: [string, string][] = SCREEN_GROUPS.flatMap((g) => g.screens);
 
 export const ABILITIES: [string, string][] = [
   ["create_task", "Create tasks"],
@@ -258,12 +251,17 @@ export function OrgAdmin({ tab }: { tab: "organisation" | "permissions" }) {
                 <div className="sw-grid-2" style={{ paddingLeft: 12, gap: 16 }}>
                   <div>
                     <div style={label}>Screens</div>
-                    {SCREENS.map(([key, lbl]) => (
-                      <label key={key} style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 11.5, padding: "3px 0" }}>
-                        <input type="checkbox" checked={editingTemplate.screens.includes(key)}
-                          onChange={(e) => setEditingTemplate({ ...editingTemplate, screens: e.target.checked ? [...editingTemplate.screens, key] : editingTemplate.screens.filter((s) => s !== key) })} />
-                        {lbl}
-                      </label>
+                    {SCREEN_GROUPS.map((grp) => (
+                      <div key={grp.group || "main"} style={{ marginBottom: 8 }}>
+                        {grp.group && <div style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--sw-muted)", margin: "8px 0 3px" }}>{grp.group}</div>}
+                        {grp.screens.map(([key, lbl]) => (
+                          <label key={key} style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 11.5, padding: "3px 0" }}>
+                            <input type="checkbox" checked={editingTemplate.screens.includes(key)}
+                              onChange={(e) => setEditingTemplate({ ...editingTemplate, screens: e.target.checked ? [...editingTemplate.screens, key] : editingTemplate.screens.filter((s) => s !== key) })} />
+                            {lbl}
+                          </label>
+                        ))}
+                      </div>
                     ))}
                   </div>
                   <div>
@@ -314,20 +312,25 @@ export function OrgAdmin({ tab }: { tab: "organisation" | "permissions" }) {
                   <div className="sw-grid-2" style={{ paddingLeft: 12, paddingTop: 12, gap: 16 }}>
                     <div>
                       <div style={label}>Screens {!editingOverrides.screens && <span style={{ color: "var(--sw-muted)", fontWeight: 400, textTransform: "none" }}>· inheriting from {template ? `"${template.name}"` : "level default"}</span>}</div>
-                      {SCREENS.map(([key, lbl]) => {
-                        const effective = editingOverrides.screens ?? template?.screens ?? [];
-                        return (
-                          <label key={key} style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 11.5, padding: "3px 0" }}>
-                            <input type="checkbox" checked={effective.includes(key)}
-                              onChange={(e) => {
-                                const base = editingOverrides.screens ?? template?.screens ?? [];
-                                const next = e.target.checked ? [...base, key] : base.filter((s) => s !== key);
-                                setEditingOverrides({ ...editingOverrides, screens: next });
-                              }} />
-                            {lbl}
-                          </label>
-                        );
-                      })}
+                      {SCREEN_GROUPS.map((grp) => (
+                        <div key={grp.group || "main"}>
+                          {grp.group && <div style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--sw-muted)", margin: "8px 0 3px" }}>{grp.group}</div>}
+                          {grp.screens.map(([key, lbl]) => {
+                            const effective = editingOverrides.screens ?? template?.screens ?? [];
+                            return (
+                              <label key={key} style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 11.5, padding: "3px 0" }}>
+                                <input type="checkbox" checked={effective.includes(key)}
+                                  onChange={(e) => {
+                                    const base = editingOverrides.screens ?? template?.screens ?? [];
+                                    const next = e.target.checked ? [...base, key] : base.filter((s) => s !== key);
+                                    setEditingOverrides({ ...editingOverrides, screens: next });
+                                  }} />
+                                {lbl}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      ))}
                       {editingOverrides.screens && (
                         <button onClick={() => setEditingOverrides({ ...editingOverrides, screens: undefined })} style={{ ...pillBtn("var(--sw-text-soft)"), marginTop: 6 }}>Revert screens to template/level default</button>
                       )}

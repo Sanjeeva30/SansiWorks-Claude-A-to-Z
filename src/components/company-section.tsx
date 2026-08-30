@@ -8,6 +8,7 @@ import { isOpen, isOverdue, onTimeStats, tasksOfPerson, criticalUnblocker, metri
 import { TopIcons } from "./shared";
 import { IconX } from "./icons";
 import { readableTextOn } from "@/lib/colors";
+import { RiskActions } from "./risk-actions";
 
 
 export function CompanySection() {
@@ -209,6 +210,20 @@ export function CompanySection() {
     return out.filter((x) => (seen.has(x.t.id) ? false : (seen.add(x.t.id), true))).sort((a, b) => a.sort - b.sort).slice(0, 5);
   }, [personStats, today]);
 
+  /* A narrative lead above the numbers. The page opened with a wall of figures
+     and left the reader to work out which of them demanded anything; this says
+     what needs doing, in the order it needs doing, and every clause is derived
+     from the same numbers shown below rather than a separate calculation. */
+  const headline = useMemo(() => {
+    const bits: string[] = [];
+    if (overdueAll.length) bits.push(`${overdueAll.length} overdue`);
+    const crit = openTasks.filter((t) => t.priority === "Critical" && isOverdue(t)).length;
+    if (crit) bits.push(`${crit} of them critical`);
+    const stuck = openTasks.filter((t) => t.status === "Stuck").length;
+    if (stuck) bits.push(`${stuck} stuck`);
+    return { bits, count: overdueAll.length + stuck };
+  }, [overdueAll, openTasks]);
+
   const unblocker = useMemo(() => criticalUnblocker(scopedTasks, deps), [scopedTasks, deps]);
   const unblockerDown = useMemo(() => {
     if (!unblocker) return [];
@@ -273,6 +288,13 @@ export function CompanySection() {
                   <p style={{ margin: 0, fontSize: 12.5, color: "var(--sw-text-soft)" }}>
                     {scopedDept ? `${scopedDept.name} — every figure on this page is scoped to this department.` : "Company-wide performance across all departments."}
                   </p>
+                  {headline.count > 0 && (
+                    <p style={{ margin: "8px 0 0", fontSize: 13.5, color: "var(--sw-text)", fontWeight: 400 }}>
+                      <span style={{ color: "var(--sw-on-crimson)" }}>{headline.count} thing{headline.count === 1 ? "" : "s"} need{headline.count === 1 ? "s" : ""} attention</span>
+                      {headline.bits.length ? <span style={{ color: "var(--sw-text-soft)" }}> — {headline.bits.join(", ")}.</span> : "."}
+                      {unblocker && <span style={{ color: "var(--sw-text-soft)" }}> Clearing “{unblocker.task.name}” frees {unblocker.unblocks} more.</span>}
+                    </p>
+                  )}
                 </div>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   <select className="sw-select" value={deptFilter} onChange={(e) => setDeptFilter(e.target.value)} style={{ height: 32, borderRadius: 8, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "0 10px", fontSize: 12, color: "var(--sw-text)" }}>
@@ -352,14 +374,16 @@ export function CompanySection() {
                   <h3 style={{ margin: "0 0 3px", fontSize: 13, fontWeight: 400 }}>Predicted late</h3>
                   <p style={{ margin: "0 0 10px", fontSize: 10.5, color: "var(--sw-muted)" }}>Due date proximity × assignee load × on-time history — flagged before they slip.</p>
                   {atRisk.map((r) => (
-                    <button key={r.t.id} onClick={() => setActiveTaskId(r.t.id)} className="sw-row" style={{ display: "flex", alignItems: "center", gap: 9, width: "100%", textAlign: "left", padding: "7px 4px", border: "none", borderBottom: "1px solid var(--sw-hair)", background: "none", cursor: "pointer" }}>
+                    <div key={r.t.id} onClick={() => setActiveTaskId(r.t.id)} className="sw-row" style={{ display: "flex", alignItems: "center", gap: 9, width: "100%", textAlign: "left", padding: "7px 4px", borderBottom: "1px solid var(--sw-hair)", cursor: "pointer", flexWrap: "wrap" }}>
                       <span style={{ width: 20, height: 20, borderRadius: 99, background: r.owner?.color || "#9A918A", color: readableTextOn(r.owner?.color || "#9A918A"), fontSize: 8, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>{r.owner ? initials(r.owner.name) : "?"}</span>
                       <span style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 12, color: "var(--sw-text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.t.name}</div>
                         <div style={{ fontSize: 10.5, color: "var(--sw-muted)", marginTop: 1 }}>{r.reason}</div>
                       </span>
                       <span style={{ flex: "none", fontSize: 9.5, fontWeight: 400, color: r.chipColor, background: "var(--sw-hover)", border: `1px solid ${r.chipColor}`, borderRadius: 999, padding: "1px 8px" }}>{r.chip}</span>
-                    </button>
+                      {/* The answer and the action now live in the same place. */}
+                      <RiskActions task={r.t} owner={r.owner} />
+                    </div>
                   ))}
                   {!atRisk.length && <p style={{ margin: "8px 0 0", fontSize: 12, color: "var(--sw-muted)" }}>Nothing at risk this week.</p>}
                 </section>
@@ -378,6 +402,16 @@ export function CompanySection() {
                           Completing this frees {unblocker.unblocks} task{unblocker.unblocks > 1 ? "s" : ""} downstream
                         </div>
                       </button>
+                      {/* The best card on the page was entirely passive: it named
+                          the one task worth clearing today and then offered no way
+                          to act on it. */}
+                      <div style={{ display: "flex", gap: 7, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}>
+                        <button
+                          onClick={() => setActiveTaskId(unblocker.task.id)}
+                          style={{ padding: "8px 18px", borderRadius: 999, border: "none", background: "var(--crimson)", color: "#fff", fontSize: 12, fontWeight: 400, cursor: "pointer", boxShadow: "0 6px 16px rgba(122,13,32,.25)" }}
+                        >Open and clear it →</button>
+                        <RiskActions task={unblocker.task} owner={unblockerOwner || undefined} />
+                      </div>
                       <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--sw-muted)", marginBottom: 5 }}>Waiting on it</div>
                       {unblockerDown.map((f) => (
                         <button key={f.id} onClick={() => setActiveTaskId(f.id)} className="sw-row" style={{ display: "flex", alignItems: "center", gap: 7, width: "100%", textAlign: "left", padding: "6px 4px", border: "none", borderBottom: "1px solid var(--sw-hair)", background: "none", cursor: "pointer" }}>

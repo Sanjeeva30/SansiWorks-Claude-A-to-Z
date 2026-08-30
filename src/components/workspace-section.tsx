@@ -145,6 +145,14 @@ export function WorkspaceSection() {
   const [inviteLevel, setInviteLevel] = useState("l6");
   const [inviteDept, setInviteDept] = useState<string | null>(null);
   const [reminderSending, setReminderSending] = useState<string | null>(null);
+  /* At 30+ people the Users tab was an unscannable wall, and "Delete
+     permanently" sat inline next to routine dropdowns — a mis-click away from
+     an irreversible action. Search narrows it; destructive actions move behind
+     a per-row menu that has to be opened deliberately. */
+  const [userQuery, setUserQuery] = useState("");
+  const [userDept, setUserDept] = useState("");
+  const [userLevel, setUserLevel] = useState("");
+  const [openRowMenu, setOpenRowMenu] = useState<string | null>(null);
 
   /* One writer for the three inline user dropdowns. Writes go through the
      server first and only patch the store on success — an RLS refusal here is
@@ -384,7 +392,14 @@ export function WorkspaceSection() {
   };
 
   /* ------- admin data ------- */
-  const sansicoUsers = profiles;
+  const sansicoUsers = useMemo(() => {
+    const q = userQuery.trim().toLowerCase();
+    return profiles.filter((p) =>
+      (!q || p.name.toLowerCase().includes(q) || p.email.toLowerCase().includes(q)) &&
+      (!userDept || p.department_id === userDept) &&
+      (!userLevel || p.level_id === userLevel)
+    );
+  }, [profiles, userQuery, userDept, userLevel]);
   const adminTabDefs: [string, string][] = [
     ["users", "Users"], ["hierarchy", "Hierarchy"], ["departments", "Departments"],
     ["organisation", "Organisation"], ["permissions", "Permissions"],
@@ -973,17 +988,55 @@ export function WorkspaceSection() {
           )}
           {workspacePage === "admin" && isAdmin && (
             <>
-              <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 16, borderBottom: "1px solid var(--sw-hair)", overflowX: "auto" }}>
-                {adminTabDefs.map(([key, label]) => (
-                  <button key={key} onClick={() => setAdminTab(key)} style={{ padding: "9px 13px", border: "none", background: "none", borderBottom: `2px solid ${adminTab === key ? "var(--crimson)" : "transparent"}`, color: adminTab === key ? "var(--sw-on-crimson)" : "var(--sw-text-soft)", fontSize: 12.5, fontWeight: 400, cursor: "pointer", marginBottom: -1, whiteSpace: "nowrap", flex: "none" }}>
-                    {label}
-                  </button>
-                ))}
-              </div>
+              {/* Nine tabs never fitted a horizontal strip: below ~700px the row
+                  clipped mid-word behind a scrollbar, so half the console was
+                  effectively hidden. A left rail holds all nine at any width and
+                  collapses to a wrapping row on narrow screens. */}
+              <div className="sw-admin-shell">
+                <nav className="sw-admin-nav" aria-label="Admin sections">
+                  {adminTabDefs.map(([key, label]) => (
+                    <button
+                      key={key}
+                      onClick={() => setAdminTab(key)}
+                      aria-current={adminTab === key ? "page" : undefined}
+                      className="sw-admin-tab"
+                      style={{
+                        background: adminTab === key ? "var(--sw-hover)" : "none",
+                        color: adminTab === key ? "var(--sw-on-crimson)" : "var(--sw-text-soft)",
+                        borderLeftColor: adminTab === key ? "var(--crimson)" : "transparent",
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </nav>
+                <div className="sw-admin-body">
 
               {adminTab === "users" && (
                 <section style={card}>
-                  <h3 style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 400 }}>Active users</h3>
+                  <h3 style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 400 }}>
+                    Active users <span style={{ fontSize: 11, color: "var(--sw-muted)", fontWeight: 400 }}>({sansicoUsers.length}{sansicoUsers.length !== profiles.length ? ` of ${profiles.length}` : ""})</span>
+                  </h3>
+                  <div style={{ display: "flex", gap: 7, marginBottom: 12, flexWrap: "wrap" }}>
+                    <input
+                      value={userQuery}
+                      onChange={(e) => setUserQuery(e.target.value)}
+                      placeholder="Search name or email…"
+                      style={{ flex: "1 1 190px", minWidth: 150, height: 30, borderRadius: 8, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", padding: "0 10px", fontSize: 12, color: "var(--sw-text)" }}
+                    />
+                    <select className="sw-select" value={userDept} onChange={(e) => setUserDept(e.target.value)} style={{ height: 30, borderRadius: 8, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", fontSize: 11.5, color: "var(--sw-text-soft)", padding: "0 8px" }}>
+                      <option value="">All departments</option>
+                      {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+                    </select>
+                    <select className="sw-select" value={userLevel} onChange={(e) => setUserLevel(e.target.value)} style={{ height: 30, borderRadius: 8, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", fontSize: 11.5, color: "var(--sw-text-soft)", padding: "0 8px" }}>
+                      <option value="">All levels</option>
+                      {levels.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+                    </select>
+                    {(userQuery || userDept || userLevel) && (
+                      <button onClick={() => { setUserQuery(""); setUserDept(""); setUserLevel(""); }} style={pillBtn("var(--sw-text-soft)")}>Clear</button>
+                    )}
+                  </div>
+                  {!sansicoUsers.length && <p style={{ fontSize: 12, color: "var(--sw-muted)", margin: "0 0 8px" }}>Nobody matches that.</p>}
                   {sansicoUsers.map((u) => (
                     <div key={u.id} style={{ display: "flex", alignItems: "center", gap: 11, padding: "9px 0", borderBottom: "1px solid var(--sw-hair)", flexWrap: "wrap" }}>
                       <button onClick={() => openProfile(u.id)} title="View profile" style={{ width: 28, height: 28, borderRadius: 99, background: u.color, color: readableTextOn(u.color), fontSize: 10.5, fontWeight: 400, display: "flex", alignItems: "center", justifyContent: "center", flex: "none", border: "none", cursor: "pointer", padding: 0 }}>{initials(u.name)}</button>
@@ -1047,9 +1100,22 @@ export function WorkspaceSection() {
                           {u.is_super ? "Make member" : "Make super admin"}
                         </button>
                       )}
+                      {/* Destructive actions live behind a deliberate click. */}
                       {u.id !== me?.id && (
+                        <span style={{ position: "relative", flex: "none" }}>
+                          <button
+                            onClick={() => setOpenRowMenu(openRowMenu === u.id ? null : u.id)}
+                            title="More actions"
+                            aria-label={`More actions for ${u.name}`}
+                            style={{ ...pillBtn("var(--sw-text-soft)"), padding: "6px 11px", fontWeight: 800, letterSpacing: "0.08em" }}
+                          >⋯</button>
+                          {openRowMenu === u.id && (
+                            <span
+                              style={{ position: "absolute", top: "calc(100% + 5px)", right: 0, zIndex: 40, minWidth: 190, background: "var(--sw-card)", border: "1px solid var(--sw-hair)", borderRadius: 10, boxShadow: "0 14px 40px rgba(23,18,15,.20)", padding: 6, display: "flex", flexDirection: "column", gap: 2 }}
+                            >
                         <button
                           onClick={async () => {
+                            setOpenRowMenu(null);
                             const nextActive = u.active === false;
                             const firstName = u.name.split(" ")[0];
                             if (!nextActive && !(await confirm({
@@ -1063,14 +1129,15 @@ export function WorkspaceSection() {
                             patch("profiles", profiles.map((p) => (p.id === u.id ? { ...p, active: nextActive } : p)));
                             pushToast(nextActive ? `${firstName} reactivated` : `${firstName} suspended`);
                           }}
-                          style={pillBtn("var(--sw-on-red)")}
+                          className="sw-row"
+                          style={{ textAlign: "left", padding: "8px 10px", borderRadius: 7, border: "none", background: "none", fontSize: 12, color: "var(--sw-text)", cursor: "pointer" }}
                         >
-                          {u.active === false ? "Reactivate" : "Suspend"}
+                          {u.active === false ? "Reactivate account" : "Suspend account"}
                         </button>
-                      )}
-                      {me?.is_super && u.id !== me?.id && (
+                        {me?.is_super && (
                         <button
                           onClick={async () => {
+                            setOpenRowMenu(null);
                             const firstName = u.name.split(" ")[0];
                             if (!(await confirm({
                               title: `Permanently delete ${u.name}?`,
@@ -1085,10 +1152,15 @@ export function WorkspaceSection() {
                             if (me) await logAudit(supabase, me.id, "permanently deleted", u.name);
                             pushToast(`${firstName} deleted`);
                           }}
-                          style={pillBtn("var(--sw-on-red)")}
+                          className="sw-row"
+                          style={{ textAlign: "left", padding: "8px 10px", borderRadius: 7, border: "none", background: "none", fontSize: 12, color: "var(--sw-on-red)", cursor: "pointer" }}
                         >
-                          Delete permanently
+                          Delete permanently…
                         </button>
+                        )}
+                            </span>
+                          )}
+                        </span>
                       )}
                     </div>
                   ))}
@@ -1854,6 +1926,8 @@ export function WorkspaceSection() {
                   })}
                 </section>
               )}
+                </div>
+              </div>
             </>
           )}
         </div>

@@ -15,6 +15,7 @@ import { PresenceAvatars } from "./presence";
 import { FilterBar } from "./filter-bar";
 import { IconChevLeft, IconChevRight, IconX } from "./icons";
 import { readableTextOn } from "@/lib/colors";
+import { RaciBadge } from "./raci-badge";
 
 const TYPE_LABELS: Record<string, string> = { text: "Text", number: "Number", select: "Dropdown", date: "Date" };
 const TYPE_ABBR: Record<string, string> = { text: "Tx", number: "#", select: "Dd", date: "Dt" };
@@ -98,17 +99,6 @@ export function ListSection() {
 
   const rowPad = density === "compact" ? "7px 16px" : "12px 16px";
   const dueColor = (t: Task) => (t.due && t.due < today && t.status !== "Done" ? "var(--sw-on-red)" : "var(--sw-text-soft)");
-  /* R and A, not R alone. Single-R RACI with a rank-checked A is the model this
-     app is built on, and it was invisible in every list — you had to open a task
-     to find out who was answerable for it. R is shown solid; A sits behind it
-     with a ring, so "who is doing it / who is answerable" reads at a glance. */
-  const raciOf = (t: Task) => {
-    const r = profiles.find((p) => p.id === t.assignee_id) || null;
-    const a = t.accountable_id && t.accountable_id !== t.assignee_id
-      ? profiles.find((p) => p.id === t.accountable_id) || null
-      : null;
-    return { r, a };
-  };
 
   const openQuickAdd = (status?: string) => { setQuickAddStatus(status || "Not Started"); setShowQuickAdd(true); };
 
@@ -360,27 +350,7 @@ export function ListSection() {
                         return openBlockers.length ? <span title="Blocked by open tasks" style={{ fontSize: 9.5, fontWeight: 400, color: "var(--sw-on-red)", background: "rgba(243,38,62,0.1)", padding: "1px 6px", borderRadius: 999, flex: "none" }}>BLOCKED ·{openBlockers.length}</span> : null;
                       })()}
                     </span>
-                    {(() => {
-                      const { r, a } = raciOf(t);
-                      return (
-                        <span style={{ display: "flex", marginRight: 2, alignItems: "center" }}>
-                          {a && (
-                            <button
-                              onClick={(e) => { e.stopPropagation(); openProfile(a.id); }}
-                              title={`Accountable: ${a.name}`}
-                              style={{ width: 20, height: 20, borderRadius: 99, background: a.color, color: readableTextOn(a.color), fontSize: 8, fontWeight: 400, display: "flex", alignItems: "center", justifyContent: "center", border: "1.5px dashed var(--sw-muted)", marginLeft: -7, cursor: "pointer", padding: 0, opacity: 0.9 }}
-                            >{initials(a.name)}</button>
-                          )}
-                          {r && (
-                            <button
-                              onClick={(e) => { e.stopPropagation(); openProfile(r.id); }}
-                              title={`Responsible: ${r.name}${a ? ` · Accountable: ${a.name}` : ""}`}
-                              style={{ width: 22, height: 22, borderRadius: 99, background: r.color, color: readableTextOn(r.color), fontSize: 9, fontWeight: 400, display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid var(--sw-card)", marginLeft: -7, cursor: "pointer", padding: 0 }}
-                            >{initials(r.name)}</button>
-                          )}
-                        </span>
-                      );
-                    })()}
+                    <RaciBadge task={t} profiles={profiles} onOpenProfile={openProfile} size="row" />
                     <span style={{ fontSize: 11.5, color: dueColor(t), width: 64, textAlign: "right", flex: "none", fontWeight: 400 }}>{t.due ? fmtShort(t.due) : ""}</span>
                     <span style={{ fontSize: 10, fontWeight: 400, letterSpacing: "0.03em", color: PRIORITY_COLORS[t.priority], width: 56, textAlign: "right", flex: "none" }}>{t.priority}</span>
                   </div>
@@ -438,25 +408,7 @@ export function ListSection() {
                         <div style={{ fontSize: 12.5, fontWeight: 400, marginBottom: 8, lineHeight: 1.35 }}>{t.name}</div>
                         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                           <span style={{ fontSize: 9.5, fontWeight: 400, color: PRIORITY_COLORS[t.priority], flex: 1 }}>{t.priority}</span>
-                          {(() => {
-                            const { r, a } = raciOf(t);
-                            return (
-                              <span style={{ display: "flex", alignItems: "center" }}>
-                                {a && (
-                                  <button onClick={(e) => { e.stopPropagation(); openProfile(a.id); }} title={`Accountable: ${a.name}`}
-                                    style={{ width: 17, height: 17, borderRadius: 99, background: a.color, color: readableTextOn(a.color), fontSize: 7, display: "flex", alignItems: "center", justifyContent: "center", border: "1.5px dashed var(--sw-muted)", marginLeft: -6, cursor: "pointer", padding: 0, opacity: 0.9 }}>
-                                    {initials(a.name)}
-                                  </button>
-                                )}
-                                {r && (
-                                  <button onClick={(e) => { e.stopPropagation(); openProfile(r.id); }} title={`Responsible: ${r.name}${a ? ` · Accountable: ${a.name}` : ""}`}
-                                    style={{ width: 19, height: 19, borderRadius: 99, background: r.color, color: readableTextOn(r.color), fontSize: 8, display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid var(--sw-card)", marginLeft: -6, cursor: "pointer", padding: 0 }}>
-                                    {initials(r.name)}
-                                  </button>
-                                )}
-                              </span>
-                            );
-                          })()}
+                          <RaciBadge task={t} profiles={profiles} onOpenProfile={openProfile} size="card" />
                           <span style={{ fontSize: 10.5, color: dueColor(t), fontWeight: 400 }}>{t.due ? fmtShort(t.due) : ""}</span>
                         </div>
                         <select
