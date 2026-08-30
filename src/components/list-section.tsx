@@ -15,6 +15,7 @@ import { PresenceAvatars } from "./presence";
 import { FilterBar } from "./filter-bar";
 import { IconChevLeft, IconChevRight, IconX } from "./icons";
 import { readableTextOn } from "@/lib/colors";
+import { moveInOrder } from "@/lib/logic";
 import { RaciBadge } from "./raci-badge";
 
 const TYPE_LABELS: Record<string, string> = { text: "Text", number: "Number", select: "Dropdown", date: "Date" };
@@ -47,13 +48,8 @@ export function ListSection() {
      card was ALREADY in, so a same-status drag never touches status at all. */
   const reorderOnDrop = (groupRows: Task[], targetId: string) => {
     if (!dragId || dragId === targetId) return;
-    const from = groupRows.findIndex((t) => t.id === dragId);
-    const to = groupRows.findIndex((t) => t.id === targetId);
-    if (from === -1 || to === -1) return;
-    const next = [...groupRows];
-    const [moved] = next.splice(from, 1);
-    next.splice(to, 0, moved);
-    reorderTasks(supabase, tasks, patch, pushToast, next.map((t) => t.id));
+    // Shared, unit-tested arithmetic — see moveInOrder in lib/logic.ts.
+    reorderTasks(supabase, tasks, patch, pushToast, moveInOrder(groupRows.map((t) => t.id), dragId, targetId));
   };
   const [showSaveView, setShowSaveView] = useState(false);
   const [saveViewName, setSaveViewName] = useState("");
@@ -552,11 +548,31 @@ export function ListSection() {
                       <div key={i} style={{ flex: 1, borderLeft: "1px solid var(--sw-hair)", background: gd.weekendBg }} />
                     ))}
                     {showTodayLine && <div style={{ position: "absolute", top: 0, bottom: 0, left: `${(todayOffset / ganttSpan) * 100}%`, width: 2, background: "var(--crimson)", zIndex: 2 }} />}
-                    {gl.bars.map((b) => (
-                      <button key={b.t.id} onClick={() => setActiveTaskId(b.t.id)} title={b.t.name} style={{ position: "absolute", top: 10 + b.row * 20, height: 15, left: `${(b.off / ganttSpan) * 100}%`, width: `${(b.sp / ganttSpan) * 100}%`, borderRadius: 99, border: "none", background: PRIORITY_COLORS[b.t.priority], opacity: b.t.status === "Done" ? 0.4 : 1, cursor: "pointer", display: "flex", alignItems: "center", padding: "0 8px", overflow: "hidden", boxShadow: "0 2px 6px rgba(23,18,15,0.15)", zIndex: 1 }}>
-                        <span style={{ fontSize: 8.5, fontWeight: 400, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{b.t.name}</span>
-                      </button>
-                    ))}
+                    {gl.bars.map((b) => {
+                      /* Dependencies existed in the data and were invisible here,
+                         so the chart showed when work sat but never why. Bars are
+                         laid out per assignee lane, so arrows between them would
+                         need measured cross-lane geometry that breaks on scroll
+                         and zoom; a blocked notch and a "frees N" badge carry the
+                         same fact and survive both. */
+                      const blockers = deps
+                        .filter((d) => d.task_id === b.t.id)
+                        .map((d) => tasks.find((x) => x.id === d.depends_on))
+                        .filter((x) => x && x.status !== "Done") as Task[];
+                      const unblocks = deps.filter((d) => d.depends_on === b.t.id).length;
+                      const tip = [
+                        b.t.name,
+                        blockers.length ? `Blocked by: ${blockers.map((x) => x.name).join(", ")}` : "",
+                        unblocks ? `Completing it frees ${unblocks} task${unblocks > 1 ? "s" : ""}` : "",
+                      ].filter(Boolean).join(" · ");
+                      return (
+                        <button key={b.t.id} onClick={() => setActiveTaskId(b.t.id)} title={tip} style={{ position: "absolute", top: 10 + b.row * 20, height: 15, left: `${(b.off / ganttSpan) * 100}%`, width: `${(b.sp / ganttSpan) * 100}%`, borderRadius: 99, border: blockers.length ? "1.5px solid var(--sw-on-red)" : "none", background: PRIORITY_COLORS[b.t.priority], opacity: b.t.status === "Done" ? 0.4 : 1, cursor: "pointer", display: "flex", alignItems: "center", gap: 4, padding: "0 8px", overflow: "hidden", boxShadow: "0 2px 6px rgba(23,18,15,0.15)", zIndex: 1 }}>
+                          {blockers.length > 0 && <span style={{ fontSize: 8, color: "#fff", flex: "none" }}>⛔</span>}
+                          <span style={{ fontSize: 8.5, fontWeight: 400, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1, minWidth: 0 }}>{b.t.name}</span>
+                          {unblocks > 0 && <span style={{ fontSize: 7.5, fontWeight: 800, color: "#fff", background: "rgba(0,0,0,.28)", borderRadius: 999, padding: "0 4px", flex: "none" }}>→{unblocks}</span>}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               ))}

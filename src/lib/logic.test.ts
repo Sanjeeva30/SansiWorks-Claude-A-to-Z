@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   isOpen, isOverdue, onTimeStats, efficiencyScore, departmentRisk, atRiskTasks,
   criticalUnblocker, workloadPct, canViewSop, isSeniorRank, isInternalAudit,
-  isDeptHead, isInternalAuditManager, difficultyPoints,
+  isDeptHead, isInternalAuditManager, difficultyPoints, moveInOrder, sortValuesFor,
 } from "./logic";
 import { Task, Profile, Department, Dependency, Level, DIFFICULTY_LEVELS } from "./types";
 
@@ -246,3 +246,40 @@ describe("SOP rank/visibility rules — always by rank, never by name", () => {
   });
 });
 
+
+
+describe("moveInOrder (drag-to-reorder arithmetic)", () => {
+  const ids = ["a", "b", "c", "d"];
+
+  it("moves an item down the list", () => {
+    expect(moveInOrder(ids, "a", "c")).toEqual(["b", "c", "a", "d"]);
+  });
+  it("moves an item up the list", () => {
+    expect(moveInOrder(ids, "d", "b")).toEqual(["a", "d", "b", "c"]);
+  });
+  it("moves to the very top", () => {
+    expect(moveInOrder(ids, "c", "a")).toEqual(["c", "a", "b", "d"]);
+  });
+  it("moves to the very bottom", () => {
+    expect(moveInOrder(ids, "a", "d")).toEqual(["b", "c", "d", "a"]);
+  });
+  it("is a no-op when dropped on itself", () => {
+    expect(moveInOrder(ids, "b", "b")).toEqual(ids);
+  });
+  it("is a no-op for ids not in the list", () => {
+    expect(moveInOrder(ids, "zz", "b")).toEqual(ids);
+    expect(moveInOrder(ids, "b", "zz")).toEqual(ids);
+  });
+  it("never loses or duplicates an item", () => {
+    for (const from of ids) for (const to of ids) {
+      const out = moveInOrder(ids, from, to);
+      expect(out.slice().sort()).toEqual(ids.slice().sort());
+      expect(new Set(out).size).toBe(ids.length);
+    }
+  });
+  it("re-spaces sort values by 10 so neighbours never need renumbering", () => {
+    expect(sortValuesFor(["x", "y", "z"])).toEqual([
+      { id: "x", sort: 10 }, { id: "y", sort: 20 }, { id: "z", sort: 30 },
+    ]);
+  });
+});

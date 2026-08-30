@@ -310,3 +310,26 @@ export function canViewDoc(
   if (visibility === "restricted") return doc.owner_id === me.id;
   return !!doc.department_id && me.department_id === doc.department_id;
 }
+
+
+/* Move one id to another id's position, returning the new order.
+
+   This is the whole of a drag-and-drop reorder that can actually be wrong: the
+   splice indices. The gesture itself needs a real browser (synthetic mouse
+   events do not produce native HTML5 drag events), but the arithmetic does not,
+   and an off-by-one here is what silently drops an item one slot short. */
+export function moveInOrder(ids: string[], fromId: string, toId: string): string[] {
+  const from = ids.indexOf(fromId);
+  const to = ids.indexOf(toId);
+  if (from === -1 || to === -1 || from === to) return ids;
+  const next = [...ids];
+  const [moved] = next.splice(from, 1);
+  next.splice(to, 0, moved);
+  return next;
+}
+
+/** The `sort` values a reordered list should be written back with. Re-spaced by
+    10 so a later single-item move never has to renumber its neighbours. */
+export function sortValuesFor(ids: string[]): { id: string; sort: number }[] {
+  return ids.map((id, i) => ({ id, sort: (i + 1) * 10 }));
+}

@@ -120,6 +120,23 @@ export function WorkspaceSection() {
   const [newDocFile, setNewDocFile] = useState<File | null>(null);
   const [creatingDoc, setCreatingDoc] = useState(false);
   const [showNewForm, setShowNewForm] = useState(false);
+  /* Memos had no read state at all, so an announcement was indistinguishable
+     from one already read and there was no reason to come back. Stored locally
+     per-browser rather than as a table: "have I seen this" is a personal
+     convenience, not a fact the company needs to audit. */
+  const [memosSeenAt, setMemosSeenAt] = useState<string>("");
+  useEffect(() => {
+    try { setMemosSeenAt(localStorage.getItem("sw-memos-seen") || ""); } catch { /* private mode */ }
+  }, []);
+  useEffect(() => {
+    if (workspacePage !== "memos" || !memos.length) return;
+    const newest = memos.reduce((a, m) => (m.created_at > a ? m.created_at : a), "");
+    const t = setTimeout(() => {
+      try { localStorage.setItem("sw-memos-seen", newest); } catch { /* private mode */ }
+    }, 1200); // only counts as read once it has actually been on screen
+    return () => clearTimeout(t);
+  }, [workspacePage, memos]);
+
   const [showNewMemo, setShowNewMemo] = useState(false);
   const [newMemo, setNewMemo] = useState({ title: "", body: "", departmentId: "", pinned: false });
   const [newForm, setNewForm] = useState({ title: "", listId: "", ownerId: "", fields: [{ id: 1, label: "What do you need?", type: "Short answer" }] });
@@ -799,6 +816,9 @@ export function WorkspaceSection() {
                   <section key={m.id} style={{ ...card, marginBottom: 12 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
                       {m.pinned && <span title="Pinned" style={{ fontSize: 11, color: "var(--sw-on-crimson)" }}>📌</span>}
+                      {memosSeenAt && m.created_at > memosSeenAt && (
+                        <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: "0.06em", color: "#fff", background: "var(--crimson)", borderRadius: 999, padding: "1px 7px" }}>NEW</span>
+                      )}
                       <h3 style={{ margin: 0, fontSize: 14, fontWeight: 400, flex: 1 }}>{m.title}</h3>
                       <span style={{ fontSize: 10.5, fontWeight: 400, color: "var(--sw-muted)", background: "var(--sw-hover)", border: "1px solid var(--sw-hair)", borderRadius: 999, padding: "2px 9px" }}>{dept ? dept.name : "Company-wide"}</span>
                       {canDelete && (

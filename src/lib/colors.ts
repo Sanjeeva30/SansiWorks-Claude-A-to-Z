@@ -56,3 +56,29 @@ export function isHeadRank(profile: Pick<Profile, "level_id">, levels: Level[]):
   return (level?.sort ?? 99) <= 3;
 }
 
+
+
+/* A short code for an org unit.
+
+   With 26 departments, hue alone cannot carry identity: the palette runs out,
+   the shades collide, and none of it survives colourblindness, greyscale
+   printing or a 20px avatar. A code does. Derived rather than stored so a unit
+   renamed in the admin console cannot end up wearing a stale label.
+
+   "Sourcing & Trade" -> S&T · "IGP Production" -> IGP · "QA/QC" -> QA. */
+export function unitCode(name: string): string {
+  const clean = name.replace(/\b(and|the|of|for|group|department|dept\.?)\b/gi, " ").trim();
+
+  // An existing acronym in the name is already the code people say out loud.
+  const acronym = clean.match(/\b[A-Z]{2,4}\b/);
+  if (acronym) return acronym[0];
+
+  const parts = clean.split(/[\s/]+/).filter(Boolean);
+  if (parts.length === 1) return parts[0].slice(0, 3).toUpperCase();
+
+  const joiner = /&/.test(name) ? "&" : "";
+  const letters = parts.filter((w) => w !== "&").slice(0, 3).map((w) => w[0].toUpperCase());
+  // Trim to the cap first, then strip any separator the cut left dangling —
+  // "Finance & Shared Services" was coming out as "F&S&".
+  return letters.join(joiner).slice(0, 4).replace(/[^A-Z0-9]+$/, "");
+}

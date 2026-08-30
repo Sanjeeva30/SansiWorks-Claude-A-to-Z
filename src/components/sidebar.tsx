@@ -1,5 +1,7 @@
 "use client";
 import React, { useEffect, useState } from "react";
+import { unitCode } from "@/lib/colors";
+import { moveInOrder } from "@/lib/logic";
 import { useStore } from "@/lib/store";
 import { useUI } from "@/lib/ui";
 import { initials } from "@/lib/types";
@@ -9,6 +11,7 @@ import { IconChevDown, IconStar, IconTrash, IconX } from "./icons";
 import { Avatar } from "./shared";
 
 const COLLAPSE_KEY = "sw-collapsed-spaces";
+const RECENT_KEY = "sw-recent-boards";
 
 export function Sidebar() {
   const { me, spaces, lists, tasks, notifications, departments, pins, features, levels, patch, supabase } = useStore();
@@ -28,6 +31,12 @@ export function Sidebar() {
   const [hoverSpace, setHoverSpace] = useState<string | null>(null);
   const [addingBoardFor, setAddingBoardFor] = useState<string | null>(null);
   const [boardName, setBoardName] = useState("");
+  /* At 26 departments the sidebar is a scroll, not a menu. Type-to-filter and a
+     Recent list turn "hunt for the board" into "type three letters" — recents
+     are per-person and local, since they are a navigation convenience and not
+     something worth a round trip. */
+  const [navFilter, setNavFilter] = useState("");
+  const [recentIds, setRecentIds] = useState<string[]>([]);
   const [addingSpace, setAddingSpace] = useState(false);
   const [newSpaceName, setNewSpaceName] = useState("");
 
@@ -38,6 +47,20 @@ export function Sidebar() {
     setCollapsed(next);
     try { localStorage.setItem(COLLAPSE_KEY, JSON.stringify(next)); } catch {}
   };
+  useEffect(() => {
+    try { setRecentIds(JSON.parse(localStorage.getItem(RECENT_KEY) || "[]")); } catch { /* first run */ }
+  }, []);
+
+  // Record the board being viewed, most recent first, capped at 5.
+  useEffect(() => {
+    if (section !== "list" || !listPage || listPage === "everything") return;
+    setRecentIds((prev) => {
+      const next = [listPage, ...prev.filter((x) => x !== listPage)].slice(0, 5);
+      try { localStorage.setItem(RECENT_KEY, JSON.stringify(next)); } catch { /* private mode */ }
+      return next;
+    });
+  }, [section, listPage]);
+
   const toggleSpace = (id: string) => persistCollapsed({ ...collapsed, [id]: !collapsed[id] });
 
   /* Collapse/expand *all* — the departments themselves always stay listed;
@@ -132,6 +155,25 @@ export function Sidebar() {
   /* Drag-to-reorder boards within a space. `orderedIds` is the space's full new
      order; re-spaced by 10 so a later single-item move never needs to
      renumber its neighbours. Reverts the optimistic patch on any write failure. */
+  const reorderPins = async (orderedTargetIds: string[]) => {
+    const prev = pins;
+    const next = pins.map((p) => {
+      const idx = orderedTargetIds.indexOf(p.target_id);
+      return p.kind === "list" && idx !== -1 ? { ...p, sort: (idx + 1) * 10 } : p;
+    });
+    patch("pins", next);
+    const results = await Promise.all(
+      orderedTargetIds.map((tid, i) =>
+        supabase.from("pins").update({ sort: (i + 1) * 10 })
+          .eq("target_id", tid).eq("kind", "list").eq("profile_id", me?.id || "")
+      )
+    );
+    if (results.some((r) => r.error)) {
+      patch("pins", prev);
+      pushToast("Couldn't save that pin order.");
+    }
+  };
+
   const reorderLists = async (orderedIds: string[]) => {
     const prev = lists;
     const sortOf = new Map(orderedIds.map((id, i) => [id, (i + 1) * 10]));
@@ -143,7 +185,12 @@ export function Sidebar() {
 
   const unread = notifications.filter((n) => !n.read).length;
   const openCount = (listId: string) => tasks.filter((t) => t.list_id === listId && t.status !== "Done").length;
-  const pinnedListIds = pins.filter((p) => p.kind === "list").map((p) => p.target_id);
+  /* Pins carry their own `sort`, which was never read — pinned boards came back
+     in whatever order Postgres returned, and the order could not be changed. */
+  const pinnedListIds = pins
+    .filter((p) => p.kind === "list")
+    .sort((a, b) => a.sort - b.sort)
+    .map((p) => p.target_id);
 
   const togglePin = async (listId: string) => {
     const existing = pins.find((p) => p.kind === "list" && p.target_id === listId);
@@ -178,7 +225,7 @@ export function Sidebar() {
     <div style={{ margin: "13px 0 4px", padding: "0 9px", fontSize: 9.5, fontWeight: 800, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--sw-muted)" }}>{label}</div>
   );
 
-  const listRow = (l: (typeof lists)[number], indent: boolean, reorder?: { draggable: boolean; isOver: boolean }) => {
+  const listRow = (l: (typeof lists)[number], indent: boolean, reorder?: { draggable: boolean; isOver: boolean; onReorder?: (fromId: string, toId: string) => void }) => {
     const active = section === "list" && listPage === "list" && activeList?.listId === l.id;
     const pinned = pinnedListIds.includes(l.id);
     const n = openCount(l.id);
@@ -192,16 +239,12 @@ export function Sidebar() {
         onDragOver={reorder?.draggable ? (e) => { e.preventDefault(); e.stopPropagation(); if (dragOverListId !== l.id) setDragOverListId(l.id); } : undefined}
         onDrop={reorder?.draggable ? (e) => {
           e.preventDefault(); e.stopPropagation();
-          if (dragListId && dragListId !== l.id) {
+          if (dragListId && dragListId !== l.id && reorder?.onReorder) {
+            // Pinned rows reorder the pin list, not the board's place in its space.
+            reorder.onReorder(dragListId, l.id);
+          } else if (dragListId && dragListId !== l.id) {
             const group = lists.filter((x) => x.space_id === l.space_id).sort((a, b) => a.sort - b.sort);
-            const from = group.findIndex((x) => x.id === dragListId);
-            const to = group.findIndex((x) => x.id === l.id);
-            if (from !== -1 && to !== -1) {
-              const next = [...group];
-              const [moved] = next.splice(from, 1);
-              next.splice(to, 0, moved);
-              reorderLists(next.map((x) => x.id));
-            }
+            reorderLists(moveInOrder(group.map((x) => x.id), dragListId, l.id));
           }
           setDragListId(null); setDragOverListId(null);
         } : undefined}
@@ -277,9 +320,24 @@ export function Sidebar() {
         {pinnedLists.length > 0 && (
           <>
             {sectionLabel("Pinned")}
-            {pinnedLists.map((l) => listRow(l, false))}
+            {pinnedLists.map((l) => listRow(l, false, {
+              draggable: true,
+              isOver: dragOverListId === l.id && dragListId !== l.id,
+              onReorder: (fromId, toId) => reorderPins(moveInOrder(pinnedLists.map((x) => x.id), fromId, toId)),
+            }))}
           </>
         )}
+
+        {(() => {
+          const recent = recentIds.map((id) => lists.find((l) => l.id === id)).filter(Boolean) as typeof lists;
+          const fresh = recent.filter((l) => !pinnedListIds.includes(l.id)).slice(0, 4);
+          return fresh.length > 1 && !navFilter ? (
+            <>
+              {sectionLabel("Recent")}
+              {fresh.map((l) => listRow(l, false))}
+            </>
+          ) : null;
+        })()}
 
         {/* Labelled "Departments" because in practice every one of these IS a
             department — calling the same thing two different names was the
@@ -306,6 +364,16 @@ export function Sidebar() {
             </button>
           )}
         </div>
+        {visibleSpaces.length > 3 && (
+          <div style={{ padding: "0 9px 6px" }}>
+            <input
+              value={navFilter}
+              onChange={(e) => setNavFilter(e.target.value)}
+              placeholder="Filter departments & boards…"
+              style={{ width: "100%", height: 26, borderRadius: 7, border: "1px solid var(--sw-hair)", background: "var(--sw-hover)", fontSize: 11, padding: "0 8px", color: "var(--sw-text)", outline: "none" }}
+            />
+          </div>
+        )}
         {addingSpace && (
           <div style={{ display: "flex", gap: 4, padding: "3px 9px 7px" }}>
             <input
@@ -326,8 +394,15 @@ export function Sidebar() {
           </div>
         )}
         {visibleSpaces.map((space) => {
-          const isCollapsed = !!collapsed[space.id];
-          const spaceLists = lists.filter((l) => l.space_id === space.id).sort((a, b) => a.sort - b.sort);
+          /* While filtering, a department stays only if it or one of its boards
+             matches, and it force-expands so the match is actually visible —
+             a filter that hides the thing you searched for is worse than none. */
+          const q = navFilter.trim().toLowerCase();
+          const allLists = lists.filter((l) => l.space_id === space.id).sort((a, b) => a.sort - b.sort);
+          const spaceHit = !q || space.name.toLowerCase().includes(q);
+          const spaceLists = q && !spaceHit ? allLists.filter((l) => l.name.toLowerCase().includes(q)) : allLists;
+          if (q && !spaceHit && !spaceLists.length) return null;
+          const isCollapsed = q ? false : !!collapsed[space.id];
           return (
             <div
               key={space.id}
@@ -343,6 +418,10 @@ export function Sidebar() {
                 >
                   <span style={{ width: 6, height: 6, borderRadius: 99, background: space.color, flex: "none" }} />
                   <span style={{ fontSize: 11.5, fontWeight: 400, color: "var(--sw-text-soft)", flex: 1, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{space.name}</span>
+                  {/* Hue alone cannot identify 26 departments — the palette runs
+                      out and none of it survives colourblindness or greyscale.
+                      The code does, and it is what people say out loud anyway. */}
+                  <span style={{ fontSize: 8.5, fontWeight: 800, letterSpacing: "0.04em", color: "var(--sw-muted)", background: "var(--sw-hover)", borderRadius: 4, padding: "1px 4px", flex: "none" }}>{unitCode(space.name)}</span>
                   <span style={{ color: "var(--sw-muted)", display: "flex", transform: isCollapsed ? "rotate(-90deg)" : "none", transition: "transform .12s" }}>
                     <IconChevDown size={10} />
                   </span>
