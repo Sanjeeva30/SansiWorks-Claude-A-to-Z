@@ -84,7 +84,12 @@ export function RecurrenceEditor({
             position: "absolute", top: "calc(100% + 6px)", left: 0, right: 0, minWidth: 300,
             background: "var(--sw-card)", border: "1px solid var(--sw-hair)", borderRadius: 12,
             boxShadow: "var(--shadow-card-hover)", padding: 14, zIndex: 60,
-            maxHeight: 400, overflowY: "auto",
+            /* The panel's own content is ~510px, so a 400px cap meant the
+               plain-English summary and the Done button sat below an internal
+               scroll — the summary is the part that makes a repeat rule
+               trustworthy, so it should never be the bit you have to hunt for.
+               Still bounded, for short viewports. */
+            maxHeight: "min(560px, calc(100vh - 150px))", overflowY: "auto",
           }}
         >
           {/* Frequency */}
